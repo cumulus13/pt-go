@@ -1,3 +1,9 @@
+// File: pt\main.go
+// Author: Hadi Cahyadi <cumulus13@gmail.com>
+// Date: 2025-10-30
+// Description: a tiny but powerful CLI tool that writes your clipboard content directly to a file — with automatic timestamped backups, append mode, and beautiful backup listings. Perfect for quick notes, code snippets, logs, or any text you want to save safely without overwriting.
+// License: MIT
+
 package main
 
 
@@ -573,6 +579,14 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 }
 
 
+// printHelp displays usage information
+func printHelp() {
+	fmt.Println("Usage:")
+	fmt.Println("  pt <filename>          Write clipboard to file")
+	fmt.Println("  pt + <filename>        Append clipboard to file")
+	fmt.Println("  pt -l <filename>       List backups")
+	fmt.Println("  pt -h, --help          Show this help message")
+}
 
 // Step 6: Main function - the entry point of the program
 
@@ -584,23 +598,33 @@ func main() {
 
 	// os.Args[0] is the program name, os.Args[1] is first argument, etc.
 
-	
-
-	if len(os.Args) < 2 {
-
-		// No arguments provided
-
-		fmt.Println("\nUsage:")
-
-		fmt.Println("  pt <filename>          Write clipboard to file")
-
-		fmt.Println("  pt + <filename>        Append clipboard to file")
-
-		fmt.Println("  pt -l <filename>       List backups")
-
-		os.Exit(1)
-
+	// Handle help flags first
+	if len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
+		printHelp()
+		os.Exit(0)
 	}
+
+	// Check command line arguments
+	if len(os.Args) < 2 {
+		printHelp()
+		os.Exit(1)
+	}
+
+	// if len(os.Args) < 2 {
+
+	// 	// No arguments provided
+
+	// 	fmt.Println("\nUsage:")
+
+	// 	fmt.Println("  pt <filename>          Write clipboard to file")
+
+	// 	fmt.Println("  pt + <filename>        Append clipboard to file")
+
+	// 	fmt.Println("  pt -l <filename>       List backups")
+
+	// 	os.Exit(1)
+
+	// }
 
 	
 
