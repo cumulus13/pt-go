@@ -25,7 +25,7 @@
 ### From Source (Recommended)
 
 ```bash
-go install github.com/cumulus13/pt-go@latest
+go install github.com/cumulus13/pt-go/pt@latest
 ```
 
 This installs the `pt` binary to your `$GOPATH/bin` (make sure it’s in your `PATH`).

@@ -1,4 +1,4 @@
-module pt
+module github.com/cumulus13/pt-go
 
 go 1.25.3
 
