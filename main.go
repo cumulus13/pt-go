@@ -1,0 +1,729 @@
+package main
+
+
+
+import (
+
+	"fmt"
+
+	"io/ioutil"
+
+	"os"
+
+	"path/filepath" // Package for file path operations
+
+	"sort"
+
+	"strings"
+
+	"time"
+
+
+
+	"github.com/atotto/clipboard"
+
+)
+
+
+
+// ANSI color codes for pretty output
+
+const (
+
+	ColorReset  = "\033[0m"
+
+	ColorCyan   = "\033[96m"
+
+	ColorYellow = "\033[93m"
+
+	ColorGreen  = "\033[92m"
+
+	ColorGray   = "\033[90m"
+
+	ColorBold   = "\033[1m"
+
+)
+
+
+
+// BackupInfo stores information about a backup file
+
+// In Go, we use structs to group related data together
+
+type BackupInfo struct {
+
+	Path     string    // Full path to the backup file
+
+	Name     string    // Just the filename
+
+	ModTime  time.Time // When the file was last modified
+
+	Size     int64     // File size in bytes
+
+}
+
+
+
+// Step 1: Get text from clipboard
+
+// In Go, functions that can fail return an error as the last return value
+
+func getClipboardText() (string, error) {
+
+	text, err := clipboard.ReadAll()
+
+	if err != nil {
+
+		return "", fmt.Errorf("failed to read clipboard: %w", err)
+
+	}
+
+	return text, nil
+
+}
+
+
+
+// Step 2: Create backup if file exists
+
+// This function returns the original filePath after creating backup
+
+func autoRenameIfExists(filePath string) (string, error) {
+
+	// Check if file exists
+
+	// In Go, we use os.Stat to get file information
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+
+		// File doesn't exist, no backup needed
+
+		return filePath, nil
+
+	}
+
+
+
+	// Get filename parts
+
+	// filepath.Ext gets the extension (.txt)
+
+	// strings.TrimSuffix removes the extension from full path
+
+	ext := filepath.Ext(filePath)
+
+	base := strings.TrimSuffix(filePath, ext)
+
+	
+
+	// Create timestamp: 20241030_143022123456
+
+	// time.Now() gets current time
+
+	// Format uses a specific reference time: Mon Jan 2 15:04:05 MST 2006
+
+	timestamp := time.Now().Format("20060102_150405.000000")
+
+	timestamp = strings.ReplaceAll(timestamp, ".", "")
+
+	
+
+	// Build backup filename: originalname_ext.timestamp
+
+	// In Go, we remove the dot from extension using strings.TrimPrefix
+
+	backupName := fmt.Sprintf("%s_%s.%s", base, strings.TrimPrefix(ext, "."), timestamp)
+
+	
+
+	// Rename the file (this is the backup operation)
+
+	err := os.Rename(filePath, backupName)
+
+	if err != nil {
+
+		return filePath, fmt.Errorf("failed to create backup: %w", err)
+
+	}
+
+	
+
+	fmt.Printf("📦 Backup created: %s → %s\n", filePath, backupName)
+
+	return filePath, nil
+
+}
+
+
+
+// Step 3: Write data to file
+
+// The 'append' parameter determines if we add to existing file or overwrite
+
+func writeFile(filePath string, data string, appendMode bool) error {
+
+	if !appendMode {
+
+		// Create backup before overwriting
+
+		var err error
+
+		filePath, err = autoRenameIfExists(filePath)
+
+		if err != nil {
+
+			return err
+
+		}
+
+	}
+
+	
+
+	// Determine file open mode
+
+	// In Go, we use flags to specify how to open a file
+
+	var flag int
+
+	if appendMode {
+
+		// O_APPEND: add to end of file
+
+		// O_CREATE: create if doesn't exist
+
+		// O_WRONLY: write-only mode
+
+		flag = os.O_APPEND | os.O_CREATE | os.O_WRONLY
+
+	} else {
+
+		// O_CREATE: create if doesn't exist
+
+		// O_WRONLY: write-only mode
+
+		// O_TRUNC: truncate (clear) file if it exists
+
+		flag = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+
+	}
+
+	
+
+	// Open the file with specified flags
+
+	// 0644 is file permissions: owner can read/write, others can only read
+
+	file, err := os.OpenFile(filePath, flag, 0644)
+
+	if err != nil {
+
+		return fmt.Errorf("failed to open file: %w", err)
+
+	}
+
+	// defer means "do this when function exits"
+
+	// This ensures the file is always closed, even if there's an error
+
+	defer file.Close()
+
+	
+
+	// Write the data
+
+	// WriteString returns number of bytes written and an error
+
+	_, err = file.WriteString(data)
+
+	if err != nil {
+
+		return fmt.Errorf("failed to write to file: %w", err)
+
+	}
+
+	
+
+	// Print success message
+
+	action := "written to"
+
+	if appendMode {
+
+		action = "appended to"
+
+	}
+
+	fmt.Printf("✅ Successfully %s: %s\n", action, filePath)
+
+	fmt.Printf("📝 Content size: %d characters\n", len(data))
+
+	
+
+	return nil
+
+}
+
+
+
+// Step 4: List all backup files
+
+// Returns a slice (Go's version of a dynamic array) of BackupInfo
+
+func listBackups(filePath string) ([]BackupInfo, error) {
+
+	// Get directory and filename
+
+	dir := filepath.Dir(filePath)
+
+	if dir == "." {
+
+		// Get current directory if no directory specified
+
+		var err error
+
+		dir, err = os.Getwd()
+
+		if err != nil {
+
+			return nil, err
+
+		}
+
+	}
+
+	
+
+	// Parse filename to create pattern
+
+	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+
+	ext := strings.TrimPrefix(filepath.Ext(filePath), ".")
+
+	pattern := fmt.Sprintf("%s_%s.", base, ext)
+
+	
+
+	// Read directory
+
+	// ioutil.ReadDir returns a slice of FileInfo
+
+	files, err := ioutil.ReadDir(dir)
+
+	if err != nil {
+
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+
+	}
+
+	
+
+	// Create empty slice to store backups
+
+	// In Go, we use make() to create slices with capacity
+
+	backups := make([]BackupInfo, 0)
+
+	
+
+	// Loop through all files
+
+	// In Go, range returns index and value
+
+	// We use _ to ignore the index since we don't need it
+
+	for _, file := range files {
+
+		// Check if filename starts with our pattern
+
+		if !strings.HasPrefix(file.Name(), pattern) {
+
+			continue // skip this file
+
+		}
+
+		
+
+		// Extract timestamp part
+
+		timestamp := strings.TrimPrefix(file.Name(), pattern)
+
+		
+
+		// Validate timestamp format (should be 20 digits)
+
+		if len(timestamp) != 21 {
+
+			continue
+
+		}
+
+		
+
+		// Add to backups slice
+
+		// In Go, we use append() to add items to a slice
+
+		backups = append(backups, BackupInfo{
+
+			Path:    filepath.Join(dir, file.Name()),
+
+			Name:    file.Name(),
+
+			ModTime: file.ModTime(),
+
+			Size:    file.Size(),
+
+		})
+
+	}
+
+	
+
+	if len(backups) == 0 {
+
+		fmt.Printf("ℹ️  No backups found for: %s\n", filePath)
+
+		return backups, nil
+
+	}
+
+	
+
+	// Sort by modification time (newest first)
+
+	// In Go, we use sort.Slice with a custom comparison function
+
+	sort.Slice(backups, func(i, j int) bool {
+
+		// Return true if i should come before j
+
+		return backups[i].ModTime.After(backups[j].ModTime)
+
+	})
+
+	
+
+	return backups, nil
+
+}
+
+
+
+// Step 5: Print backups as a pretty table
+
+func printBackupTable(filePath string, backups []BackupInfo) {
+
+	// Table column widths
+
+	const (
+
+		col1Width = 50
+
+		col2Width = 19
+
+		col3Width = 15
+
+	)
+
+	
+
+	// Print header
+
+	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n\n",
+
+		ColorCyan, ColorBold, filePath, ColorReset, ColorCyan, ColorReset)
+
+	
+
+	// Top border using box drawing characters
+
+	fmt.Printf("%s┌%s┬%s┬%s┐%s\n",
+
+		ColorGray,
+
+		strings.Repeat("─", col1Width+2),
+
+		strings.Repeat("─", col2Width+2),
+
+		strings.Repeat("─", col3Width+2),
+
+		ColorReset)
+
+	
+
+	// Header row
+
+	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s\n",
+
+		ColorGray, ColorReset,
+
+		ColorBold, ColorYellow, col1Width, "File Name", ColorReset,
+
+		ColorGray, ColorReset,
+
+		ColorBold, ColorYellow, col2Width, "Modified", ColorReset,
+
+		ColorGray, ColorReset,
+
+		ColorBold, ColorYellow, col3Width, "Size", ColorReset,
+
+		ColorGray, ColorReset)
+
+	
+
+	// Separator
+
+	fmt.Printf("%s├%s┼%s┼%s┤%s\n",
+
+		ColorGray,
+
+		strings.Repeat("─", col1Width+2),
+
+		strings.Repeat("─", col2Width+2),
+
+		strings.Repeat("─", col3Width+2),
+
+		ColorReset)
+
+	
+
+	// Data rows
+
+	for _, backup := range backups {
+
+		// Format filename (truncate if too long)
+
+		name := backup.Name
+
+		if len(name) > col1Width {
+
+			name = name[:col1Width-3] + "..."
+
+		}
+
+		
+
+		// Format modification time
+
+		modTime := backup.ModTime.Format("2006-01-02 15:04:05")
+
+		
+
+		// Format size with appropriate unit
+
+		var sizeStr string
+
+		if backup.Size >= 1024*1024 {
+
+			sizeStr = fmt.Sprintf("%.2f MB", float64(backup.Size)/(1024*1024))
+
+		} else if backup.Size >= 1024 {
+
+			sizeStr = fmt.Sprintf("%.2f KB", float64(backup.Size)/1024)
+
+		} else {
+
+			sizeStr = fmt.Sprintf("%d B", backup.Size)
+
+		}
+
+		
+
+		// Print row with proper formatting
+
+		// %-*s means left-aligned string with width
+
+		// %*s means right-aligned string with width
+
+		fmt.Printf("%s│%s %s%-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
+
+			ColorGray, ColorReset,
+
+			ColorGreen, col1Width, name, ColorReset,
+
+			ColorGray, ColorReset,
+
+			col2Width, modTime,
+
+			ColorGray, ColorReset,
+
+			col3Width, sizeStr,
+
+			ColorGray, ColorReset)
+
+	}
+
+	
+
+	// Bottom border
+
+	fmt.Printf("%s└%s┴%s┴%s┘%s\n\n",
+
+		ColorGray,
+
+		strings.Repeat("─", col1Width+2),
+
+		strings.Repeat("─", col2Width+2),
+
+		strings.Repeat("─", col3Width+2),
+
+		ColorReset)
+
+}
+
+
+
+// Step 6: Main function - the entry point of the program
+
+func main() {
+
+	// Check command line arguments
+
+	// os.Args is a slice containing all command line arguments
+
+	// os.Args[0] is the program name, os.Args[1] is first argument, etc.
+
+	
+
+	if len(os.Args) < 2 {
+
+		// No arguments provided
+
+		fmt.Println("\nUsage:")
+
+		fmt.Println("  pt <filename>          Write clipboard to file")
+
+		fmt.Println("  pt + <filename>        Append clipboard to file")
+
+		fmt.Println("  pt -l <filename>       List backups")
+
+		os.Exit(1)
+
+	}
+
+	
+
+	// Handle different commands
+
+	switch os.Args[1] {
+
+	case "-l", "--list":
+
+		// List backups command
+
+		if len(os.Args) < 3 {
+
+			fmt.Println("❌ Error: Filename required")
+
+			os.Exit(1)
+
+		}
+
+		
+
+		backups, err := listBackups(os.Args[2])
+
+		if err != nil {
+
+			fmt.Printf("❌ Error: %v\n", err)
+
+			os.Exit(1)
+
+		}
+
+		
+
+		if len(backups) > 0 {
+
+			printBackupTable(os.Args[2], backups)
+
+		}
+
+		
+
+	case "+":
+
+		// Append mode
+
+		if len(os.Args) < 3 {
+
+			fmt.Println("❌ Error: Filename required")
+
+			os.Exit(1)
+
+		}
+
+		
+
+		// Get clipboard content
+
+		text, err := getClipboardText()
+
+		if err != nil {
+
+			fmt.Printf("❌ Error: %v\n", err)
+
+			os.Exit(1)
+
+		}
+
+		
+
+		// Write to file in append mode
+
+		err = writeFile(os.Args[2], text, true)
+
+		if err != nil {
+
+			fmt.Printf("❌ Error: %v\n", err)
+
+			os.Exit(1)
+
+		}
+
+		
+
+	default:
+
+		// Write mode (default)
+
+		// Get clipboard content
+
+		text, err := getClipboardText()
+
+		if err != nil {
+
+			fmt.Printf("❌ Error: %v\n", err)
+
+			os.Exit(1)
+
+		}
+
+		
+
+		if text == "" {
+
+			fmt.Println("⚠️  Warning: Clipboard is empty")
+
+			os.Exit(1)
+
+		}
+
+		
+
+		// Write to file (will create backup if file exists)
+
+		err = writeFile(os.Args[1], text, false)
+
+		if err != nil {
+
+			fmt.Printf("❌ Error: %v\n", err)
+
+			os.Exit(1)
+
+		}
+
+	}
+
+}
