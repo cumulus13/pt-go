@@ -336,25 +336,6 @@ go fmt ./...
 golangci-lint run
 ```
 
-## 📝 Changelog
-
-### Version 2.0.0 (2025-11-02)
-- ✨ Added restore functionality with `-r` flag
-- ✨ Added `--last` quick restore option
-- 🔒 Implemented production security hardening
-- 🔧 Added path validation and size limits
-- 📊 Improved backup listing with numbered rows
-- 🐛 Fixed backup name collision issues
-- 🎨 Enhanced error messages and logging
-- 📚 Comprehensive documentation
-
-### Version 1.0.0 (2025-10-30)
-- 🎉 Initial release
-- 📝 Basic write functionality
-- 📦 Automatic backup creation
-- ➕ Append mode
-- 📊 Backup listing
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
