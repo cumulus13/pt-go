@@ -129,6 +129,7 @@ func generateUniqueBackupName(filePath string) string {
 	ext := filepath.Ext(filePath)
 	base := strings.TrimSuffix(filePath, ext)
 
+	// Format: YYYYMMDD_HHMMSSµµµµµµ (no dots in timestamp)
 	timestamp := time.Now().Format("20060102_150405.000000")
 	timestamp = strings.ReplaceAll(timestamp, ".", "")
 
@@ -268,7 +269,12 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 	// Parse filename pattern
 	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	ext := strings.TrimPrefix(filepath.Ext(filePath), ".")
+	
+	// Pattern should match: basename_ext.timestamp...
 	pattern := fmt.Sprintf("%s_%s.", base, ext)
+	
+	// Debug logging
+	logger.Printf("Looking for backups with pattern: %s in directory: %s", pattern, dir)
 
 	// Read directory using modern API
 	entries, err := os.ReadDir(dir)
@@ -284,19 +290,42 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		}
 
 		name := entry.Name()
+		
+		// Debug: log what we're checking
+		logger.Printf("Checking file: %s against pattern: %s", name, pattern)
+		
 		if !strings.HasPrefix(name, pattern) {
 			continue
 		}
 
 		// Extract and validate timestamp
 		timestamp := strings.TrimPrefix(name, pattern)
-		if len(timestamp) < 21 {
+		
+		// Debug: log timestamp extraction
+		logger.Printf("Extracted timestamp: %s (length: %d)", timestamp, len(timestamp))
+		
+		if len(timestamp) < 20 {
+			logger.Printf("Skipping %s: timestamp too short", name)
 			continue
 		}
 
-		// Validate it looks like our timestamp format
-		timestampPart := timestamp[:20]
-		if !isValidTimestamp(timestampPart) {
+		// More flexible validation: check if it starts with a date-like pattern
+		// Format should be: YYYYMMDD_HHMMSS... (at least 15 digits in first 20 chars)
+		timestampPart := timestamp
+		if len(timestampPart) > 30 {
+			timestampPart = timestampPart[:30]
+		}
+		
+		// Count digits in the timestamp part (should have many digits for date/time)
+		digitCount := 0
+		for _, c := range timestampPart {
+			if c >= '0' && c <= '9' {
+				digitCount++
+			}
+		}
+		
+		if digitCount < 14 {
+			logger.Printf("Skipping %s: not enough digits in timestamp (%d)", name, digitCount)
 			continue
 		}
 
@@ -307,6 +336,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 			continue
 		}
 
+		logger.Printf("Found valid backup: %s", name)
 		backups = append(backups, BackupInfo{
 			Path:    filepath.Join(dir, name),
 			Name:    name,
