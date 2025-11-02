@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.16+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/cumulus13/pt)
+[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/cumulus13/pt)
 
 > **`pt`**, A tiny but powerful CLI tool that writes your clipboard content directly to a file — with automatic timestamped backups, append mode, restore functionality, and beautiful backup listings. Perfect for quick notes, code snippets, logs, or any text you want to save safely without overwriting.
 
