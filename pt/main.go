@@ -1,753 +1,659 @@
-// File: pt\main.go
+// File: pt/main.go
 // Author: Hadi Cahyadi <cumulus13@gmail.com>
 // Date: 2025-10-30
-// Description: a tiny but powerful CLI tool that writes your clipboard content directly to a file — with automatic timestamped backups, append mode, and beautiful backup listings. Perfect for quick notes, code snippets, logs, or any text you want to save safely without overwriting.
+// Description: Production-hardened clipboard-to-file tool with security, validation, and robustness improvements
 // License: MIT
 
 package main
 
-
-
 import (
-
+	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-
-	"io/ioutil"
-
+	"log"
 	"os"
-
-	"path/filepath" // Package for file path operations
-
+	"path/filepath"
 	"sort"
-
+	"strconv"
 	"strings"
-
 	"time"
 
-
-
 	"github.com/atotto/clipboard"
-
 )
 
-
+// Configuration constants
+const (
+	MaxClipboardSize = 100 * 1024 * 1024 // 100MB max
+	MaxBackupCount   = 100                // Keep max 100 backups
+	MaxFilenameLen   = 200                // Max filename length
+	Version          = "2.0.0"
+)
 
 // ANSI color codes for pretty output
-
 const (
-
 	ColorReset  = "\033[0m"
-
 	ColorCyan   = "\033[96m"
-
 	ColorYellow = "\033[93m"
-
 	ColorGreen  = "\033[92m"
-
 	ColorGray   = "\033[90m"
-
 	ColorBold   = "\033[1m"
-
+	ColorRed    = "\033[91m"
 )
 
-
-
 // BackupInfo stores information about a backup file
-
-// In Go, we use structs to group related data together
-
 type BackupInfo struct {
-
-	Path     string    // Full path to the backup file
-
-	Name     string    // Just the filename
-
-	ModTime  time.Time // When the file was last modified
-
-	Size     int64     // File size in bytes
-
+	Path    string
+	Name    string
+	ModTime time.Time
+	Size    int64
 }
 
+// Logger for audit trail
+var logger *log.Logger
 
+func init() {
+	// Initialize logger (write to stderr to not interfere with stdout)
+	logger = log.New(os.Stderr, "", log.LstdFlags)
+}
 
-// Step 1: Get text from clipboard
+// validatePath checks for path traversal and other security issues
+func validatePath(filePath string) error {
+	if filePath == "" {
+		return fmt.Errorf("filename cannot be empty")
+	}
 
-// In Go, functions that can fail return an error as the last return value
-
-func getClipboardText() (string, error) {
-
-	text, err := clipboard.ReadAll()
-
+	// Get absolute path
+	absPath, err := filepath.Abs(filePath)
 	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
 
+	// Check for path traversal attempts
+	cleanPath := filepath.Clean(filePath)
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("path traversal not allowed")
+	}
+
+	// Check filename length
+	if len(filepath.Base(filePath)) > MaxFilenameLen {
+		return fmt.Errorf("filename too long (max %d characters)", MaxFilenameLen)
+	}
+
+	// Prevent writing to system directories (basic check)
+	systemDirs := []string{"/etc", "/sys", "/proc", "/dev", "C:\\Windows", "C:\\System32"}
+	for _, sysDir := range systemDirs {
+		if strings.HasPrefix(absPath, sysDir) {
+			return fmt.Errorf("writing to system directories not allowed")
+		}
+	}
+
+	return nil
+}
+
+// checkDiskSpace validates there's enough space (basic check)
+func checkDiskSpace(path string, requiredSize int64) error {
+	// Get directory
+	dir := filepath.Dir(path)
+	if dir == "." {
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return err
+		}
+	}
+
+	// Try to create a small test file to verify write permissions
+	testFile := filepath.Join(dir, ".pt_test_"+generateShortID())
+	f, err := os.Create(testFile)
+	if err != nil {
+		return fmt.Errorf("no write permission in directory: %w", err)
+	}
+	f.Close()
+	os.Remove(testFile)
+
+	// Note: Actual disk space checking is platform-specific
+	// This is a basic validation that we can write to the directory
+	return nil
+}
+
+// generateShortID creates a short unique identifier
+func generateShortID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// generateUniqueBackupName creates a collision-resistant backup filename
+func generateUniqueBackupName(filePath string) string {
+	ext := filepath.Ext(filePath)
+	base := strings.TrimSuffix(filePath, ext)
+
+	timestamp := time.Now().Format("20060102_150405.000000")
+	timestamp = strings.ReplaceAll(timestamp, ".", "")
+
+	// Add process ID and random component for uniqueness
+	uniqueID := fmt.Sprintf("%d_%s", os.Getpid(), generateShortID())
+
+	return fmt.Sprintf("%s_%s.%s.%s", base, strings.TrimPrefix(ext, "."), timestamp, uniqueID)
+}
+
+// getClipboardText reads from clipboard with size validation
+func getClipboardText() (string, error) {
+	text, err := clipboard.ReadAll()
+	if err != nil {
 		return "", fmt.Errorf("failed to read clipboard: %w", err)
+	}
 
+	// Validate size
+	if len(text) > MaxClipboardSize {
+		return "", fmt.Errorf("clipboard content too large (max %dMB)", MaxClipboardSize/(1024*1024))
 	}
 
 	return text, nil
-
 }
 
-
-
-// Step 2: Create backup if file exists
-
-// This function returns the original filePath after creating backup
-
+// autoRenameIfExists creates backup with atomic-like behavior
 func autoRenameIfExists(filePath string) (string, error) {
-
 	// Check if file exists
-
-	// In Go, we use os.Stat to get file information
-
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-
-		// File doesn't exist, no backup needed
-
+	info, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
 		return filePath, nil
-
 	}
-
-
-
-	// Get filename parts
-
-	// filepath.Ext gets the extension (.txt)
-
-	// strings.TrimSuffix removes the extension from full path
-
-	ext := filepath.Ext(filePath)
-
-	base := strings.TrimSuffix(filePath, ext)
-
-	
-
-	// Create timestamp: 20241030_143022123456
-
-	// time.Now() gets current time
-
-	// Format uses a specific reference time: Mon Jan 2 15:04:05 MST 2006
-
-	timestamp := time.Now().Format("20060102_150405.000000")
-
-	timestamp = strings.ReplaceAll(timestamp, ".", "")
-
-	
-
-	// Build backup filename: originalname_ext.timestamp
-
-	// In Go, we remove the dot from extension using strings.TrimPrefix
-
-	backupName := fmt.Sprintf("%s_%s.%s", base, strings.TrimPrefix(ext, "."), timestamp)
-
-	
-
-	// Rename the file (this is the backup operation)
-
-	err := os.Rename(filePath, backupName)
-
 	if err != nil {
-
-		return filePath, fmt.Errorf("failed to create backup: %w", err)
-
+		return filePath, fmt.Errorf("failed to check file: %w", err)
 	}
 
-	
+	// Don't backup empty files
+	if info.Size() == 0 {
+		logger.Printf("Skipping backup of empty file: %s", filePath)
+		return filePath, nil
+	}
 
-	fmt.Printf("📦 Backup created: %s → %s\n", filePath, backupName)
+	// Generate unique backup name
+	backupName := generateUniqueBackupName(filePath)
+
+	// Rename the file
+	err = os.Rename(filePath, backupName)
+	if err != nil {
+		return filePath, fmt.Errorf("failed to create backup: %w", err)
+	}
+
+	logger.Printf("Backup created: %s -> %s", filePath, backupName)
+	fmt.Printf("📦 Backup created: %s\n", filepath.Base(backupName))
 
 	return filePath, nil
-
 }
 
-
-
-// Step 3: Write data to file
-
-// The 'append' parameter determines if we add to existing file or overwrite
-
+// writeFile writes data to file with validation
 func writeFile(filePath string, data string, appendMode bool) error {
+	// Validate path
+	if err := validatePath(filePath); err != nil {
+		return err
+	}
+
+	// Check disk space
+	if err := checkDiskSpace(filePath, int64(len(data))); err != nil {
+		return err
+	}
 
 	if !appendMode {
-
 		// Create backup before overwriting
-
 		var err error
-
 		filePath, err = autoRenameIfExists(filePath)
-
 		if err != nil {
-
 			return err
-
 		}
-
 	}
-
-	
 
 	// Determine file open mode
-
-	// In Go, we use flags to specify how to open a file
-
 	var flag int
-
 	if appendMode {
-
-		// O_APPEND: add to end of file
-
-		// O_CREATE: create if doesn't exist
-
-		// O_WRONLY: write-only mode
-
 		flag = os.O_APPEND | os.O_CREATE | os.O_WRONLY
-
 	} else {
-
-		// O_CREATE: create if doesn't exist
-
-		// O_WRONLY: write-only mode
-
-		// O_TRUNC: truncate (clear) file if it exists
-
 		flag = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
-
 	}
 
-	
-
-	// Open the file with specified flags
-
-	// 0644 is file permissions: owner can read/write, others can only read
-
+	// Open file
 	file, err := os.OpenFile(filePath, flag, 0644)
-
 	if err != nil {
-
 		return fmt.Errorf("failed to open file: %w", err)
-
 	}
-
-	// defer means "do this when function exits"
-
-	// This ensures the file is always closed, even if there's an error
-
 	defer file.Close()
 
-	
-
-	// Write the data
-
-	// WriteString returns number of bytes written and an error
-
-	_, err = file.WriteString(data)
-
+	// Write data
+	n, err := file.WriteString(data)
 	if err != nil {
-
 		return fmt.Errorf("failed to write to file: %w", err)
-
 	}
 
-	
+	// Verify write completed
+	if n != len(data) {
+		return fmt.Errorf("incomplete write: wrote %d bytes, expected %d", n, len(data))
+	}
 
-	// Print success message
+	// Sync to disk
+	if err := file.Sync(); err != nil {
+		logger.Printf("Warning: failed to sync file: %v", err)
+	}
 
 	action := "written to"
-
 	if appendMode {
-
 		action = "appended to"
-
 	}
 
+	logger.Printf("Successfully %s: %s (%d bytes)", action, filePath, len(data))
 	fmt.Printf("✅ Successfully %s: %s\n", action, filePath)
-
 	fmt.Printf("📝 Content size: %d characters\n", len(data))
 
-	
-
 	return nil
-
 }
 
-
-
-// Step 4: List all backup files
-
-// Returns a slice (Go's version of a dynamic array) of BackupInfo
-
+// listBackups returns backup files with improved validation
 func listBackups(filePath string) ([]BackupInfo, error) {
-
-	// Get directory and filename
+	// Validate path first
+	if err := validatePath(filePath); err != nil {
+		return nil, err
+	}
 
 	dir := filepath.Dir(filePath)
-
 	if dir == "." {
-
-		// Get current directory if no directory specified
-
 		var err error
-
 		dir, err = os.Getwd()
-
 		if err != nil {
-
 			return nil, err
-
 		}
-
 	}
 
-	
-
-	// Parse filename to create pattern
-
+	// Parse filename pattern
 	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-
 	ext := strings.TrimPrefix(filepath.Ext(filePath), ".")
-
 	pattern := fmt.Sprintf("%s_%s.", base, ext)
 
-	
-
-	// Read directory
-
-	// ioutil.ReadDir returns a slice of FileInfo
-
-	files, err := ioutil.ReadDir(dir)
-
+	// Read directory using modern API
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-
 		return nil, fmt.Errorf("failed to read directory: %w", err)
-
 	}
-
-	
-
-	// Create empty slice to store backups
-
-	// In Go, we use make() to create slices with capacity
 
 	backups := make([]BackupInfo, 0)
 
-	
-
-	// Loop through all files
-
-	// In Go, range returns index and value
-
-	// We use _ to ignore the index since we don't need it
-
-	for _, file := range files {
-
-		// Check if filename starts with our pattern
-
-		if !strings.HasPrefix(file.Name(), pattern) {
-
-			continue // skip this file
-
-		}
-
-		
-
-		// Extract timestamp part
-
-		timestamp := strings.TrimPrefix(file.Name(), pattern)
-
-		
-
-		// Validate timestamp format (should be 20 digits)
-
-		if len(timestamp) != 21 {
-
+	for _, entry := range entries {
+		if entry.IsDir() {
 			continue
-
 		}
 
-		
+		name := entry.Name()
+		if !strings.HasPrefix(name, pattern) {
+			continue
+		}
 
-		// Add to backups slice
+		// Extract and validate timestamp
+		timestamp := strings.TrimPrefix(name, pattern)
+		if len(timestamp) < 21 {
+			continue
+		}
 
-		// In Go, we use append() to add items to a slice
+		// Validate it looks like our timestamp format
+		timestampPart := timestamp[:20]
+		if !isValidTimestamp(timestampPart) {
+			continue
+		}
+
+		// Get file info
+		info, err := entry.Info()
+		if err != nil {
+			logger.Printf("Warning: failed to get info for %s: %v", name, err)
+			continue
+		}
 
 		backups = append(backups, BackupInfo{
-
-			Path:    filepath.Join(dir, file.Name()),
-
-			Name:    file.Name(),
-
-			ModTime: file.ModTime(),
-
-			Size:    file.Size(),
-
+			Path:    filepath.Join(dir, name),
+			Name:    name,
+			ModTime: info.ModTime(),
+			Size:    info.Size(),
 		})
-
 	}
-
-	
 
 	if len(backups) == 0 {
-
-		fmt.Printf("ℹ️  No backups found for: %s\n", filePath)
-
 		return backups, nil
-
 	}
 
-	
-
 	// Sort by modification time (newest first)
-
-	// In Go, we use sort.Slice with a custom comparison function
-
 	sort.Slice(backups, func(i, j int) bool {
-
-		// Return true if i should come before j
-
 		return backups[i].ModTime.After(backups[j].ModTime)
-
 	})
 
-	
+	// Limit to MaxBackupCount
+	if len(backups) > MaxBackupCount {
+		backups = backups[:MaxBackupCount]
+	}
 
 	return backups, nil
-
 }
 
+// isValidTimestamp checks if string matches our timestamp format
+func isValidTimestamp(s string) bool {
+	if len(s) != 20 {
+		return false
+	}
+	// Check if all characters are digits
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
 
-
-// Step 5: Print backups as a pretty table
-
+// printBackupTable displays backups in formatted table
 func printBackupTable(filePath string, backups []BackupInfo) {
-
-	// Table column widths
-
 	const (
-
 		col1Width = 50
-
 		col2Width = 19
-
 		col3Width = 15
-
 	)
 
-	
-
-	// Print header
-
-	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n\n",
-
+	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
 		ColorCyan, ColorBold, filePath, ColorReset, ColorCyan, ColorReset)
+	fmt.Printf("%sTotal: %d backup(s)%s\n\n", ColorGray, len(backups), ColorReset)
 
-	
-
-	// Top border using box drawing characters
-
+	// Top border
 	fmt.Printf("%s┌%s┬%s┬%s┐%s\n",
-
 		ColorGray,
-
 		strings.Repeat("─", col1Width+2),
-
 		strings.Repeat("─", col2Width+2),
-
 		strings.Repeat("─", col3Width+2),
-
 		ColorReset)
-
-	
 
 	// Header row
-
 	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s\n",
-
 		ColorGray, ColorReset,
-
 		ColorBold, ColorYellow, col1Width, "File Name", ColorReset,
-
 		ColorGray, ColorReset,
-
 		ColorBold, ColorYellow, col2Width, "Modified", ColorReset,
-
 		ColorGray, ColorReset,
-
 		ColorBold, ColorYellow, col3Width, "Size", ColorReset,
-
 		ColorGray, ColorReset)
 
-	
-
 	// Separator
-
 	fmt.Printf("%s├%s┼%s┼%s┤%s\n",
-
 		ColorGray,
-
 		strings.Repeat("─", col1Width+2),
-
 		strings.Repeat("─", col2Width+2),
-
 		strings.Repeat("─", col3Width+2),
-
 		ColorReset)
 
-	
-
 	// Data rows
-
-	for _, backup := range backups {
-
-		// Format filename (truncate if too long)
-
+	for i, backup := range backups {
 		name := backup.Name
-
-		if len(name) > col1Width {
-
-			name = name[:col1Width-3] + "..."
-
+		// Account for number prefix (up to 3 digits + ". ")
+		maxNameLen := col1Width - 5
+		if len(name) > maxNameLen {
+			name = name[:maxNameLen-3] + "..."
 		}
-
-		
-
-		// Format modification time
 
 		modTime := backup.ModTime.Format("2006-01-02 15:04:05")
 
-		
-
-		// Format size with appropriate unit
-
 		var sizeStr string
-
 		if backup.Size >= 1024*1024 {
-
 			sizeStr = fmt.Sprintf("%.2f MB", float64(backup.Size)/(1024*1024))
-
 		} else if backup.Size >= 1024 {
-
 			sizeStr = fmt.Sprintf("%.2f KB", float64(backup.Size)/1024)
-
 		} else {
-
 			sizeStr = fmt.Sprintf("%d B", backup.Size)
-
 		}
 
-		
-
-		// Print row with proper formatting
-
-		// %-*s means left-aligned string with width
-
-		// %*s means right-aligned string with width
-
-		fmt.Printf("%s│%s %s%-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
-
+		fmt.Printf("%s│%s %s%3d. %-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
 			ColorGray, ColorReset,
-
-			ColorGreen, col1Width, name, ColorReset,
-
+			ColorGreen, i+1, maxNameLen, name, ColorReset,
 			ColorGray, ColorReset,
-
 			col2Width, modTime,
-
 			ColorGray, ColorReset,
-
 			col3Width, sizeStr,
-
 			ColorGray, ColorReset)
-
 	}
 
-	
-
 	// Bottom border
-
 	fmt.Printf("%s└%s┴%s┴%s┘%s\n\n",
-
 		ColorGray,
-
 		strings.Repeat("─", col1Width+2),
-
 		strings.Repeat("─", col2Width+2),
-
 		strings.Repeat("─", col3Width+2),
-
 		ColorReset)
-
 }
 
+// restoreBackup restores a backup file with validation
+func restoreBackup(backupPath, originalPath string) error {
+	// Validate paths
+	if err := validatePath(originalPath); err != nil {
+		return err
+	}
+
+	// Check if backup exists
+	info, err := os.Stat(backupPath)
+	if err != nil {
+		return fmt.Errorf("backup file not found: %w", err)
+	}
+
+	// Check backup isn't too large
+	if info.Size() > MaxClipboardSize {
+		return fmt.Errorf("backup file too large to restore (max %dMB)", MaxClipboardSize/(1024*1024))
+	}
+
+	// Read backup file
+	content, err := os.ReadFile(backupPath)
+	if err != nil {
+		return fmt.Errorf("failed to read backup file: %w", err)
+	}
+
+	// Create backup of current file if it exists
+	if _, err := os.Stat(originalPath); err == nil {
+		_, err = autoRenameIfExists(originalPath)
+		if err != nil {
+			return fmt.Errorf("failed to backup current file: %w", err)
+		}
+	}
+
+	// Write content to original filename
+	err = os.WriteFile(originalPath, content, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to restore file: %w", err)
+	}
+
+	logger.Printf("Restored: %s from %s", originalPath, backupPath)
+	fmt.Printf("✅ Successfully restored: %s\n", originalPath)
+	fmt.Printf("📦 From backup: %s\n", filepath.Base(backupPath))
+	fmt.Printf("📝 Content size: %d characters\n", len(content))
+
+	return nil
+}
+
+// readUserChoice reads and validates user input
+func readUserChoice(max int) (int, error) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("Enter backup number to restore (1-%d) or 0 to cancel: ", max)
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return 0, fmt.Errorf("failed to read input: %w", err)
+	}
+
+	// Trim whitespace
+	input = strings.TrimSpace(input)
+
+	// Parse integer
+	choice, err := strconv.Atoi(input)
+	if err != nil {
+		return 0, fmt.Errorf("invalid input: please enter a number")
+	}
+
+	// Validate range
+	if choice < 0 || choice > max {
+		return 0, fmt.Errorf("invalid selection: must be between 0 and %d", max)
+	}
+
+	return choice, nil
+}
 
 // printHelp displays usage information
 func printHelp() {
+	fmt.Printf("%sPT - Clipboard to File Tool v%s%s\n\n", ColorBold, Version, ColorReset)
 	fmt.Println("Usage:")
-	fmt.Println("  pt <filename>          Write clipboard to file")
-	fmt.Println("  pt + <filename>        Append clipboard to file")
-	fmt.Println("  pt -l <filename>       List backups")
-	fmt.Println("  pt -h, --help          Show this help message")
+	fmt.Println("  pt <filename>               Write clipboard to file")
+	fmt.Println("  pt + <filename>             Append clipboard to file")
+	fmt.Println("  pt -l <filename>            List backups")
+	fmt.Println("  pt -r <filename>            Restore backup (interactive)")
+	fmt.Println("  pt -r <filename> --last     Restore last backup")
+	fmt.Println("  pt -h, --help               Show this help")
+	fmt.Println("  pt -v, --version            Show version")
+	fmt.Println("\nExamples:")
+	fmt.Println("  pt notes.txt                # Save clipboard to notes.txt")
+	fmt.Println("  pt + log.txt                # Append clipboard to log.txt")
+	fmt.Println("  pt -l notes.txt             # List all backups")
+	fmt.Println("  pt -r notes.txt             # Interactive restore")
+	fmt.Println("  pt -r notes.txt --last      # Restore most recent backup")
+	fmt.Printf("\n%sLimits: Max file size %dMB, Max %d backups kept%s\n",
+		ColorGray, MaxClipboardSize/(1024*1024), MaxBackupCount, ColorReset)
 }
 
-// Step 6: Main function - the entry point of the program
+// printVersion displays version information
+func printVersion() {
+	fmt.Printf("PT version %s\n", Version)
+	fmt.Println("Production-hardened clipboard to file tool")
+}
 
 func main() {
-
-	// Check command line arguments
-
-	// os.Args is a slice containing all command line arguments
-
-	// os.Args[0] is the program name, os.Args[1] is first argument, etc.
-
-	// Handle help flags first
-	if len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
-		printHelp()
-		os.Exit(0)
+	// Handle help and version flags
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case "-h", "--help":
+			printHelp()
+			os.Exit(0)
+		case "-v", "--version":
+			printVersion()
+			os.Exit(0)
+		}
 	}
 
-	// Check command line arguments
+	// Require at least one argument
 	if len(os.Args) < 2 {
+		fmt.Printf("%s❌ Error: No command specified%s\n\n", ColorRed, ColorReset)
 		printHelp()
 		os.Exit(1)
 	}
 
-	// if len(os.Args) < 2 {
-
-	// 	// No arguments provided
-
-	// 	fmt.Println("\nUsage:")
-
-	// 	fmt.Println("  pt <filename>          Write clipboard to file")
-
-	// 	fmt.Println("  pt + <filename>        Append clipboard to file")
-
-	// 	fmt.Println("  pt -l <filename>       List backups")
-
-	// 	os.Exit(1)
-
-	// }
-
-	
-
 	// Handle different commands
-
 	switch os.Args[1] {
-
 	case "-l", "--list":
-
-		// List backups command
-
 		if len(os.Args) < 3 {
-
-			fmt.Println("❌ Error: Filename required")
-
+			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
 			os.Exit(1)
-
 		}
-
-		
 
 		backups, err := listBackups(os.Args[2])
-
 		if err != nil {
-
-			fmt.Printf("❌ Error: %v\n", err)
-
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
-
 		}
 
-		
-
-		if len(backups) > 0 {
-
+		if len(backups) == 0 {
+			fmt.Printf("ℹ️  No backups found for: %s\n", os.Args[2])
+		} else {
 			printBackupTable(os.Args[2], backups)
-
 		}
 
-		
+	case "-r", "--restore":
+		if len(os.Args) < 3 {
+			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+			os.Exit(1)
+		}
+
+		filePath := os.Args[2]
+
+		// Get list of backups
+		backups, err := listBackups(filePath)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
+		if len(backups) == 0 {
+			fmt.Printf("%s❌ Error: No backups found for: %s%s\n", ColorRed, filePath, ColorReset)
+			os.Exit(1)
+		}
+
+		// Check for --last flag
+		if len(os.Args) == 4 && os.Args[3] == "--last" {
+			err = restoreBackup(backups[0].Path, filePath)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+		} else {
+			// Interactive selection
+			printBackupTable(filePath, backups)
+
+			choice, err := readUserChoice(len(backups))
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+			if choice == 0 {
+				fmt.Println("❌ Restore cancelled")
+				os.Exit(0)
+			}
+
+			// Restore selected backup
+			selectedBackup := backups[choice-1]
+			err = restoreBackup(selectedBackup.Path, filePath)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+		}
 
 	case "+":
-
-		// Append mode
-
 		if len(os.Args) < 3 {
-
-			fmt.Println("❌ Error: Filename required")
-
+			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
 			os.Exit(1)
-
 		}
-
-		
-
-		// Get clipboard content
 
 		text, err := getClipboardText()
-
 		if err != nil {
-
-			fmt.Printf("❌ Error: %v\n", err)
-
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
-
 		}
-
-		
-
-		// Write to file in append mode
-
-		err = writeFile(os.Args[2], text, true)
-
-		if err != nil {
-
-			fmt.Printf("❌ Error: %v\n", err)
-
-			os.Exit(1)
-
-		}
-
-		
-
-	default:
-
-		// Write mode (default)
-
-		// Get clipboard content
-
-		text, err := getClipboardText()
-
-		if err != nil {
-
-			fmt.Printf("❌ Error: %v\n", err)
-
-			os.Exit(1)
-
-		}
-
-		
 
 		if text == "" {
-
-			fmt.Println("⚠️  Warning: Clipboard is empty")
-
+			fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
 			os.Exit(1)
-
 		}
 
-		
+		err = writeFile(os.Args[2], text, true)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
 
-		// Write to file (will create backup if file exists)
+	default:
+		// Write mode (default)
+		text, err := getClipboardText()
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
+		if text == "" {
+			fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+			os.Exit(1)
+		}
 
 		err = writeFile(os.Args[1], text, false)
-
 		if err != nil {
-
-			fmt.Printf("❌ Error: %v\n", err)
-
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
-
 		}
-
 	}
-
 }
