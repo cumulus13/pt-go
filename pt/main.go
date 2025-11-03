@@ -27,6 +27,7 @@ const (
 	MaxClipboardSize = 100 * 1024 * 1024 // 100MB max
 	MaxBackupCount   = 100                // Keep max 100 backups
 	MaxFilenameLen   = 200                // Max filename length
+	BackupDirName    = "backup"           // Backup directory name
 	Version          = "2.0.0"
 )
 
@@ -55,6 +56,41 @@ var logger *log.Logger
 func init() {
 	// Initialize logger (write to stderr to not interfere with stdout)
 	logger = log.New(os.Stderr, "", log.LstdFlags)
+}
+
+// ensureBackupDir creates backup directory if it doesn't exist
+// Returns the absolute path to the backup directory
+func ensureBackupDir(filePath string) (string, error) {
+	// Get directory of the target file
+	dir := filepath.Dir(filePath)
+	if dir == "." {
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get current directory: %w", err)
+		}
+	}
+
+	// Create backup directory path
+	backupDir := filepath.Join(dir, BackupDirName)
+
+	// Check if backup directory exists
+	info, err := os.Stat(backupDir)
+	if os.IsNotExist(err) {
+		// Create backup directory with appropriate permissions
+		err = os.MkdirAll(backupDir, 0755)
+		if err != nil {
+			return "", fmt.Errorf("failed to create backup directory: %w", err)
+		}
+		logger.Printf("Created backup directory: %s", backupDir)
+		fmt.Printf("📁 Created backup directory: %s\n", backupDir)
+	} else if err != nil {
+		return "", fmt.Errorf("failed to check backup directory: %w", err)
+	} else if !info.IsDir() {
+		return "", fmt.Errorf("backup path exists but is not a directory: %s", backupDir)
+	}
+
+	return backupDir, nil
 }
 
 // validatePath checks for path traversal and other security issues
@@ -125,9 +161,12 @@ func generateShortID() string {
 }
 
 // generateUniqueBackupName creates a collision-resistant backup filename
+// Now returns just the filename (without directory path)
 func generateUniqueBackupName(filePath string) string {
-	ext := filepath.Ext(filePath)
-	base := strings.TrimSuffix(filePath, ext)
+	// Get just the base filename (not the full path)
+	baseName := filepath.Base(filePath)
+	ext := filepath.Ext(baseName)
+	nameWithoutExt := strings.TrimSuffix(baseName, ext)
 
 	// Format: YYYYMMDD_HHMMSSµµµµµµ (no dots in timestamp)
 	timestamp := time.Now().Format("20060102_150405.000000")
@@ -136,7 +175,7 @@ func generateUniqueBackupName(filePath string) string {
 	// Add process ID and random component for uniqueness
 	uniqueID := fmt.Sprintf("%d_%s", os.Getpid(), generateShortID())
 
-	return fmt.Sprintf("%s_%s.%s.%s", base, strings.TrimPrefix(ext, "."), timestamp, uniqueID)
+	return fmt.Sprintf("%s_%s.%s.%s", nameWithoutExt, strings.TrimPrefix(ext, "."), timestamp, uniqueID)
 }
 
 // getClipboardText reads from clipboard with size validation
@@ -155,6 +194,7 @@ func getClipboardText() (string, error) {
 }
 
 // autoRenameIfExists creates backup with atomic-like behavior
+// Now stores backups in the "backup" subdirectory
 func autoRenameIfExists(filePath string) (string, error) {
 	// Check if file exists
 	info, err := os.Stat(filePath)
@@ -171,17 +211,33 @@ func autoRenameIfExists(filePath string) (string, error) {
 		return filePath, nil
 	}
 
-	// Generate unique backup name
-	backupName := generateUniqueBackupName(filePath)
+	// Ensure backup directory exists
+	backupDir, err := ensureBackupDir(filePath)
+	if err != nil {
+		return filePath, err
+	}
 
-	// Rename the file
-	err = os.Rename(filePath, backupName)
+	// Generate unique backup filename (just the name, not full path)
+	backupFileName := generateUniqueBackupName(filePath)
+	
+	// Full path to backup file in backup directory
+	backupPath := filepath.Join(backupDir, backupFileName)
+
+	// Copy the file to backup directory (not rename, so original stays)
+	// Read original file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return filePath, fmt.Errorf("failed to read file for backup: %w", err)
+	}
+
+	// Write to backup directory
+	err = os.WriteFile(backupPath, content, 0644)
 	if err != nil {
 		return filePath, fmt.Errorf("failed to create backup: %w", err)
 	}
 
-	logger.Printf("Backup created: %s -> %s", filePath, backupName)
-	fmt.Printf("📦 Backup created: %s\n", filepath.Base(backupName))
+	logger.Printf("Backup created: %s -> %s", filePath, backupPath)
+	fmt.Printf("📦 Backup created: %s%s%s\n", ColorGreen, backupFileName, ColorReset)
 
 	return filePath, nil
 }
@@ -250,13 +306,14 @@ func writeFile(filePath string, data string, appendMode bool) error {
 	return nil
 }
 
-// listBackups returns backup files with improved validation
+// listBackups returns backup files from backup directory
 func listBackups(filePath string) ([]BackupInfo, error) {
 	// Validate path first
 	if err := validatePath(filePath); err != nil {
 		return nil, err
 	}
 
+	// Get backup directory path
 	dir := filepath.Dir(filePath)
 	if dir == "." {
 		var err error
@@ -265,21 +322,30 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 			return nil, err
 		}
 	}
+	
+	backupDir := filepath.Join(dir, BackupDirName)
 
-	// Parse filename pattern
-	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-	ext := strings.TrimPrefix(filepath.Ext(filePath), ".")
+	// Check if backup directory exists
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		// No backup directory means no backups
+		return []BackupInfo{}, nil
+	}
+
+	// Get base filename for pattern matching
+	baseName := filepath.Base(filePath)
+	ext := filepath.Ext(baseName)
+	nameWithoutExt := strings.TrimSuffix(baseName, ext)
+	extWithoutDot := strings.TrimPrefix(ext, ".")
 	
 	// Pattern should match: basename_ext.timestamp...
-	pattern := fmt.Sprintf("%s_%s.", base, ext)
+	pattern := fmt.Sprintf("%s_%s.", nameWithoutExt, extWithoutDot)
 	
-	// Debug logging
-	logger.Printf("Looking for backups with pattern: %s in directory: %s", pattern, dir)
+	logger.Printf("Looking for backups with pattern: %s in directory: %s", pattern, backupDir)
 
-	// Read directory using modern API
-	entries, err := os.ReadDir(dir)
+	// Read backup directory
+	entries, err := os.ReadDir(backupDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory: %w", err)
+		return nil, fmt.Errorf("failed to read backup directory: %w", err)
 	}
 
 	backups := make([]BackupInfo, 0)
@@ -291,7 +357,6 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 
 		name := entry.Name()
 		
-		// Debug: log what we're checking
 		logger.Printf("Checking file: %s against pattern: %s", name, pattern)
 		
 		if !strings.HasPrefix(name, pattern) {
@@ -301,7 +366,6 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		// Extract and validate timestamp
 		timestamp := strings.TrimPrefix(name, pattern)
 		
-		// Debug: log timestamp extraction
 		logger.Printf("Extracted timestamp: %s (length: %d)", timestamp, len(timestamp))
 		
 		if len(timestamp) < 20 {
@@ -310,13 +374,12 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		}
 
 		// More flexible validation: check if it starts with a date-like pattern
-		// Format should be: YYYYMMDD_HHMMSS... (at least 15 digits in first 20 chars)
 		timestampPart := timestamp
 		if len(timestampPart) > 30 {
 			timestampPart = timestampPart[:30]
 		}
 		
-		// Count digits in the timestamp part (should have many digits for date/time)
+		// Count digits in the timestamp part
 		digitCount := 0
 		for _, c := range timestampPart {
 			if c >= '0' && c <= '9' {
@@ -338,7 +401,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 
 		logger.Printf("Found valid backup: %s", name)
 		backups = append(backups, BackupInfo{
-			Path:    filepath.Join(dir, name),
+			Path:    filepath.Join(backupDir, name),
 			Name:    name,
 			ModTime: info.ModTime(),
 			Size:    info.Size(),
@@ -362,20 +425,6 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 	return backups, nil
 }
 
-// isValidTimestamp checks if string matches our timestamp format
-func isValidTimestamp(s string) bool {
-	if len(s) != 20 {
-		return false
-	}
-	// Check if all characters are digits
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
-
 // printBackupTable displays backups in formatted table
 func printBackupTable(filePath string, backups []BackupInfo) {
 	const (
@@ -386,7 +435,8 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 
 	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
 		ColorCyan, ColorBold, filePath, ColorReset, ColorCyan, ColorReset)
-	fmt.Printf("%sTotal: %d backup(s)%s\n\n", ColorGray, len(backups), ColorReset)
+	fmt.Printf("%sTotal: %d backup(s) (stored in ./%s/)%s\n\n", 
+		ColorGray, len(backups), BackupDirName, ColorReset)
 
 	// Top border
 	fmt.Printf("%s┌%s┬%s┬%s┐%s\n",
@@ -543,7 +593,8 @@ func printHelp() {
 	fmt.Println("  pt -l notes.txt             # List all backups")
 	fmt.Println("  pt -r notes.txt             # Interactive restore")
 	fmt.Println("  pt -r notes.txt --last      # Restore most recent backup")
-	fmt.Printf("\n%sLimits: Max file size %dMB, Max %d backups kept%s\n",
+	fmt.Printf("\n%sBackup Location: All backups stored in ./%s/ directory%s\n", ColorCyan, BackupDirName, ColorReset)
+	fmt.Printf("%sLimits: Max file size %dMB, Max %d backups kept%s\n",
 		ColorGray, MaxClipboardSize/(1024*1024), MaxBackupCount, ColorReset)
 }
 
@@ -588,7 +639,7 @@ func main() {
 		}
 
 		if len(backups) == 0 {
-			fmt.Printf("ℹ️  No backups found for: %s\n", os.Args[2])
+			fmt.Printf("ℹ️  No backups found for: %s (check ./%s/ directory)\n", os.Args[2], BackupDirName)
 		} else {
 			printBackupTable(os.Args[2], backups)
 		}
@@ -609,7 +660,8 @@ func main() {
 		}
 
 		if len(backups) == 0 {
-			fmt.Printf("%s❌ Error: No backups found for: %s%s\n", ColorRed, filePath, ColorReset)
+			fmt.Printf("%s❌ Error: No backups found for: %s (check ./%s/ directory)%s\n", 
+				ColorRed, filePath, BackupDirName, ColorReset)
 			os.Exit(1)
 		}
 
