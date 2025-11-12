@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -28,7 +29,8 @@ const (
 	MaxBackupCount   = 100                // Keep max 100 backups
 	MaxFilenameLen   = 200                // Max filename length
 	BackupDirName    = "backup"           // Backup directory name
-	Version          = "2.0.0"
+	Version          = "2.1.0"
+	MaxSearchDepth   = 10                 // Max directory depth for recursive search
 )
 
 // ANSI color codes for pretty output
@@ -40,6 +42,7 @@ const (
 	ColorGray   = "\033[90m"
 	ColorBold   = "\033[1m"
 	ColorRed    = "\033[91m"
+	ColorBlue   = "\033[94m"
 )
 
 // BackupInfo stores information about a backup file
@@ -50,12 +53,334 @@ type BackupInfo struct {
 	Size    int64
 }
 
+// FileSearchResult stores information about found files
+type FileSearchResult struct {
+	Path     string
+	Dir      string
+	Size     int64
+	ModTime  time.Time
+	Depth    int
+}
+
 // Logger for audit trail
 var logger *log.Logger
 
 func init() {
 	// Initialize logger (write to stderr to not interfere with stdout)
 	logger = log.New(os.Stderr, "", log.LstdFlags)
+}
+
+// searchFileRecursive searches for a file recursively in current and subdirectories
+func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, error) {
+	results := make([]FileSearchResult, 0)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// First check current directory
+	currentPath := filepath.Join(cwd, filename)
+	if info, err := os.Stat(currentPath); err == nil && !info.IsDir() {
+		results = append(results, FileSearchResult{
+			Path:    currentPath,
+			Dir:     cwd,
+			Size:    info.Size(),
+			ModTime: info.ModTime(),
+			Depth:   0,
+		})
+	}
+
+	// Then search recursively
+	err = filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// Skip directories we can't access
+			return nil
+		}
+
+		// Skip backup directories
+		if info.IsDir() && info.Name() == BackupDirName {
+			return filepath.SkipDir
+		}
+
+		// Calculate depth
+		relPath, err := filepath.Rel(cwd, path)
+		if err != nil {
+			return nil
+		}
+		depth := len(strings.Split(relPath, string(os.PathSeparator))) - 1
+
+		// Skip if too deep
+		if depth > maxDepth {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Check if filename matches
+		if !info.IsDir() && info.Name() == filename {
+			// Skip if already added (current directory)
+			if path == currentPath {
+				return nil
+			}
+
+			results = append(results, FileSearchResult{
+				Path:    path,
+				Dir:     filepath.Dir(path),
+				Size:    info.Size(),
+				ModTime: info.ModTime(),
+				Depth:   depth,
+			})
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return results, fmt.Errorf("error during search: %w", err)
+	}
+
+	return results, nil
+}
+
+// printFileSearchResults displays found files in a formatted table
+func printFileSearchResults(results []FileSearchResult) {
+	const (
+		col1Width = 60
+		col2Width = 19
+		col3Width = 12
+	)
+
+	fmt.Printf("\n%s🔍 Found %d file(s):%s\n\n", ColorCyan, len(results), ColorReset)
+
+	// Top border
+	fmt.Printf("%s┌%s┬%s┬%s┐%s\n",
+		ColorGray,
+		strings.Repeat("─", col1Width+2),
+		strings.Repeat("─", col2Width+2),
+		strings.Repeat("─", col3Width+2),
+		ColorReset)
+
+	// Header row
+	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s\n",
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col1Width, "Path", ColorReset,
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col2Width, "Modified", ColorReset,
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col3Width, "Size", ColorReset,
+		ColorGray, ColorReset)
+
+	// Separator
+	fmt.Printf("%s├%s┼%s┼%s┤%s\n",
+		ColorGray,
+		strings.Repeat("─", col1Width+2),
+		strings.Repeat("─", col2Width+2),
+		strings.Repeat("─", col3Width+2),
+		ColorReset)
+
+	// Data rows
+	for i, result := range results {
+		// Get relative path for display
+		cwd, _ := os.Getwd()
+		relPath, err := filepath.Rel(cwd, result.Path)
+		if err != nil {
+			relPath = result.Path
+		}
+
+		displayPath := relPath
+		maxPathLen := col1Width - 5
+		if len(displayPath) > maxPathLen {
+			displayPath = "..." + displayPath[len(displayPath)-maxPathLen+3:]
+		}
+
+		modTime := result.ModTime.Format("2006-01-02 15:04:05")
+
+		var sizeStr string
+		if result.Size >= 1024*1024 {
+			sizeStr = fmt.Sprintf("%.2f MB", float64(result.Size)/(1024*1024))
+		} else if result.Size >= 1024 {
+			sizeStr = fmt.Sprintf("%.2f KB", float64(result.Size)/1024)
+		} else {
+			sizeStr = fmt.Sprintf("%d B", result.Size)
+		}
+
+		fmt.Printf("%s│%s %s%3d. %-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
+			ColorGray, ColorReset,
+			ColorGreen, i+1, maxPathLen, displayPath, ColorReset,
+			ColorGray, ColorReset,
+			col2Width, modTime,
+			ColorGray, ColorReset,
+			col3Width, sizeStr,
+			ColorGray, ColorReset)
+	}
+
+	// Bottom border
+	fmt.Printf("%s└%s┴%s┴%s┘%s\n\n",
+		ColorGray,
+		strings.Repeat("─", col1Width+2),
+		strings.Repeat("─", col2Width+2),
+		strings.Repeat("─", col3Width+2),
+		ColorReset)
+}
+
+// resolveFilePath resolves the file path, searching recursively if not found in current directory
+func resolveFilePath(filename string) (string, error) {
+	// First check if file exists in current directory
+	if info, err := os.Stat(filename); err == nil && !info.IsDir() {
+		absPath, _ := filepath.Abs(filename)
+		return absPath, nil
+	}
+
+	// Search recursively
+	logger.Printf("File not found in current directory, searching recursively...")
+	fmt.Printf("%s🔍 Searching for '%s' in subdirectories...%s\n", ColorBlue, filename, ColorReset)
+
+	results, err := searchFileRecursive(filename, MaxSearchDepth)
+	if err != nil {
+		return "", err
+	}
+
+	if len(results) == 0 {
+		return "", fmt.Errorf("file '%s' not found in current directory or subdirectories", filename)
+	}
+
+	if len(results) == 1 {
+		fmt.Printf("%s✓ Found: %s%s\n", ColorGreen, results[0].Path, ColorReset)
+		return results[0].Path, nil
+	}
+
+	// Multiple files found, prompt user
+	printFileSearchResults(results)
+
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("Enter file number to use (1-%d) or 0 to cancel: ", len(results))
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("failed to read input: %w", err)
+	}
+
+	input = strings.TrimSpace(input)
+	choice, err := strconv.Atoi(input)
+	if err != nil {
+		return "", fmt.Errorf("invalid input: please enter a number")
+	}
+
+	if choice < 0 || choice > len(results) {
+		return "", fmt.Errorf("invalid selection: must be between 0 and %d", len(results))
+	}
+
+	if choice == 0 {
+		return "", fmt.Errorf("operation cancelled")
+	}
+
+	return results[choice-1].Path, nil
+}
+
+// checkDeltaInstalled checks if delta CLI tool is installed
+func checkDeltaInstalled() bool {
+	_, err := exec.LookPath("delta")
+	return err == nil
+}
+
+// runDelta executes delta to show diff between two files
+func runDelta(file1, file2 string) error {
+	if !checkDeltaInstalled() {
+		return fmt.Errorf("delta is not installed. Install it from: https://github.com/dandavison/delta")
+	}
+
+	cmd := exec.Command("delta", file1, file2)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	
+	// Delta returns exit status 1 when files differ - this is NORMAL, not an error!
+	// Only return error if exit code is something else (2+ means real error)
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 1 {
+				// Exit code 1 = files differ, which is expected - NOT an error
+				return nil
+			}
+		}
+		// Real error (exit code 2+ or other issue)
+		return err
+	}
+
+	return nil
+}
+
+// handleDiffCommand handles the -d/--diff command
+func handleDiffCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("filename required for diff command")
+	}
+
+	filename := args[0]
+	useLast := len(args) > 1 && args[1] == "--last"
+
+	// Resolve file path
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		return err
+	}
+
+	// Get backups
+	backups, err := listBackups(filePath)
+	if err != nil {
+		return err
+	}
+
+	if len(backups) == 0 {
+		return fmt.Errorf("no backups found for: %s (check ./%s/ directory)", filePath, BackupDirName)
+	}
+
+	var selectedBackup BackupInfo
+
+	if useLast {
+		// Use last backup
+		selectedBackup = backups[0]
+		fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	} else {
+		// Show backups and prompt
+		printBackupTable(filePath, backups)
+
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Enter backup number to compare (1-%d) or 0 to cancel: ", len(backups))
+
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read input: %w", err)
+		}
+
+		input = strings.TrimSpace(input)
+		choice, err := strconv.Atoi(input)
+		if err != nil {
+			return fmt.Errorf("invalid input: please enter a number")
+		}
+
+		if choice < 0 || choice > len(backups) {
+			return fmt.Errorf("invalid selection: must be between 0 and %d", len(backups))
+		}
+
+		if choice == 0 {
+			return fmt.Errorf("diff cancelled")
+		}
+
+		selectedBackup = backups[choice-1]
+		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	}
+
+	// Run delta
+	err = runDelta(selectedBackup.Path, filePath)
+	if err != nil {
+		return fmt.Errorf("delta execution failed: %w", err)
+	}
+
+	return nil
 }
 
 // ensureBackupDir creates backup directory if it doesn't exist
@@ -301,7 +626,7 @@ func writeFile(filePath string, data string, appendMode bool) error {
 
 	logger.Printf("Successfully %s: %s (%d bytes)", action, filePath, len(data))
 	fmt.Printf("✅ Successfully %s: %s\n", action, filePath)
-	fmt.Printf("📝 Content size: %d characters\n", len(data))
+	fmt.Printf("📄 Content size: %d characters\n", len(data))
 
 	return nil
 }
@@ -544,7 +869,7 @@ func restoreBackup(backupPath, originalPath string) error {
 	logger.Printf("Restored: %s from %s", originalPath, backupPath)
 	fmt.Printf("✅ Successfully restored: %s\n", originalPath)
 	fmt.Printf("📦 From backup: %s\n", filepath.Base(backupPath))
-	fmt.Printf("📝 Content size: %d characters\n", len(content))
+	fmt.Printf("📄 Content size: %d characters\n", len(content))
 
 	return nil
 }
@@ -585,6 +910,8 @@ func printHelp() {
 	fmt.Println("  pt -l <filename>            List backups")
 	fmt.Println("  pt -r <filename>            Restore backup (interactive)")
 	fmt.Println("  pt -r <filename> --last     Restore last backup")
+	fmt.Println("  pt -d <filename>            Compare file with backup (interactive)")
+	fmt.Println("  pt -d <filename> --last     Compare file with last backup")
 	fmt.Println("  pt -h, --help               Show this help")
 	fmt.Println("  pt -v, --version            Show version")
 	fmt.Println("\nExamples:")
@@ -593,15 +920,23 @@ func printHelp() {
 	fmt.Println("  pt -l notes.txt             # List all backups")
 	fmt.Println("  pt -r notes.txt             # Interactive restore")
 	fmt.Println("  pt -r notes.txt --last      # Restore most recent backup")
+	fmt.Println("  pt -d notes.txt             # Interactive diff with backup")
+	fmt.Println("  pt -d notes.txt --last      # Diff with most recent backup")
+	fmt.Printf("\n%sFeatures:%s\n", ColorBold, ColorReset)
+	fmt.Printf("  • %sRecursive Search:%s If file not in current dir, searches subdirectories\n", ColorCyan, ColorReset)
+	fmt.Printf("  • %sDiff Support:%s Uses 'delta' CLI tool for beautiful diffs\n", ColorCyan, ColorReset)
 	fmt.Printf("\n%sBackup Location: All backups stored in ./%s/ directory%s\n", ColorCyan, BackupDirName, ColorReset)
 	fmt.Printf("%sLimits: Max file size %dMB, Max %d backups kept%s\n",
 		ColorGray, MaxClipboardSize/(1024*1024), MaxBackupCount, ColorReset)
+	fmt.Printf("\n%sNote: Install 'delta' for diff functionality: https://github.com/dandavison/delta%s\n",
+		ColorGray, ColorReset)
 }
 
 // printVersion displays version information
 func printVersion() {
 	fmt.Printf("PT version %s\n", Version)
 	fmt.Println("Production-hardened clipboard to file tool")
+	fmt.Println("Features: Recursive search, backup management, delta diff support")
 }
 
 func main() {
@@ -632,16 +967,35 @@ func main() {
 			os.Exit(1)
 		}
 
-		backups, err := listBackups(os.Args[2])
+		// Resolve file path with recursive search
+		filePath, err := resolveFilePath(os.Args[2])
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
+		backups, err := listBackups(filePath)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
 		}
 
 		if len(backups) == 0 {
-			fmt.Printf("ℹ️  No backups found for: %s (check ./%s/ directory)\n", os.Args[2], BackupDirName)
+			fmt.Printf("ℹ️  No backups found for: %s (check ./%s/ directory)\n", filePath, BackupDirName)
 		} else {
-			printBackupTable(os.Args[2], backups)
+			printBackupTable(filePath, backups)
+		}
+
+	case "-d", "--diff":
+		if len(os.Args) < 3 {
+			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+			os.Exit(1)
+		}
+
+		err := handleDiffCommand(os.Args[2:])
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
 		}
 
 	case "-r", "--restore":
@@ -650,7 +1004,19 @@ func main() {
 			os.Exit(1)
 		}
 
-		filePath := os.Args[2]
+		filename := os.Args[2]
+
+		// Resolve file path with recursive search
+		filePath, err := resolveFilePath(filename)
+		if err != nil {
+			// For restore, if file doesn't exist, use the filename as-is
+			// (we're restoring it, so it might not exist yet)
+			filePath = filename
+			absPath, err := filepath.Abs(filePath)
+			if err == nil {
+				filePath = absPath
+			}
+		}
 
 		// Get list of backups
 		backups, err := listBackups(filePath)
@@ -713,7 +1079,14 @@ func main() {
 			os.Exit(1)
 		}
 
-		err = writeFile(os.Args[2], text, true)
+		// Resolve file path with recursive search
+		filePath, err := resolveFilePath(os.Args[2])
+		if err != nil {
+			// If file doesn't exist, use the provided path as-is
+			filePath = os.Args[2]
+		}
+
+		err = writeFile(filePath, text, true)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
@@ -732,7 +1105,14 @@ func main() {
 			os.Exit(1)
 		}
 
-		err = writeFile(os.Args[1], text, false)
+		// Resolve file path with recursive search
+		filePath, err := resolveFilePath(os.Args[1])
+		if err != nil {
+			// If file doesn't exist, use the provided path as-is
+			filePath = os.Args[1]
+		}
+
+		err = writeFile(filePath, text, false)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
