@@ -21,17 +21,30 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
+	"gopkg.in/yaml.v3"
 )
 
-// Configuration constants
+// Configuration constants (defaults)
 const (
-	MaxClipboardSize = 100 * 1024 * 1024 // 100MB max
-	MaxBackupCount   = 100                // Keep max 100 backups
-	MaxFilenameLen   = 200                // Max filename length
-	BackupDirName    = "backup"           // Backup directory name
-	Version          = "2.1.0"
-	MaxSearchDepth   = 10                 // Max directory depth for recursive search
+	DefaultMaxClipboardSize = 100 * 1024 * 1024 // 100MB max
+	DefaultMaxBackupCount   = 100                // Keep max 100 backups
+	DefaultMaxFilenameLen   = 200                // Max filename length
+	DefaultBackupDirName    = "backup"           // Backup directory name
+	Version                 = "2.3.0"
+	DefaultMaxSearchDepth   = 10                 // Max directory depth for recursive search
 )
+
+// Config holds the application configuration
+type Config struct {
+	MaxClipboardSize int    `yaml:"max_clipboard_size"` // in bytes
+	MaxBackupCount   int    `yaml:"max_backup_count"`
+	MaxFilenameLen   int    `yaml:"max_filename_length"`
+	BackupDirName    string `yaml:"backup_dir_name"`
+	MaxSearchDepth   int    `yaml:"max_search_depth"`
+}
+
+// Global config instance
+var appConfig *Config
 
 // ANSI color codes for pretty output
 const (
@@ -62,12 +75,575 @@ type FileSearchResult struct {
 	Depth    int
 }
 
+// TreeNode represents a node in the directory tree
+type TreeNode struct {
+	Name     string
+	Path     string
+	IsDir    bool
+	Size     int64
+	Children []*TreeNode
+}
+
+// GitIgnore holds gitignore patterns
+type GitIgnore struct {
+	patterns []string
+}
+
 // Logger for audit trail
 var logger *log.Logger
 
 func init() {
 	// Initialize logger (write to stderr to not interfere with stdout)
 	logger = log.New(os.Stderr, "", log.LstdFlags)
+	
+	// Load configuration
+	appConfig = loadConfig()
+}
+
+// getDefaultConfig returns default configuration
+func getDefaultConfig() *Config {
+	return &Config{
+		MaxClipboardSize: DefaultMaxClipboardSize,
+		MaxBackupCount:   DefaultMaxBackupCount,
+		MaxFilenameLen:   DefaultMaxFilenameLen,
+		BackupDirName:    DefaultBackupDirName,
+		MaxSearchDepth:   DefaultMaxSearchDepth,
+	}
+}
+
+// findConfigFile searches for pt.yml or pt.yaml in multiple locations
+func findConfigFile() string {
+	// Config file names to search for
+	configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
+	
+	// Search locations (in order of priority)
+	searchPaths := []string{
+		".",                                    // Current directory
+		filepath.Join(os.Getenv("HOME"), ".config", "pt"), // ~/.config/pt/
+		os.Getenv("HOME"),                      // Home directory
+	}
+	
+	// Windows home directory
+	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+		searchPaths = append(searchPaths, userProfile)
+	}
+	
+	// Search for config file
+	for _, basePath := range searchPaths {
+		for _, configName := range configNames {
+			configPath := filepath.Join(basePath, configName)
+			if _, err := os.Stat(configPath); err == nil {
+				return configPath
+			}
+		}
+	}
+	
+	return ""
+}
+
+// loadConfig loads configuration from pt.yml/pt.yaml or uses defaults
+func loadConfig() *Config {
+	config := getDefaultConfig()
+	
+	configPath := findConfigFile()
+	if configPath == "" {
+		logger.Println("No config file found, using defaults")
+		return config
+	}
+	
+	logger.Printf("Loading config from: %s", configPath)
+	
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		logger.Printf("Warning: failed to read config file: %v, using defaults", err)
+		return config
+	}
+	
+	err = yaml.Unmarshal(data, config)
+	if err != nil {
+		logger.Printf("Warning: failed to parse config file: %v, using defaults", err)
+		return config
+	}
+	
+	// Validate loaded config and apply bounds
+	if config.MaxClipboardSize <= 0 || config.MaxClipboardSize > 1024*1024*1024 {
+		logger.Printf("Warning: invalid max_clipboard_size, using default")
+		config.MaxClipboardSize = DefaultMaxClipboardSize
+	}
+	
+	if config.MaxBackupCount <= 0 || config.MaxBackupCount > 10000 {
+		logger.Printf("Warning: invalid max_backup_count, using default")
+		config.MaxBackupCount = DefaultMaxBackupCount
+	}
+	
+	if config.MaxFilenameLen <= 0 || config.MaxFilenameLen > 1000 {
+		logger.Printf("Warning: invalid max_filename_length, using default")
+		config.MaxFilenameLen = DefaultMaxFilenameLen
+	}
+	
+	if config.BackupDirName == "" {
+		logger.Printf("Warning: empty backup_dir_name, using default")
+		config.BackupDirName = DefaultBackupDirName
+	}
+	
+	if config.MaxSearchDepth <= 0 || config.MaxSearchDepth > 100 {
+		logger.Printf("Warning: invalid max_search_depth, using default")
+		config.MaxSearchDepth = DefaultMaxSearchDepth
+	}
+	
+	logger.Printf("Config loaded successfully: clipboard=%dMB, backups=%d, depth=%d", 
+		config.MaxClipboardSize/(1024*1024), config.MaxBackupCount, config.MaxSearchDepth)
+	
+	return config
+}
+
+// generateSampleConfig creates a sample pt.yml file
+func generateSampleConfig(path string) error {
+	config := getDefaultConfig()
+	
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	
+	// Add comments to the generated file
+	header := `# PT Configuration File
+# This file configures the behavior of the PT tool
+# All values are optional - if not specified, defaults will be used
+
+# Maximum clipboard content size in bytes (default: 104857600 = 100MB)
+# Range: 1 - 1073741824 (1GB)
+`
+	
+	fullContent := header + string(data)
+	
+	err = os.WriteFile(path, []byte(fullContent), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	
+	return nil
+}
+
+// handleConfigCommand handles config-related commands
+func handleConfigCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("config subcommand required: 'init', 'show', or 'path'")
+	}
+	
+	subcommand := args[0]
+	
+	switch subcommand {
+	case "init":
+		// Generate sample config file
+		var configPath string
+		if len(args) > 1 {
+			configPath = args[1]
+		} else {
+			configPath = "pt.yml"
+		}
+		
+		// Check if file already exists
+		if _, err := os.Stat(configPath); err == nil {
+			fmt.Printf("%s⚠️  Warning: Config file already exists: %s%s\n", ColorYellow, configPath, ColorReset)
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("Overwrite? (y/N): ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input != "y" && input != "yes" {
+				fmt.Println("❌ Cancelled")
+				return nil
+			}
+		}
+		
+		err := generateSampleConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to generate config: %w", err)
+		}
+		
+		fmt.Printf("✅ Sample config file created: %s%s%s\n", ColorGreen, configPath, ColorReset)
+		fmt.Println("📝 Edit this file to customize PT behavior")
+		
+	case "show":
+		// Show current configuration
+		fmt.Printf("\n%sCurrent PT Configuration:%s\n\n", ColorBold, ColorReset)
+		fmt.Printf("%sMax Clipboard Size:%s %d bytes (%.1f MB)\n", 
+			ColorCyan, ColorReset, appConfig.MaxClipboardSize, float64(appConfig.MaxClipboardSize)/(1024*1024))
+		fmt.Printf("%sMax Backup Count:%s %d\n", ColorCyan, ColorReset, appConfig.MaxBackupCount)
+		fmt.Printf("%sMax Filename Length:%s %d characters\n", ColorCyan, ColorReset, appConfig.MaxFilenameLen)
+		fmt.Printf("%sBackup Directory:%s %s/\n", ColorCyan, ColorReset, appConfig.BackupDirName)
+		fmt.Printf("%sMax Search Depth:%s %d levels\n\n", ColorCyan, ColorReset, appConfig.MaxSearchDepth)
+		
+		configPath := findConfigFile()
+		if configPath != "" {
+			fmt.Printf("%sConfig loaded from:%s %s\n", ColorGray, ColorReset, configPath)
+		} else {
+			fmt.Printf("%sUsing default configuration (no config file found)%s\n", ColorGray, ColorReset)
+		}
+		
+	case "path":
+		// Show config file path
+		configPath := findConfigFile()
+		if configPath != "" {
+			fmt.Printf("📄 Config file: %s%s%s\n", ColorGreen, configPath, ColorReset)
+		} else {
+			fmt.Printf("%sℹ️  No config file found%s\n", ColorGray, ColorReset)
+			fmt.Println("\nSearched in:")
+			fmt.Println("  • ./pt.yml or ./pt.yaml")
+			fmt.Println("  • ~/.config/pt/pt.yml or ~/.config/pt/pt.yaml")
+			fmt.Println("  • ~/pt.yml or ~/pt.yaml")
+			fmt.Printf("\n%sCreate one with:%s pt config init\n", ColorCyan, ColorReset)
+		}
+		
+	default:
+		return fmt.Errorf("unknown config subcommand: %s (use 'init', 'show', or 'path')", subcommand)
+	}
+	
+	return nil
+}
+
+// formatSize formats file size in human-readable format
+func formatSize(size int64) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
+}
+
+// loadGitIgnore loads .gitignore patterns from a file
+func loadGitIgnore(rootPath string) (*GitIgnore, error) {
+	gitignorePath := filepath.Join(rootPath, ".gitignore")
+	gi := &GitIgnore{patterns: make([]string, 0)}
+	
+	file, err := os.Open(gitignorePath)
+	if err != nil {
+		// No .gitignore file is okay
+		if os.IsNotExist(err) {
+			return gi, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		gi.patterns = append(gi.patterns, line)
+	}
+
+	return gi, scanner.Err()
+}
+
+// shouldIgnore checks if a path should be ignored based on gitignore patterns
+func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
+	baseName := filepath.Base(path)
+	
+	for _, pattern := range gi.patterns {
+		// Handle directory patterns (ending with /)
+		if strings.HasSuffix(pattern, "/") {
+			dirPattern := strings.TrimSuffix(pattern, "/")
+			if isDir && (baseName == dirPattern || strings.HasPrefix(baseName, dirPattern)) {
+				return true
+			}
+			continue
+		}
+		
+		// Handle wildcard patterns
+		if strings.Contains(pattern, "*") {
+			matched, _ := filepath.Match(pattern, baseName)
+			if matched {
+				return true
+			}
+			continue
+		}
+		
+		// Exact match
+		if baseName == pattern {
+			return true
+		}
+		
+		// Check if path contains pattern (for nested paths)
+		if strings.Contains(path, "/"+pattern+"/") || strings.Contains(path, "\\"+pattern+"\\") {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// buildTree recursively builds a directory tree
+func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*TreeNode, error) {
+	if depth > maxDepth {
+		return nil, nil
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	baseName := filepath.Base(path)
+	
+	// Check exceptions
+	if exceptions[baseName] {
+		return nil, nil
+	}
+
+	// Check gitignore
+	if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
+		return nil, nil
+	}
+
+	node := &TreeNode{
+		Name:  baseName,
+		Path:  path,
+		IsDir: info.IsDir(),
+		Size:  info.Size(),
+	}
+
+	if info.IsDir() {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return node, nil // Return node but skip children if can't read
+		}
+
+		for _, entry := range entries {
+			childPath := filepath.Join(path, entry.Name())
+			childNode, err := buildTree(childPath, gitignore, exceptions, depth+1, maxDepth)
+			if err != nil || childNode == nil {
+				continue
+			}
+			node.Children = append(node.Children, childNode)
+		}
+
+		// Sort children: directories first, then files, alphabetically
+		sort.Slice(node.Children, func(i, j int) bool {
+			if node.Children[i].IsDir != node.Children[j].IsDir {
+				return node.Children[i].IsDir
+			}
+			return node.Children[i].Name < node.Children[j].Name
+		})
+	}
+
+	return node, nil
+}
+
+// printTree prints the directory tree
+func printTree(node *TreeNode, prefix string, isLast bool, showSize bool) {
+	if node == nil {
+		return
+	}
+
+	// Print current node
+	connector := "├── "
+	if isLast {
+		connector = "└── "
+	}
+
+	displayName := node.Name
+	if node.IsDir {
+		displayName = ColorCyan + displayName + "/" + ColorReset
+	} else {
+		displayName = ColorGreen + displayName + ColorReset
+	}
+
+	sizeStr := ""
+	if showSize && !node.IsDir {
+		sizeStr = ColorGray + " (" + formatSize(node.Size) + ")" + ColorReset
+	}
+
+	fmt.Printf("%s%s%s%s\n", prefix, connector, displayName, sizeStr)
+
+	// Print children
+	if node.IsDir && len(node.Children) > 0 {
+		childPrefix := prefix
+		if isLast {
+			childPrefix += "    "
+		} else {
+			childPrefix += "│   "
+		}
+
+		for i, child := range node.Children {
+			printTree(child, childPrefix, i == len(node.Children)-1, showSize)
+		}
+	}
+}
+
+// handleTreeCommand handles the -t/--tree command
+func handleTreeCommand(args []string) error {
+	// Parse arguments
+	exceptions := make(map[string]bool)
+	startPath := "."
+	
+	// Check for -e/--exception flags
+	i := 0
+	for i < len(args) {
+		if args[i] == "-e" || args[i] == "--exception" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("-e/--exception requires a value")
+			}
+			i++
+			// Split comma-separated exceptions
+			for _, exc := range strings.Split(args[i], ",") {
+				exceptions[strings.TrimSpace(exc)] = true
+			}
+			i++
+		} else {
+			// This should be the path
+			startPath = args[i]
+			i++
+		}
+	}
+
+	// Get absolute path
+	absPath, err := filepath.Abs(startPath)
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Check if path exists
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("path does not exist: %w", err)
+	}
+
+	// Load .gitignore if exists
+	var gitignore *GitIgnore
+	if info.IsDir() {
+		gitignore, err = loadGitIgnore(absPath)
+		if err != nil {
+			logger.Printf("Warning: failed to load .gitignore: %v", err)
+		}
+	}
+
+	// Build tree
+	tree, err := buildTree(absPath, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
+	if err != nil {
+		return fmt.Errorf("failed to build tree: %w", err)
+	}
+
+	if tree == nil {
+		return fmt.Errorf("no files to display")
+	}
+
+	// Print tree
+	fmt.Printf("\n%s%s%s\n", ColorBold, tree.Name, ColorReset)
+	if tree.IsDir && len(tree.Children) > 0 {
+		for i, child := range tree.Children {
+			printTree(child, "", i == len(tree.Children)-1, true)
+		}
+	}
+	fmt.Println()
+
+	// Print summary
+	fileCount := 0
+	dirCount := 0
+	var totalSize int64
+
+	var countNodes func(*TreeNode)
+	countNodes = func(n *TreeNode) {
+		if n.IsDir {
+			dirCount++
+			for _, child := range n.Children {
+				countNodes(child)
+			}
+		} else {
+			fileCount++
+			totalSize += n.Size
+		}
+	}
+	countNodes(tree)
+
+	fmt.Printf("%s%d directories, %d files, %s total%s\n", 
+		ColorGray, dirCount, fileCount, formatSize(totalSize), ColorReset)
+
+	if len(exceptions) > 0 {
+		excList := make([]string, 0, len(exceptions))
+		for exc := range exceptions {
+			excList = append(excList, exc)
+		}
+		fmt.Printf("%sExceptions: %s%s\n", ColorGray, strings.Join(excList, ", "), ColorReset)
+	}
+
+	if gitignore != nil && len(gitignore.patterns) > 0 {
+		fmt.Printf("%sUsing .gitignore (%d patterns)%s\n", ColorGray, len(gitignore.patterns), ColorReset)
+	}
+
+	return nil
+}
+
+// handleRemoveCommand handles the -rm/--remove command
+func handleRemoveCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("filename required for remove command")
+	}
+
+	filename := args[0]
+
+	// Resolve file path with recursive search
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		return err
+	}
+
+	// Check if file exists
+	info, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("file not found: %s", filePath)
+		}
+		return fmt.Errorf("failed to check file: %w", err)
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("cannot remove directories, only files")
+	}
+
+	// Create backup before removing
+	if info.Size() > 0 {
+		_, err = autoRenameIfExists(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to create backup: %w", err)
+		}
+	}
+
+	// Read file content for logging
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Delete the file
+	err = os.Remove(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
+
+	logger.Printf("File deleted: %s (%d bytes)", filePath, len(content))
+	fmt.Printf("🗑️  File deleted: %s\n", filePath)
+
+	// Create empty placeholder file with same name
+	emptyFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create empty placeholder: %w", err)
+	}
+	emptyFile.Close()
+
+	logger.Printf("Created empty placeholder: %s", filePath)
+	fmt.Printf("📄 Created empty placeholder: %s\n", filePath)
+	fmt.Printf("ℹ️  Original content (%d bytes) backed up to ./%s/\n", len(content), appConfig.BackupDirName)
+
+	return nil
 }
 
 // searchFileRecursive searches for a file recursively in current and subdirectories
@@ -98,7 +674,7 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 		}
 
 		// Skip backup directories
-		if info.IsDir() && info.Name() == BackupDirName {
+		if info.IsDir() && info.Name() == appConfig.BackupDirName {
 			return filepath.SkipDir
 		}
 
@@ -196,14 +772,7 @@ func printFileSearchResults(results []FileSearchResult) {
 
 		modTime := result.ModTime.Format("2006-01-02 15:04:05")
 
-		var sizeStr string
-		if result.Size >= 1024*1024 {
-			sizeStr = fmt.Sprintf("%.2f MB", float64(result.Size)/(1024*1024))
-		} else if result.Size >= 1024 {
-			sizeStr = fmt.Sprintf("%.2f KB", float64(result.Size)/1024)
-		} else {
-			sizeStr = fmt.Sprintf("%d B", result.Size)
-		}
+		sizeStr := formatSize(result.Size)
 
 		fmt.Printf("%s│%s %s%3d. %-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
 			ColorGray, ColorReset,
@@ -236,7 +805,7 @@ func resolveFilePath(filename string) (string, error) {
 	logger.Printf("File not found in current directory, searching recursively...")
 	fmt.Printf("%s🔍 Searching for '%s' in subdirectories...%s\n", ColorBlue, filename, ColorReset)
 
-	results, err := searchFileRecursive(filename, MaxSearchDepth)
+	results, err := searchFileRecursive(filename, appConfig.MaxSearchDepth)
 	if err != nil {
 		return "", err
 	}
@@ -335,7 +904,7 @@ func handleDiffCommand(args []string) error {
 	}
 
 	if len(backups) == 0 {
-		return fmt.Errorf("no backups found for: %s (check ./%s/ directory)", filePath, BackupDirName)
+		return fmt.Errorf("no backups found for: %s (check ./%s/ directory)", filePath, appConfig.BackupDirName)
 	}
 
 	var selectedBackup BackupInfo
@@ -397,7 +966,7 @@ func ensureBackupDir(filePath string) (string, error) {
 	}
 
 	// Create backup directory path
-	backupDir := filepath.Join(dir, BackupDirName)
+	backupDir := filepath.Join(dir, appConfig.BackupDirName)
 
 	// Check if backup directory exists
 	info, err := os.Stat(backupDir)
@@ -437,8 +1006,8 @@ func validatePath(filePath string) error {
 	}
 
 	// Check filename length
-	if len(filepath.Base(filePath)) > MaxFilenameLen {
-		return fmt.Errorf("filename too long (max %d characters)", MaxFilenameLen)
+	if len(filepath.Base(filePath)) > appConfig.MaxFilenameLen {
+		return fmt.Errorf("filename too long (max %d characters)", appConfig.MaxFilenameLen)
 	}
 
 	// Prevent writing to system directories (basic check)
@@ -511,8 +1080,8 @@ func getClipboardText() (string, error) {
 	}
 
 	// Validate size
-	if len(text) > MaxClipboardSize {
-		return "", fmt.Errorf("clipboard content too large (max %dMB)", MaxClipboardSize/(1024*1024))
+	if len(text) > appConfig.MaxClipboardSize {
+		return "", fmt.Errorf("clipboard content too large (max %dMB)", appConfig.MaxClipboardSize/(1024*1024))
 	}
 
 	return text, nil
@@ -648,7 +1217,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		}
 	}
 	
-	backupDir := filepath.Join(dir, BackupDirName)
+	backupDir := filepath.Join(dir, appConfig.BackupDirName)
 
 	// Check if backup directory exists
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
@@ -743,8 +1312,8 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 	})
 
 	// Limit to MaxBackupCount
-	if len(backups) > MaxBackupCount {
-		backups = backups[:MaxBackupCount]
+	if len(backups) > appConfig.MaxBackupCount {
+		backups = backups[:appConfig.MaxBackupCount]
 	}
 
 	return backups, nil
@@ -761,7 +1330,7 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
 		ColorCyan, ColorBold, filePath, ColorReset, ColorCyan, ColorReset)
 	fmt.Printf("%sTotal: %d backup(s) (stored in ./%s/)%s\n\n", 
-		ColorGray, len(backups), BackupDirName, ColorReset)
+		ColorGray, len(backups), appConfig.BackupDirName, ColorReset)
 
 	// Top border
 	fmt.Printf("%s┌%s┬%s┬%s┐%s\n",
@@ -799,15 +1368,7 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 		}
 
 		modTime := backup.ModTime.Format("2006-01-02 15:04:05")
-
-		var sizeStr string
-		if backup.Size >= 1024*1024 {
-			sizeStr = fmt.Sprintf("%.2f MB", float64(backup.Size)/(1024*1024))
-		} else if backup.Size >= 1024 {
-			sizeStr = fmt.Sprintf("%.2f KB", float64(backup.Size)/1024)
-		} else {
-			sizeStr = fmt.Sprintf("%d B", backup.Size)
-		}
+		sizeStr := formatSize(backup.Size)
 
 		fmt.Printf("%s│%s %s%3d. %-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
 			ColorGray, ColorReset,
@@ -842,8 +1403,8 @@ func restoreBackup(backupPath, originalPath string) error {
 	}
 
 	// Check backup isn't too large
-	if info.Size() > MaxClipboardSize {
-		return fmt.Errorf("backup file too large to restore (max %dMB)", MaxClipboardSize/(1024*1024))
+	if info.Size() > int64(appConfig.MaxClipboardSize) {
+		return fmt.Errorf("backup file too large to restore (max %dMB)", appConfig.MaxClipboardSize/(1024*1024))
 	}
 
 	// Read backup file
@@ -905,29 +1466,51 @@ func readUserChoice(max int) (int, error) {
 func printHelp() {
 	fmt.Printf("%sPT - Clipboard to File Tool v%s%s\n\n", ColorBold, Version, ColorReset)
 	fmt.Println("Usage:")
-	fmt.Println("  pt <filename>               Write clipboard to file")
-	fmt.Println("  pt + <filename>             Append clipboard to file")
-	fmt.Println("  pt -l <filename>            List backups")
-	fmt.Println("  pt -r <filename>            Restore backup (interactive)")
-	fmt.Println("  pt -r <filename> --last     Restore last backup")
-	fmt.Println("  pt -d <filename>            Compare file with backup (interactive)")
-	fmt.Println("  pt -d <filename> --last     Compare file with last backup")
-	fmt.Println("  pt -h, --help               Show this help")
-	fmt.Println("  pt -v, --version            Show version")
+	fmt.Println("  pt <filename>                    Write clipboard to file")
+	fmt.Println("  pt + <filename>                  Append clipboard to file")
+	fmt.Println("  pt -l <filename>                 List backups")
+	fmt.Println("  pt -r <filename>                 Restore backup (interactive)")
+	fmt.Println("  pt -r <filename> --last          Restore last backup")
+	fmt.Println("  pt -d <filename>                 Compare file with backup (interactive)")
+	fmt.Println("  pt -d <filename> --last          Compare file with last backup")
+	fmt.Println("  pt -rm <filename>                Delete file (with backup) and create empty placeholder")
+	fmt.Println("  pt -t [path]                     Show directory tree with file sizes")
+	fmt.Println("  pt -t [path] -e file1,file2      Tree with exceptions (comma-separated)")
+	fmt.Println("  pt config <subcommand>           Manage configuration")
+	fmt.Println("  pt -h, --help                    Show this help")
+	fmt.Println("  pt -v, --version                 Show version")
+	fmt.Println("\nConfiguration Commands:")
+	fmt.Println("  pt config init [path]            Create sample config file (default: pt.yml)")
+	fmt.Println("  pt config show                   Show current configuration")
+	fmt.Println("  pt config path                   Show config file location")
 	fmt.Println("\nExamples:")
-	fmt.Println("  pt notes.txt                # Save clipboard to notes.txt")
-	fmt.Println("  pt + log.txt                # Append clipboard to log.txt")
-	fmt.Println("  pt -l notes.txt             # List all backups")
-	fmt.Println("  pt -r notes.txt             # Interactive restore")
-	fmt.Println("  pt -r notes.txt --last      # Restore most recent backup")
-	fmt.Println("  pt -d notes.txt             # Interactive diff with backup")
-	fmt.Println("  pt -d notes.txt --last      # Diff with most recent backup")
+	fmt.Println("  pt notes.txt                     # Save clipboard to notes.txt")
+	fmt.Println("  pt + log.txt                     # Append clipboard to log.txt")
+	fmt.Println("  pt -l notes.txt                  # List all backups")
+	fmt.Println("  pt -r notes.txt                  # Interactive restore")
+	fmt.Println("  pt -r notes.txt --last           # Restore most recent backup")
+	fmt.Println("  pt -d notes.txt                  # Interactive diff with backup")
+	fmt.Println("  pt -d notes.txt --last           # Diff with most recent backup")
+	fmt.Println("  pt -rm notes.txt                 # Delete notes.txt (backup first)")
+	fmt.Println("  pt -t                            # Show tree of current directory")
+	fmt.Println("  pt -t /path/to/dir               # Show tree of specific directory")
+	fmt.Println("  pt -t -e node_modules,.git       # Tree excluding node_modules and .git")
+	fmt.Println("  pt config init                   # Create pt.yml config file")
+	fmt.Println("  pt config show                   # View current settings")
 	fmt.Printf("\n%sFeatures:%s\n", ColorBold, ColorReset)
 	fmt.Printf("  • %sRecursive Search:%s If file not in current dir, searches subdirectories\n", ColorCyan, ColorReset)
 	fmt.Printf("  • %sDiff Support:%s Uses 'delta' CLI tool for beautiful diffs\n", ColorCyan, ColorReset)
-	fmt.Printf("\n%sBackup Location: All backups stored in ./%s/ directory%s\n", ColorCyan, BackupDirName, ColorReset)
+	fmt.Printf("  • %sTree View:%s Display directory structure with file sizes\n", ColorCyan, ColorReset)
+	fmt.Printf("  • %sGitignore Support:%s Respects .gitignore patterns in tree view\n", ColorCyan, ColorReset)
+	fmt.Printf("  • %sSafe Delete:%s Backup before delete, create empty placeholder\n", ColorCyan, ColorReset)
+	fmt.Printf("  • %sConfigurable:%s Customize via pt.yml config file\n", ColorCyan, ColorReset)
+	fmt.Printf("\n%sBackup Location: All backups stored in ./%s/ directory%s\n", ColorCyan, appConfig.BackupDirName, ColorReset)
 	fmt.Printf("%sLimits: Max file size %dMB, Max %d backups kept%s\n",
-		ColorGray, MaxClipboardSize/(1024*1024), MaxBackupCount, ColorReset)
+		ColorGray, appConfig.MaxClipboardSize/(1024*1024), appConfig.MaxBackupCount, ColorReset)
+	fmt.Printf("\n%sConfig File Locations (searched in order):%s\n", ColorGray, ColorReset)
+	fmt.Println("  • ./pt.yml or ./pt.yaml (current directory)")
+	fmt.Println("  • ~/.config/pt/pt.yml or ~/.config/pt/pt.yaml")
+	fmt.Println("  • ~/pt.yml or ~/pt.yaml (home directory)")
 	fmt.Printf("\n%sNote: Install 'delta' for diff functionality: https://github.com/dandavison/delta%s\n",
 		ColorGray, ColorReset)
 }
@@ -936,7 +1519,14 @@ func printHelp() {
 func printVersion() {
 	fmt.Printf("PT version %s\n", Version)
 	fmt.Println("Production-hardened clipboard to file tool")
-	fmt.Println("Features: Recursive search, backup management, delta diff support")
+	fmt.Println("Features: Recursive search, backup management, delta diff, tree view, safe delete, configurable")
+	
+	configPath := findConfigFile()
+	if configPath != "" {
+		fmt.Printf("\nConfig: %s\n", configPath)
+	} else {
+		fmt.Println("\nConfig: Using defaults (no config file)")
+	}
 }
 
 func main() {
@@ -961,6 +1551,41 @@ func main() {
 
 	// Handle different commands
 	switch os.Args[1] {
+	case "config":
+		if len(os.Args) < 3 {
+			fmt.Printf("%s❌ Error: Config subcommand required%s\n", ColorRed, ColorReset)
+			fmt.Println("\nAvailable subcommands:")
+			fmt.Println("  pt config init [path]  - Create sample config file")
+			fmt.Println("  pt config show         - Show current configuration")
+			fmt.Println("  pt config path         - Show config file location")
+			os.Exit(1)
+		}
+		
+		err := handleConfigCommand(os.Args[2:])
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
+	case "-t", "--tree":
+		err := handleTreeCommand(os.Args[2:])
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
+	case "-rm", "--remove":
+		if len(os.Args) < 3 {
+			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+			os.Exit(1)
+		}
+
+		err := handleRemoveCommand(os.Args[2:])
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
 	case "-l", "--list":
 		if len(os.Args) < 3 {
 			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
@@ -981,7 +1606,7 @@ func main() {
 		}
 
 		if len(backups) == 0 {
-			fmt.Printf("ℹ️  No backups found for: %s (check ./%s/ directory)\n", filePath, BackupDirName)
+			fmt.Printf("ℹ️  No backups found for: %s (check ./%s/ directory)\n", filePath, appConfig.BackupDirName)
 		} else {
 			printBackupTable(filePath, backups)
 		}
@@ -1027,7 +1652,7 @@ func main() {
 
 		if len(backups) == 0 {
 			fmt.Printf("%s❌ Error: No backups found for: %s (check ./%s/ directory)%s\n", 
-				ColorRed, filePath, BackupDirName, ColorReset)
+				ColorRed, filePath, appConfig.BackupDirName, ColorReset)
 			os.Exit(1)
 		}
 
