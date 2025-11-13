@@ -184,7 +184,7 @@ func findConfigFile() string {
 	
 	// Windows home directory
 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
-		searchPaths = append(searchPaths, userProfile)
+		searchPaths = append(searchPaths, userProfile, filepath.Join(userProfile, ".pt"))
 	}
 	
 	// Search for config file
@@ -1523,7 +1523,7 @@ func readUserChoice(max int) (int, error) {
 
 // printHelp displays usage information
 func printHelp() {
-	fmt.Printf("%sPT - Clipboard to File Tool v%s%s\n\n", ColorBold, Version, ColorReset)
+	fmt.Printf("%sPT - Clipboard to File Tool with Smart Version Management v%s%s\n\n", ColorBold, Version, ColorReset)
 	fmt.Println("Usage:")
 	fmt.Println("  pt <filename>                    Write clipboard to file")
 	fmt.Println("  pt + <filename>                  Append clipboard to file")
@@ -1618,7 +1618,7 @@ func main() {
 
 	// Require at least one argument
 	if len(os.Args) < 2 {
-		fmt.Printf("%s❌ Error: No command specified%s\n\n", ColorRed, ColorReset)
+		// fmt.Printf("%s❌ Error: No command specified%s\n\n", ColorRed, ColorReset)
 		printHelp()
 		os.Exit(1)
 	}
