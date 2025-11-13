@@ -30,9 +30,11 @@ const (
 	DefaultMaxBackupCount   = 100                // Keep max 100 backups
 	DefaultMaxFilenameLen   = 200                // Max filename length
 	DefaultBackupDirName    = "backup"           // Backup directory name
-	Version                 = "2.3.0"
 	DefaultMaxSearchDepth   = 10                 // Max directory depth for recursive search
 )
+
+// Version will be loaded from VERSION file
+var Version string = "dev"
 
 // Config holds the application configuration
 type Config struct {
@@ -96,8 +98,65 @@ func init() {
 	// Initialize logger (write to stderr to not interfere with stdout)
 	logger = log.New(os.Stderr, "", log.LstdFlags)
 	
+	// Load version from VERSION file
+	Version = loadVersion()
+	
 	// Load configuration
 	appConfig = loadConfig()
+}
+
+// loadVersion loads version from VERSION file
+func loadVersion() string {
+	// Try to find VERSION file in multiple locations
+	versionPaths := []string{
+		"VERSION",                                    // Current directory
+		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"), // Same directory as executable
+		"/usr/local/share/pt/VERSION",               // Linux system location
+		filepath.Join(os.Getenv("HOME"), ".local", "share", "pt", "VERSION"), // User location
+	}
+	
+	// Windows locations
+	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+		versionPaths = append(versionPaths, 
+			filepath.Join(userProfile, ".pt", "VERSION"),
+			filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
+		)
+	}
+	
+	for _, versionPath := range versionPaths {
+		data, err := os.ReadFile(versionPath)
+		if err == nil {
+			// Parse version from file content
+			content := strings.TrimSpace(string(data))
+			
+			// Support formats:
+			// 1. version = "1.0.12"
+			// 2. 1.0.12
+			// 3. v1.0.12
+			
+			// Remove 'version = ' prefix if exists
+			if strings.HasPrefix(content, "version") {
+				parts := strings.SplitN(content, "=", 2)
+				if len(parts) == 2 {
+					content = strings.TrimSpace(parts[1])
+				}
+			}
+			
+			// Remove quotes
+			content = strings.Trim(content, `"'`)
+			
+			// Remove 'v' prefix if exists
+			content = strings.TrimPrefix(content, "v")
+			
+			if content != "" {
+				logger.Printf("Version loaded from: %s (%s)", versionPath, content)
+				return content
+			}
+		}
+	}
+	
+	logger.Println("VERSION file not found, using 'dev'")
+	return "dev"
 }
 
 // getDefaultConfig returns default configuration
@@ -1520,12 +1579,27 @@ func printVersion() {
 	fmt.Printf("PT version %s\n", Version)
 	fmt.Println("Production-hardened clipboard to file tool")
 	fmt.Println("Features: Recursive search, backup management, delta diff, tree view, safe delete, configurable")
+	fmt.Println()
+	
+	// Show version file location if found
+	versionPaths := []string{
+		"VERSION",
+		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
+	}
+	
+	for _, versionPath := range versionPaths {
+		if _, err := os.Stat(versionPath); err == nil {
+			absPath, _ := filepath.Abs(versionPath)
+			fmt.Printf("Version file: %s\n", absPath)
+			break
+		}
+	}
 	
 	configPath := findConfigFile()
 	if configPath != "" {
-		fmt.Printf("\nConfig: %s\n", configPath)
+		fmt.Printf("Config file: %s\n", configPath)
 	} else {
-		fmt.Println("\nConfig: Using defaults (no config file)")
+		fmt.Println("Config: Using defaults (no config file)")
 	}
 }
 
