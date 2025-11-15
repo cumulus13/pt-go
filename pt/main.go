@@ -1196,10 +1196,24 @@ func autoRenameIfExists(filePath string) (string, error) {
 }
 
 // writeFile writes data to file with validation
-func writeFile(filePath string, data string, appendMode bool) error {
+func writeFile(filePath string, data string, appendMode bool, checkMode bool) error {
 	// Validate path
 	if err := validatePath(filePath); err != nil {
 		return err
+	}
+
+	// Check mode: compare with existing file first
+	if checkMode && !appendMode {
+		if existingData, err := os.ReadFile(filePath); err == nil {
+			// File exists, compare content
+			if string(existingData) == data {
+				logger.Printf("Content identical, skipping write: %s", filePath)
+				fmt.Printf("ℹ️  Content identical to current file, no changes needed\n")
+				fmt.Printf("📄 File: %s\n", filePath)
+				return nil
+			}
+			fmt.Printf("🔍 Content differs, proceeding with backup and write\n")
+		}
 	}
 
 	// Check disk space
@@ -1526,6 +1540,7 @@ func printHelp() {
 	fmt.Printf("%sPT - Clipboard to File Tool with Smart Version Management v%s%s\n\n", ColorBold, Version, ColorReset)
 	fmt.Println("Usage:")
 	fmt.Println("  pt <filename>                    Write clipboard to file")
+	fmt.Println("  pt <filename> -c                 Write only if content differs (check mode)")
 	fmt.Println("  pt + <filename>                  Append clipboard to file")
 	fmt.Println("  pt -l <filename>                 List backups")
 	fmt.Println("  pt -r <filename>                 Restore backup (interactive)")
@@ -1544,6 +1559,8 @@ func printHelp() {
 	fmt.Println("  pt config path                   Show config file location")
 	fmt.Println("\nExamples:")
 	fmt.Println("  pt notes.txt                     # Save clipboard to notes.txt")
+	fmt.Println("  pt notes.txt -c                  # Save only if content changed")
+	fmt.Println("  pt notes.txt --check             # Same as above")
 	fmt.Println("  pt + log.txt                     # Append clipboard to log.txt")
 	fmt.Println("  pt -l notes.txt                  # List all backups")
 	fmt.Println("  pt -r notes.txt                  # Interactive restore")
@@ -1563,6 +1580,7 @@ func printHelp() {
 	fmt.Printf("  • %sGitignore Support:%s Respects .gitignore patterns in tree view\n", ColorCyan, ColorReset)
 	fmt.Printf("  • %sSafe Delete:%s Backup before delete, create empty placeholder\n", ColorCyan, ColorReset)
 	fmt.Printf("  • %sConfigurable:%s Customize via pt.yml config file\n", ColorCyan, ColorReset)
+	fmt.Printf("  • %sCheck Mode:%s Skip write if content unchanged (save disk space)\n", ColorCyan, ColorReset)
 	fmt.Printf("\n%sBackup Location: All backups stored in ./%s/ directory%s\n", ColorCyan, appConfig.BackupDirName, ColorReset)
 	fmt.Printf("%sLimits: Max file size %dMB, Max %d backups kept%s\n",
 		ColorGray, appConfig.MaxClipboardSize/(1024*1024), appConfig.MaxBackupCount, ColorReset)
@@ -1785,7 +1803,7 @@ func main() {
 			filePath = os.Args[2]
 		}
 
-		err = writeFile(filePath, text, true)
+		err = writeFile(filePath, text, true, false)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
@@ -1793,6 +1811,18 @@ func main() {
 
 	default:
 		// Write mode (default)
+		// Check for -c/--check flag
+		checkMode := false
+		filename := os.Args[1]
+		
+		if len(os.Args) > 2 {
+			for i := 2; i < len(os.Args); i++ {
+				if os.Args[i] == "-c" || os.Args[i] == "--check" {
+					checkMode = true
+				}
+			}
+		}
+		
 		text, err := getClipboardText()
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -1805,13 +1835,17 @@ func main() {
 		}
 
 		// Resolve file path with recursive search
-		filePath, err := resolveFilePath(os.Args[1])
+		filePath, err := resolveFilePath(filename)
 		if err != nil {
 			// If file doesn't exist, use the provided path as-is
-			filePath = os.Args[1]
+			filePath = filename
 		}
 
-		err = writeFile(filePath, text, false)
+		if checkMode {
+			fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+		}
+
+		err = writeFile(filePath, text, false, checkMode)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
