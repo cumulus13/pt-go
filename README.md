@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.16+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.15-blue.svg)](https://github.com/cumulus13/pt)
+[![Version](https://img.shields.io/badge/version-1.0.15-blue.svg)](https://github.com/cumulus13/pt-go)
 
 > **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file — with automatic timestamped backups, **recursive file search**, **delta diff comparison**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager — it's a complete version control system for your files!**
 
@@ -48,11 +48,11 @@
 ### Install from Source
 
 ```bash
-go install github.com/cumulus13/pt/pt@latest
+go install github.com/cumulus13/pt-go/pt@latest
 
 # or Clone the repository
-git clone https://github.com/cumulus13/pt.git
-cd pt
+git clone https://github.com/cumulus13/pt-go.git
+cd pt-go
 
 # Build and install
 go build -o pt pt/main.go
@@ -67,7 +67,7 @@ sudo mv pt /usr/local/bin/
 
 ```bash
 # One-liner installation
-curl -sSL https://raw.githubusercontent.com/cumulus13/pt/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/cumulus13/pt-go/pt/main/install.sh | bash
 ```
 
 ### Install Delta (for diff feature)
@@ -758,8 +758,8 @@ Contributions are welcome! Please follow these steps:
 
 ```bash
 # Clone your fork
-git clone https://github.com/cumulus13/pt.git
-cd pt
+git clone https://github.com/cumulus13/pt-go.git
+cd pt-go
 
 # Install dependencies
 go mod download
@@ -831,8 +831,8 @@ SOFTWARE.
 
 ## 💖 Support
 
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/cumulus13/pt/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/cumulus13/pt/discussions)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/cumulus13/pt-go/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/cumulus13/pt-go/discussions)
 - 📧 **Email**: cumulus13@gmail.com
 
 **Made with ❤️ by Hadi Cahyadi**
@@ -865,7 +865,7 @@ If you find PT useful, consider supporting its development and please consider g
 
 ```bash
 # 1. Install PT
-go install github.com/cumulus13/pt/pt@latest
+go install github.com/cumulus13/pt-go/pt@latest
 
 # 2. Save your first file
 echo "Hello PT" | pbcopy  # Copy something
