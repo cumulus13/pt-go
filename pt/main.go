@@ -1,28 +1,8 @@
-// Daftar Perbaikan yang Dilakukan pada PT Tool:
-
-// 1. BUG FIX: Fungsi parseWriteArgs tidak pernah dipanggil
-//    - Fungsi ini didefinisikan tapi tidak digunakan di main()
-//    - Seharusnya digunakan untuk parsing argumen -m dan -c
-
-// 2. BUG FIX: Handling argumen -m (message/comment) tidak konsisten
-//    - Di beberapa command sudah ada, di command lain belum
-//    - Perlu standardisasi parsing argumen
-
-// 3. BUG FIX: restoreBackup() dipanggil tanpa parameter comment
-//    - Fungsi signature: restoreBackup(backupPath, originalPath, comment string)
-//    - Dipanggil dengan: restoreBackup(backups[0].Path, filePath)
-//    - Missing parameter comment
-
-// 4. IMPROVEMENT: Error handling kurang informatif
-//    - Beberapa error tidak memberikan context yang cukup
-
-// 5. IMPROVEMENT: Validasi input user kurang ketat
-//    - Perlu validasi lebih baik untuk user input
-
-// 6. CODE SMELL: Duplicate code dalam parsing argumen
-//    - Banyak duplikasi logic parsing -m, -c, dll
-
-// KODE YANG DIPERBAIKI:
+// File: pt\main.go
+// Author: Hadi Cahyadi <cumulus13@gmail.com>
+// Date: 2025-11-18
+// Description: Clipboard to File Tool with Smart Version Management
+// License: MIT
 
 package main
 
