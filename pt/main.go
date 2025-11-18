@@ -635,7 +635,7 @@ func handleTreeCommand(args []string) error {
 	return nil
 }
 
-// FIX: Tambahkan parsing comment untuk handleRemoveCommand
+// parsing comment for handleRemoveCommand
 func handleRemoveCommand(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("filename required for remove command")
@@ -905,7 +905,7 @@ func runDelta(file1, file2 string) error {
 
 	err := cmd.Run()
 	
-	// FIX: Delta exit code 1 adalah NORMAL saat file berbeda
+	// Delta exit code 1 is NORMAL when files are different
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() == 1 {
@@ -1327,10 +1327,10 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 
 func printBackupTable(filePath string, backups []BackupInfo) {
 	const (
-		col1Width = 40  // Lebih lebar untuk filename
+		col1Width = 40  // More width for filename
 		col2Width = 19
 		col3Width = 12
-		col4Width = 30  // Lebih kecil untuk comment
+		col4Width = 30  // Smaller for comments
 	)
 
 	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
@@ -1409,7 +1409,7 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 		ColorReset)
 }
 
-// FIX: Tambahkan parameter comment yang hilang
+// Add the missing comment parameter
 func restoreBackup(backupPath, originalPath, comment string) error {
 	if err := validatePath(originalPath); err != nil {
 		return err
@@ -1456,7 +1456,6 @@ func restoreBackup(backupPath, originalPath, comment string) error {
 	return nil
 }
 
-// FIX: Fungsi parseWriteArgs sekarang benar-benar digunakan
 func parseWriteArgs(args []string) (filename string, comment string, checkMode bool, err error) {
 	if len(args) == 0 {
 		return "", "", false, fmt.Errorf("filename required")
@@ -1695,7 +1694,6 @@ func main() {
 		comment := ""
 		useLast := false
 
-		// FIX: Parse argumen untuk restore dengan benar
 		for i := 3; i < len(os.Args); i++ {
 			if os.Args[i] == "--last" {
 				useLast = true
@@ -1709,7 +1707,7 @@ func main() {
 
 		filePath, err := resolveFilePath(filename)
 		if err != nil {
-			// Untuk restore, file mungkin belum ada
+			// To restore, the file may not exist yet
 			filePath = filename
 			absPath, err := filepath.Abs(filePath)
 			if err == nil {
@@ -1729,7 +1727,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		// FIX: Gunakan parameter comment saat memanggil restoreBackup
+		// Use the comment parameter when calling restoreBackup
 		if useLast {
 			if comment == "" {
 				comment = "Restored from last backup"
@@ -1781,7 +1779,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		// FIX: Parse argumen untuk append dengan benar
+		// Parse the arguments for append correctly
 		filename := os.Args[2]
 		comment := ""
 		
@@ -1806,7 +1804,7 @@ func main() {
 		}
 
 	default:
-		// FIX: Gunakan parseWriteArgs untuk write mode default
+		// Use parseWriteArgs for the default write mode
 		text, err := getClipboardText()
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -1818,7 +1816,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Parse argumen menggunakan parseWriteArgs
+		// Parse arguments using parseWriteArgs
 		filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
