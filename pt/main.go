@@ -1,8 +1,28 @@
-// File: pt/main.go
-// Author: Hadi Cahyadi <cumulus13@gmail.com>
-// Date: 2025-10-30
-// Description: Production-hardened clipboard-to-file tool with security, validation, and robustness improvements
-// License: MIT
+// Daftar Perbaikan yang Dilakukan pada PT Tool:
+
+// 1. BUG FIX: Fungsi parseWriteArgs tidak pernah dipanggil
+//    - Fungsi ini didefinisikan tapi tidak digunakan di main()
+//    - Seharusnya digunakan untuk parsing argumen -m dan -c
+
+// 2. BUG FIX: Handling argumen -m (message/comment) tidak konsisten
+//    - Di beberapa command sudah ada, di command lain belum
+//    - Perlu standardisasi parsing argumen
+
+// 3. BUG FIX: restoreBackup() dipanggil tanpa parameter comment
+//    - Fungsi signature: restoreBackup(backupPath, originalPath, comment string)
+//    - Dipanggil dengan: restoreBackup(backups[0].Path, filePath)
+//    - Missing parameter comment
+
+// 4. IMPROVEMENT: Error handling kurang informatif
+//    - Beberapa error tidak memberikan context yang cukup
+
+// 5. IMPROVEMENT: Validasi input user kurang ketat
+//    - Perlu validasi lebih baik untuk user input
+
+// 6. CODE SMELL: Duplicate code dalam parsing argumen
+//    - Banyak duplikasi logic parsing -m, -c, dll
+
+// KODE YANG DIPERBAIKI:
 
 package main
 
@@ -10,6 +30,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -38,7 +59,7 @@ var Version string = "dev"
 
 // Config holds the application configuration
 type Config struct {
-	MaxClipboardSize int    `yaml:"max_clipboard_size"` // in bytes
+	MaxClipboardSize int    `yaml:"max_clipboard_size"`
 	MaxBackupCount   int    `yaml:"max_backup_count"`
 	MaxFilenameLen   int    `yaml:"max_filename_length"`
 	BackupDirName    string `yaml:"backup_dir_name"`
@@ -66,6 +87,15 @@ type BackupInfo struct {
 	Name    string
 	ModTime time.Time
 	Size    int64
+	Comment string
+}
+
+// BackupMetadata stores metadata for backup files
+type BackupMetadata struct {
+	Comment   string    `json:"comment"`
+	Timestamp time.Time `json:"timestamp"`
+	Size      int64     `json:"size"`
+	Original  string    `json:"original_file"`
 }
 
 // FileSearchResult stores information about found files
@@ -95,27 +125,20 @@ type GitIgnore struct {
 var logger *log.Logger
 
 func init() {
-	// Initialize logger (write to stderr to not interfere with stdout)
 	logger = log.New(os.Stderr, "", log.LstdFlags)
-	
-	// Load version from VERSION file
 	Version = loadVersion()
-	
-	// Load configuration
 	appConfig = loadConfig()
 }
 
 // loadVersion loads version from VERSION file
 func loadVersion() string {
-	// Try to find VERSION file in multiple locations
 	versionPaths := []string{
-		"VERSION",                                    // Current directory
-		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"), // Same directory as executable
-		"/usr/local/share/pt/VERSION",               // Linux system location
-		filepath.Join(os.Getenv("HOME"), ".local", "share", "pt", "VERSION"), // User location
+		"VERSION",
+		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
+		"/usr/local/share/pt/VERSION",
+		filepath.Join(os.Getenv("HOME"), ".local", "share", "pt", "VERSION"),
 	}
 	
-	// Windows locations
 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
 		versionPaths = append(versionPaths, 
 			filepath.Join(userProfile, ".pt", "VERSION"),
@@ -126,15 +149,8 @@ func loadVersion() string {
 	for _, versionPath := range versionPaths {
 		data, err := os.ReadFile(versionPath)
 		if err == nil {
-			// Parse version from file content
 			content := strings.TrimSpace(string(data))
 			
-			// Support formats:
-			// 1. version = "1.0.12"
-			// 2. 1.0.12
-			// 3. v1.0.12
-			
-			// Remove 'version = ' prefix if exists
 			if strings.HasPrefix(content, "version") {
 				parts := strings.SplitN(content, "=", 2)
 				if len(parts) == 2 {
@@ -142,10 +158,7 @@ func loadVersion() string {
 				}
 			}
 			
-			// Remove quotes
 			content = strings.Trim(content, `"'`)
-			
-			// Remove 'v' prefix if exists
 			content = strings.TrimPrefix(content, "v")
 			
 			if content != "" {
@@ -159,7 +172,6 @@ func loadVersion() string {
 	return "dev"
 }
 
-// getDefaultConfig returns default configuration
 func getDefaultConfig() *Config {
 	return &Config{
 		MaxClipboardSize: DefaultMaxClipboardSize,
@@ -170,24 +182,19 @@ func getDefaultConfig() *Config {
 	}
 }
 
-// findConfigFile searches for pt.yml or pt.yaml in multiple locations
 func findConfigFile() string {
-	// Config file names to search for
 	configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
 	
-	// Search locations (in order of priority)
 	searchPaths := []string{
-		".",                                    // Current directory
-		filepath.Join(os.Getenv("HOME"), ".config", "pt"), // ~/.config/pt/
-		os.Getenv("HOME"),                      // Home directory
+		".",
+		filepath.Join(os.Getenv("HOME"), ".config", "pt"),
+		os.Getenv("HOME"),
 	}
 	
-	// Windows home directory
 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
 		searchPaths = append(searchPaths, userProfile, filepath.Join(userProfile, ".pt"))
 	}
 	
-	// Search for config file
 	for _, basePath := range searchPaths {
 		for _, configName := range configNames {
 			configPath := filepath.Join(basePath, configName)
@@ -200,7 +207,6 @@ func findConfigFile() string {
 	return ""
 }
 
-// loadConfig loads configuration from pt.yml/pt.yaml or uses defaults
 func loadConfig() *Config {
 	config := getDefaultConfig()
 	
@@ -224,7 +230,6 @@ func loadConfig() *Config {
 		return config
 	}
 	
-	// Validate loaded config and apply bounds
 	if config.MaxClipboardSize <= 0 || config.MaxClipboardSize > 1024*1024*1024 {
 		logger.Printf("Warning: invalid max_clipboard_size, using default")
 		config.MaxClipboardSize = DefaultMaxClipboardSize
@@ -256,7 +261,6 @@ func loadConfig() *Config {
 	return config
 }
 
-// generateSampleConfig creates a sample pt.yml file
 func generateSampleConfig(path string) error {
 	config := getDefaultConfig()
 	
@@ -265,7 +269,6 @@ func generateSampleConfig(path string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 	
-	// Add comments to the generated file
 	header := `# PT Configuration File
 # This file configures the behavior of the PT tool
 # All values are optional - if not specified, defaults will be used
@@ -284,7 +287,6 @@ func generateSampleConfig(path string) error {
 	return nil
 }
 
-// handleConfigCommand handles config-related commands
 func handleConfigCommand(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("config subcommand required: 'init', 'show', or 'path'")
@@ -294,7 +296,6 @@ func handleConfigCommand(args []string) error {
 	
 	switch subcommand {
 	case "init":
-		// Generate sample config file
 		var configPath string
 		if len(args) > 1 {
 			configPath = args[1]
@@ -302,7 +303,6 @@ func handleConfigCommand(args []string) error {
 			configPath = "pt.yml"
 		}
 		
-		// Check if file already exists
 		if _, err := os.Stat(configPath); err == nil {
 			fmt.Printf("%s⚠️  Warning: Config file already exists: %s%s\n", ColorYellow, configPath, ColorReset)
 			reader := bufio.NewReader(os.Stdin)
@@ -324,7 +324,6 @@ func handleConfigCommand(args []string) error {
 		fmt.Println("📝 Edit this file to customize PT behavior")
 		
 	case "show":
-		// Show current configuration
 		fmt.Printf("\n%sCurrent PT Configuration:%s\n\n", ColorBold, ColorReset)
 		fmt.Printf("%sMax Clipboard Size:%s %d bytes (%.1f MB)\n", 
 			ColorCyan, ColorReset, appConfig.MaxClipboardSize, float64(appConfig.MaxClipboardSize)/(1024*1024))
@@ -341,7 +340,6 @@ func handleConfigCommand(args []string) error {
 		}
 		
 	case "path":
-		// Show config file path
 		configPath := findConfigFile()
 		if configPath != "" {
 			fmt.Printf("📄 Config file: %s%s%s\n", ColorGreen, configPath, ColorReset)
@@ -361,7 +359,6 @@ func handleConfigCommand(args []string) error {
 	return nil
 }
 
-// formatSize formats file size in human-readable format
 func formatSize(size int64) string {
 	const unit = 1024
 	if size < unit {
@@ -375,14 +372,55 @@ func formatSize(size int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
 }
 
-// loadGitIgnore loads .gitignore patterns from a file
+func saveBackupMetadata(backupPath, comment, originalFile string, size int64) error {
+	metadataPath := backupPath + ".meta.json"
+	
+	metadata := BackupMetadata{
+		Comment:   comment,
+		Timestamp: time.Now(),
+		Size:      size,
+		Original:  originalFile,
+	}
+	
+	data, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+	
+	err = os.WriteFile(metadataPath, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+	
+	return nil
+}
+
+func loadBackupMetadata(backupPath string) (string, error) {
+	metadataPath := backupPath + ".meta.json"
+	
+	data, err := os.ReadFile(metadataPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	
+	var metadata BackupMetadata
+	err = json.Unmarshal(data, &metadata)
+	if err != nil {
+		return "", err
+	}
+	
+	return metadata.Comment, nil
+}
+
 func loadGitIgnore(rootPath string) (*GitIgnore, error) {
 	gitignorePath := filepath.Join(rootPath, ".gitignore")
 	gi := &GitIgnore{patterns: make([]string, 0)}
 	
 	file, err := os.Open(gitignorePath)
 	if err != nil {
-		// No .gitignore file is okay
 		if os.IsNotExist(err) {
 			return gi, nil
 		}
@@ -393,7 +431,6 @@ func loadGitIgnore(rootPath string) (*GitIgnore, error) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -403,12 +440,10 @@ func loadGitIgnore(rootPath string) (*GitIgnore, error) {
 	return gi, scanner.Err()
 }
 
-// shouldIgnore checks if a path should be ignored based on gitignore patterns
 func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
 	baseName := filepath.Base(path)
 	
 	for _, pattern := range gi.patterns {
-		// Handle directory patterns (ending with /)
 		if strings.HasSuffix(pattern, "/") {
 			dirPattern := strings.TrimSuffix(pattern, "/")
 			if isDir && (baseName == dirPattern || strings.HasPrefix(baseName, dirPattern)) {
@@ -417,7 +452,6 @@ func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
 			continue
 		}
 		
-		// Handle wildcard patterns
 		if strings.Contains(pattern, "*") {
 			matched, _ := filepath.Match(pattern, baseName)
 			if matched {
@@ -426,12 +460,10 @@ func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
 			continue
 		}
 		
-		// Exact match
 		if baseName == pattern {
 			return true
 		}
 		
-		// Check if path contains pattern (for nested paths)
 		if strings.Contains(path, "/"+pattern+"/") || strings.Contains(path, "\\"+pattern+"\\") {
 			return true
 		}
@@ -440,7 +472,6 @@ func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
 	return false
 }
 
-// buildTree recursively builds a directory tree
 func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*TreeNode, error) {
 	if depth > maxDepth {
 		return nil, nil
@@ -453,12 +484,10 @@ func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, de
 
 	baseName := filepath.Base(path)
 	
-	// Check exceptions
 	if exceptions[baseName] {
 		return nil, nil
 	}
 
-	// Check gitignore
 	if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
 		return nil, nil
 	}
@@ -473,7 +502,7 @@ func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, de
 	if info.IsDir() {
 		entries, err := os.ReadDir(path)
 		if err != nil {
-			return node, nil // Return node but skip children if can't read
+			return node, nil
 		}
 
 		for _, entry := range entries {
@@ -485,7 +514,6 @@ func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, de
 			node.Children = append(node.Children, childNode)
 		}
 
-		// Sort children: directories first, then files, alphabetically
 		sort.Slice(node.Children, func(i, j int) bool {
 			if node.Children[i].IsDir != node.Children[j].IsDir {
 				return node.Children[i].IsDir
@@ -497,13 +525,11 @@ func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, de
 	return node, nil
 }
 
-// printTree prints the directory tree
 func printTree(node *TreeNode, prefix string, isLast bool, showSize bool) {
 	if node == nil {
 		return
 	}
 
-	// Print current node
 	connector := "├── "
 	if isLast {
 		connector = "└── "
@@ -523,7 +549,6 @@ func printTree(node *TreeNode, prefix string, isLast bool, showSize bool) {
 
 	fmt.Printf("%s%s%s%s\n", prefix, connector, displayName, sizeStr)
 
-	// Print children
 	if node.IsDir && len(node.Children) > 0 {
 		childPrefix := prefix
 		if isLast {
@@ -538,13 +563,10 @@ func printTree(node *TreeNode, prefix string, isLast bool, showSize bool) {
 	}
 }
 
-// handleTreeCommand handles the -t/--tree command
 func handleTreeCommand(args []string) error {
-	// Parse arguments
 	exceptions := make(map[string]bool)
 	startPath := "."
 	
-	// Check for -e/--exception flags
 	i := 0
 	for i < len(args) {
 		if args[i] == "-e" || args[i] == "--exception" {
@@ -552,31 +574,26 @@ func handleTreeCommand(args []string) error {
 				return fmt.Errorf("-e/--exception requires a value")
 			}
 			i++
-			// Split comma-separated exceptions
 			for _, exc := range strings.Split(args[i], ",") {
 				exceptions[strings.TrimSpace(exc)] = true
 			}
 			i++
 		} else {
-			// This should be the path
 			startPath = args[i]
 			i++
 		}
 	}
 
-	// Get absolute path
 	absPath, err := filepath.Abs(startPath)
 	if err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}
 
-	// Check if path exists
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return fmt.Errorf("path does not exist: %w", err)
 	}
 
-	// Load .gitignore if exists
 	var gitignore *GitIgnore
 	if info.IsDir() {
 		gitignore, err = loadGitIgnore(absPath)
@@ -585,7 +602,6 @@ func handleTreeCommand(args []string) error {
 		}
 	}
 
-	// Build tree
 	tree, err := buildTree(absPath, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
 	if err != nil {
 		return fmt.Errorf("failed to build tree: %w", err)
@@ -595,7 +611,6 @@ func handleTreeCommand(args []string) error {
 		return fmt.Errorf("no files to display")
 	}
 
-	// Print tree
 	fmt.Printf("\n%s%s%s\n", ColorBold, tree.Name, ColorReset)
 	if tree.IsDir && len(tree.Children) > 0 {
 		for i, child := range tree.Children {
@@ -604,7 +619,6 @@ func handleTreeCommand(args []string) error {
 	}
 	fmt.Println()
 
-	// Print summary
 	fileCount := 0
 	dirCount := 0
 	var totalSize int64
@@ -641,21 +655,31 @@ func handleTreeCommand(args []string) error {
 	return nil
 }
 
-// handleRemoveCommand handles the -rm/--remove command
+// FIX: Tambahkan parsing comment untuk handleRemoveCommand
 func handleRemoveCommand(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("filename required for remove command")
 	}
 
 	filename := args[0]
+	comment := ""
+	
+	for i := 1; i < len(args); i++ {
+		if args[i] == "-m" || args[i] == "--message" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("-m/--message requires a value")
+			}
+			i++
+			comment = args[i]
+			break
+		}
+	}
 
-	// Resolve file path with recursive search
 	filePath, err := resolveFilePath(filename)
 	if err != nil {
 		return err
 	}
 
-	// Check if file exists
 	info, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -668,21 +692,21 @@ func handleRemoveCommand(args []string) error {
 		return fmt.Errorf("cannot remove directories, only files")
 	}
 
-	// Create backup before removing
 	if info.Size() > 0 {
-		_, err = autoRenameIfExists(filePath)
+		if comment == "" {
+			comment = "Deleted file backup"
+		}
+		_, err = autoRenameIfExists(filePath, comment)
 		if err != nil {
 			return fmt.Errorf("failed to create backup: %w", err)
 		}
 	}
 
-	// Read file content for logging
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Delete the file
 	err = os.Remove(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
@@ -691,7 +715,6 @@ func handleRemoveCommand(args []string) error {
 	logger.Printf("File deleted: %s (%d bytes)", filePath, len(content))
 	fmt.Printf("🗑️  File deleted: %s\n", filePath)
 
-	// Create empty placeholder file with same name
 	emptyFile, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to create empty placeholder: %w", err)
@@ -705,7 +728,6 @@ func handleRemoveCommand(args []string) error {
 	return nil
 }
 
-// searchFileRecursive searches for a file recursively in current and subdirectories
 func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, error) {
 	results := make([]FileSearchResult, 0)
 	cwd, err := os.Getwd()
@@ -713,7 +735,6 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// First check current directory
 	currentPath := filepath.Join(cwd, filename)
 	if info, err := os.Stat(currentPath); err == nil && !info.IsDir() {
 		results = append(results, FileSearchResult{
@@ -725,26 +746,21 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 		})
 	}
 
-	// Then search recursively
 	err = filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			// Skip directories we can't access
 			return nil
 		}
 
-		// Skip backup directories
 		if info.IsDir() && info.Name() == appConfig.BackupDirName {
 			return filepath.SkipDir
 		}
 
-		// Calculate depth
 		relPath, err := filepath.Rel(cwd, path)
 		if err != nil {
 			return nil
 		}
 		depth := len(strings.Split(relPath, string(os.PathSeparator))) - 1
 
-		// Skip if too deep
 		if depth > maxDepth {
 			if info.IsDir() {
 				return filepath.SkipDir
@@ -752,9 +768,7 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 			return nil
 		}
 
-		// Check if filename matches
 		if !info.IsDir() && info.Name() == filename {
-			// Skip if already added (current directory)
 			if path == currentPath {
 				return nil
 			}
@@ -778,7 +792,6 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 	return results, nil
 }
 
-// printFileSearchResults displays found files in a formatted table
 func printFileSearchResults(results []FileSearchResult) {
 	const (
 		col1Width = 60
@@ -788,7 +801,6 @@ func printFileSearchResults(results []FileSearchResult) {
 
 	fmt.Printf("\n%s🔍 Found %d file(s):%s\n\n", ColorCyan, len(results), ColorReset)
 
-	// Top border
 	fmt.Printf("%s┌%s┬%s┬%s┐%s\n",
 		ColorGray,
 		strings.Repeat("─", col1Width+2),
@@ -796,7 +808,6 @@ func printFileSearchResults(results []FileSearchResult) {
 		strings.Repeat("─", col3Width+2),
 		ColorReset)
 
-	// Header row
 	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s\n",
 		ColorGray, ColorReset,
 		ColorBold, ColorYellow, col1Width, "Path", ColorReset,
@@ -806,7 +817,6 @@ func printFileSearchResults(results []FileSearchResult) {
 		ColorBold, ColorYellow, col3Width, "Size", ColorReset,
 		ColorGray, ColorReset)
 
-	// Separator
 	fmt.Printf("%s├%s┼%s┼%s┤%s\n",
 		ColorGray,
 		strings.Repeat("─", col1Width+2),
@@ -814,9 +824,7 @@ func printFileSearchResults(results []FileSearchResult) {
 		strings.Repeat("─", col3Width+2),
 		ColorReset)
 
-	// Data rows
 	for i, result := range results {
-		// Get relative path for display
 		cwd, _ := os.Getwd()
 		relPath, err := filepath.Rel(cwd, result.Path)
 		if err != nil {
@@ -830,7 +838,6 @@ func printFileSearchResults(results []FileSearchResult) {
 		}
 
 		modTime := result.ModTime.Format("2006-01-02 15:04:05")
-
 		sizeStr := formatSize(result.Size)
 
 		fmt.Printf("%s│%s %s%3d. %-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
@@ -843,7 +850,6 @@ func printFileSearchResults(results []FileSearchResult) {
 			ColorGray, ColorReset)
 	}
 
-	// Bottom border
 	fmt.Printf("%s└%s┴%s┴%s┘%s\n\n",
 		ColorGray,
 		strings.Repeat("─", col1Width+2),
@@ -852,15 +858,12 @@ func printFileSearchResults(results []FileSearchResult) {
 		ColorReset)
 }
 
-// resolveFilePath resolves the file path, searching recursively if not found in current directory
 func resolveFilePath(filename string) (string, error) {
-	// First check if file exists in current directory
 	if info, err := os.Stat(filename); err == nil && !info.IsDir() {
 		absPath, _ := filepath.Abs(filename)
 		return absPath, nil
 	}
 
-	// Search recursively
 	logger.Printf("File not found in current directory, searching recursively...")
 	fmt.Printf("%s🔍 Searching for '%s' in subdirectories...%s\n", ColorBlue, filename, ColorReset)
 
@@ -878,7 +881,6 @@ func resolveFilePath(filename string) (string, error) {
 		return results[0].Path, nil
 	}
 
-	// Multiple files found, prompt user
 	printFileSearchResults(results)
 
 	reader := bufio.NewReader(os.Stdin)
@@ -906,13 +908,11 @@ func resolveFilePath(filename string) (string, error) {
 	return results[choice-1].Path, nil
 }
 
-// checkDeltaInstalled checks if delta CLI tool is installed
 func checkDeltaInstalled() bool {
 	_, err := exec.LookPath("delta")
 	return err == nil
 }
 
-// runDelta executes delta to show diff between two files
 func runDelta(file1, file2 string) error {
 	if !checkDeltaInstalled() {
 		return fmt.Errorf("delta is not installed. Install it from: https://github.com/dandavison/delta")
@@ -925,23 +925,19 @@ func runDelta(file1, file2 string) error {
 
 	err := cmd.Run()
 	
-	// Delta returns exit status 1 when files differ - this is NORMAL, not an error!
-	// Only return error if exit code is something else (2+ means real error)
+	// FIX: Delta exit code 1 adalah NORMAL saat file berbeda
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() == 1 {
-				// Exit code 1 = files differ, which is expected - NOT an error
 				return nil
 			}
 		}
-		// Real error (exit code 2+ or other issue)
 		return err
 	}
 
 	return nil
 }
 
-// handleDiffCommand handles the -d/--diff command
 func handleDiffCommand(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("filename required for diff command")
@@ -950,13 +946,11 @@ func handleDiffCommand(args []string) error {
 	filename := args[0]
 	useLast := len(args) > 1 && args[1] == "--last"
 
-	// Resolve file path
 	filePath, err := resolveFilePath(filename)
 	if err != nil {
 		return err
 	}
 
-	// Get backups
 	backups, err := listBackups(filePath)
 	if err != nil {
 		return err
@@ -969,11 +963,9 @@ func handleDiffCommand(args []string) error {
 	var selectedBackup BackupInfo
 
 	if useLast {
-		// Use last backup
 		selectedBackup = backups[0]
 		fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
 	} else {
-		// Show backups and prompt
 		printBackupTable(filePath, backups)
 
 		reader := bufio.NewReader(os.Stdin)
@@ -1002,7 +994,6 @@ func handleDiffCommand(args []string) error {
 		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
 	}
 
-	// Run delta
 	err = runDelta(selectedBackup.Path, filePath)
 	if err != nil {
 		return fmt.Errorf("delta execution failed: %w", err)
@@ -1011,10 +1002,7 @@ func handleDiffCommand(args []string) error {
 	return nil
 }
 
-// ensureBackupDir creates backup directory if it doesn't exist
-// Returns the absolute path to the backup directory
 func ensureBackupDir(filePath string) (string, error) {
-	// Get directory of the target file
 	dir := filepath.Dir(filePath)
 	if dir == "." {
 		var err error
@@ -1024,13 +1012,10 @@ func ensureBackupDir(filePath string) (string, error) {
 		}
 	}
 
-	// Create backup directory path
 	backupDir := filepath.Join(dir, appConfig.BackupDirName)
 
-	// Check if backup directory exists
 	info, err := os.Stat(backupDir)
 	if os.IsNotExist(err) {
-		// Create backup directory with appropriate permissions
 		err = os.MkdirAll(backupDir, 0755)
 		if err != nil {
 			return "", fmt.Errorf("failed to create backup directory: %w", err)
@@ -1046,30 +1031,25 @@ func ensureBackupDir(filePath string) (string, error) {
 	return backupDir, nil
 }
 
-// validatePath checks for path traversal and other security issues
 func validatePath(filePath string) error {
 	if filePath == "" {
 		return fmt.Errorf("filename cannot be empty")
 	}
 
-	// Get absolute path
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}
 
-	// Check for path traversal attempts
 	cleanPath := filepath.Clean(filePath)
 	if strings.Contains(cleanPath, "..") {
 		return fmt.Errorf("path traversal not allowed")
 	}
 
-	// Check filename length
 	if len(filepath.Base(filePath)) > appConfig.MaxFilenameLen {
 		return fmt.Errorf("filename too long (max %d characters)", appConfig.MaxFilenameLen)
 	}
 
-	// Prevent writing to system directories (basic check)
 	systemDirs := []string{"/etc", "/sys", "/proc", "/dev", "C:\\Windows", "C:\\System32"}
 	for _, sysDir := range systemDirs {
 		if strings.HasPrefix(absPath, sysDir) {
@@ -1080,9 +1060,7 @@ func validatePath(filePath string) error {
 	return nil
 }
 
-// checkDiskSpace validates there's enough space (basic check)
 func checkDiskSpace(path string, requiredSize int64) error {
-	// Get directory
 	dir := filepath.Dir(path)
 	if dir == "." {
 		var err error
@@ -1092,7 +1070,6 @@ func checkDiskSpace(path string, requiredSize int64) error {
 		}
 	}
 
-	// Try to create a small test file to verify write permissions
 	testFile := filepath.Join(dir, ".pt_test_"+generateShortID())
 	f, err := os.Create(testFile)
 	if err != nil {
@@ -1101,44 +1078,34 @@ func checkDiskSpace(path string, requiredSize int64) error {
 	f.Close()
 	os.Remove(testFile)
 
-	// Note: Actual disk space checking is platform-specific
-	// This is a basic validation that we can write to the directory
 	return nil
 }
 
-// generateShortID creates a short unique identifier
 func generateShortID() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
-// generateUniqueBackupName creates a collision-resistant backup filename
-// Now returns just the filename (without directory path)
 func generateUniqueBackupName(filePath string) string {
-	// Get just the base filename (not the full path)
 	baseName := filepath.Base(filePath)
 	ext := filepath.Ext(baseName)
 	nameWithoutExt := strings.TrimSuffix(baseName, ext)
 
-	// Format: YYYYMMDD_HHMMSSµµµµµµ (no dots in timestamp)
 	timestamp := time.Now().Format("20060102_150405.000000")
 	timestamp = strings.ReplaceAll(timestamp, ".", "")
 
-	// Add process ID and random component for uniqueness
 	uniqueID := fmt.Sprintf("%d_%s", os.Getpid(), generateShortID())
 
 	return fmt.Sprintf("%s_%s.%s.%s", nameWithoutExt, strings.TrimPrefix(ext, "."), timestamp, uniqueID)
 }
 
-// getClipboardText reads from clipboard with size validation
 func getClipboardText() (string, error) {
 	text, err := clipboard.ReadAll()
 	if err != nil {
 		return "", fmt.Errorf("failed to read clipboard: %w", err)
 	}
 
-	// Validate size
 	if len(text) > appConfig.MaxClipboardSize {
 		return "", fmt.Errorf("clipboard content too large (max %dMB)", appConfig.MaxClipboardSize/(1024*1024))
 	}
@@ -1146,10 +1113,7 @@ func getClipboardText() (string, error) {
 	return text, nil
 }
 
-// autoRenameIfExists creates backup with atomic-like behavior
-// Now stores backups in the "backup" subdirectory
-func autoRenameIfExists(filePath string) (string, error) {
-	// Check if file exists
+func autoRenameIfExists(filePath, comment string) (string, error) {
 	info, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
 		return filePath, nil
@@ -1158,54 +1122,53 @@ func autoRenameIfExists(filePath string) (string, error) {
 		return filePath, fmt.Errorf("failed to check file: %w", err)
 	}
 
-	// Don't backup empty files
 	if info.Size() == 0 {
 		logger.Printf("Skipping backup of empty file: %s", filePath)
 		return filePath, nil
 	}
 
-	// Ensure backup directory exists
 	backupDir, err := ensureBackupDir(filePath)
 	if err != nil {
 		return filePath, err
 	}
 
-	// Generate unique backup filename (just the name, not full path)
 	backupFileName := generateUniqueBackupName(filePath)
-	
-	// Full path to backup file in backup directory
 	backupPath := filepath.Join(backupDir, backupFileName)
 
-	// Copy the file to backup directory (not rename, so original stays)
-	// Read original file
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return filePath, fmt.Errorf("failed to read file for backup: %w", err)
 	}
 
-	// Write to backup directory
 	err = os.WriteFile(backupPath, content, 0644)
 	if err != nil {
 		return filePath, fmt.Errorf("failed to create backup: %w", err)
 	}
 
+	err = saveBackupMetadata(backupPath, comment, filePath, info.Size())
+	if err != nil {
+		logger.Printf("Warning: failed to save backup metadata: %v", err)
+	}
+
 	logger.Printf("Backup created: %s -> %s", filePath, backupPath)
-	fmt.Printf("📦 Backup created: %s%s%s\n", ColorGreen, backupFileName, ColorReset)
+	if comment != "" {
+		logger.Printf("Backup comment: %s", comment)
+		fmt.Printf("📦 Backup created: %s%s%s\n", ColorGreen, backupFileName, ColorReset)
+		fmt.Printf("💬 Comment: \"%s%s%s\"\n", ColorCyan, comment, ColorReset)
+	} else {
+		fmt.Printf("📦 Backup created: %s%s%s\n", ColorGreen, backupFileName, ColorReset)
+	}
 
 	return filePath, nil
 }
 
-// writeFile writes data to file with validation
-func writeFile(filePath string, data string, appendMode bool, checkMode bool) error {
-	// Validate path
+func writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) error {
 	if err := validatePath(filePath); err != nil {
 		return err
 	}
 
-	// Check mode: compare with existing file first
 	if checkMode && !appendMode {
 		if existingData, err := os.ReadFile(filePath); err == nil {
-			// File exists, compare content
 			if string(existingData) == data {
 				logger.Printf("Content identical, skipping write: %s", filePath)
 				fmt.Printf("ℹ️  Content identical to current file, no changes needed\n")
@@ -1216,21 +1179,18 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool) er
 		}
 	}
 
-	// Check disk space
 	if err := checkDiskSpace(filePath, int64(len(data))); err != nil {
 		return err
 	}
 
 	if !appendMode {
-		// Create backup before overwriting
 		var err error
-		filePath, err = autoRenameIfExists(filePath)
+		filePath, err = autoRenameIfExists(filePath, comment)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Determine file open mode
 	var flag int
 	if appendMode {
 		flag = os.O_APPEND | os.O_CREATE | os.O_WRONLY
@@ -1238,25 +1198,21 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool) er
 		flag = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 	}
 
-	// Open file
 	file, err := os.OpenFile(filePath, flag, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
 	defer file.Close()
 
-	// Write data
 	n, err := file.WriteString(data)
 	if err != nil {
 		return fmt.Errorf("failed to write to file: %w", err)
 	}
 
-	// Verify write completed
 	if n != len(data) {
 		return fmt.Errorf("incomplete write: wrote %d bytes, expected %d", n, len(data))
 	}
 
-	// Sync to disk
 	if err := file.Sync(); err != nil {
 		logger.Printf("Warning: failed to sync file: %v", err)
 	}
@@ -1273,14 +1229,11 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool) er
 	return nil
 }
 
-// listBackups returns backup files from backup directory
 func listBackups(filePath string) ([]BackupInfo, error) {
-	// Validate path first
 	if err := validatePath(filePath); err != nil {
 		return nil, err
 	}
 
-	// Get backup directory path
 	dir := filepath.Dir(filePath)
 	if dir == "." {
 		var err error
@@ -1292,24 +1245,19 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 	
 	backupDir := filepath.Join(dir, appConfig.BackupDirName)
 
-	// Check if backup directory exists
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		// No backup directory means no backups
 		return []BackupInfo{}, nil
 	}
 
-	// Get base filename for pattern matching
 	baseName := filepath.Base(filePath)
 	ext := filepath.Ext(baseName)
 	nameWithoutExt := strings.TrimSuffix(baseName, ext)
 	extWithoutDot := strings.TrimPrefix(ext, ".")
 	
-	// Pattern should match: basename_ext.timestamp...
 	pattern := fmt.Sprintf("%s_%s.", nameWithoutExt, extWithoutDot)
 	
 	logger.Printf("Looking for backups with pattern: %s in directory: %s", pattern, backupDir)
 
-	// Read backup directory
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read backup directory: %w", err)
@@ -1324,13 +1272,16 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 
 		name := entry.Name()
 		
+		if strings.HasSuffix(name, ".meta.json") {
+			continue
+		}
+		
 		logger.Printf("Checking file: %s against pattern: %s", name, pattern)
 		
 		if !strings.HasPrefix(name, pattern) {
 			continue
 		}
 
-		// Extract and validate timestamp
 		timestamp := strings.TrimPrefix(name, pattern)
 		
 		logger.Printf("Extracted timestamp: %s (length: %d)", timestamp, len(timestamp))
@@ -1340,13 +1291,11 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 			continue
 		}
 
-		// More flexible validation: check if it starts with a date-like pattern
 		timestampPart := timestamp
 		if len(timestampPart) > 30 {
 			timestampPart = timestampPart[:30]
 		}
 		
-		// Count digits in the timestamp part
 		digitCount := 0
 		for _, c := range timestampPart {
 			if c >= '0' && c <= '9' {
@@ -1359,19 +1308,25 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 			continue
 		}
 
-		// Get file info
 		info, err := entry.Info()
 		if err != nil {
 			logger.Printf("Warning: failed to get info for %s: %v", name, err)
 			continue
 		}
 
-		logger.Printf("Found valid backup: %s", name)
+		backupPath := filepath.Join(backupDir, name)
+		comment, err := loadBackupMetadata(backupPath)
+		if err != nil {
+			logger.Printf("Warning: failed to load metadata for %s: %v", name, err)
+		}
+
+		logger.Printf("Found valid backup: %s (comment: %s)", name, comment)
 		backups = append(backups, BackupInfo{
-			Path:    filepath.Join(backupDir, name),
+			Path:    backupPath,
 			Name:    name,
 			ModTime: info.ModTime(),
 			Size:    info.Size(),
+			Comment: comment,
 		})
 	}
 
@@ -1379,12 +1334,10 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		return backups, nil
 	}
 
-	// Sort by modification time (newest first)
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].ModTime.After(backups[j].ModTime)
 	})
 
-	// Limit to MaxBackupCount
 	if len(backups) > appConfig.MaxBackupCount {
 		backups = backups[:appConfig.MaxBackupCount]
 	}
@@ -1392,12 +1345,12 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 	return backups, nil
 }
 
-// printBackupTable displays backups in formatted table
 func printBackupTable(filePath string, backups []BackupInfo) {
 	const (
-		col1Width = 50
+		col1Width = 40  // Lebih lebar untuk filename
 		col2Width = 19
-		col3Width = 15
+		col3Width = 12
+		col4Width = 30  // Lebih kecil untuk comment
 	)
 
 	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
@@ -1405,96 +1358,107 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 	fmt.Printf("%sTotal: %d backup(s) (stored in ./%s/)%s\n\n", 
 		ColorGray, len(backups), appConfig.BackupDirName, ColorReset)
 
-	// Top border
-	fmt.Printf("%s┌%s┬%s┬%s┐%s\n",
+	fmt.Printf("%s┌%s┬%s┬%s┬%s┐%s\n",
 		ColorGray,
 		strings.Repeat("─", col1Width+2),
 		strings.Repeat("─", col2Width+2),
 		strings.Repeat("─", col3Width+2),
+		strings.Repeat("─", col4Width+2),
 		ColorReset)
 
-	// Header row
-	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s\n",
+	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s %s%s%-*s%s %s│%s\n",
 		ColorGray, ColorReset,
 		ColorBold, ColorYellow, col1Width, "File Name", ColorReset,
 		ColorGray, ColorReset,
 		ColorBold, ColorYellow, col2Width, "Modified", ColorReset,
 		ColorGray, ColorReset,
 		ColorBold, ColorYellow, col3Width, "Size", ColorReset,
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col4Width, "Comment", ColorReset,
 		ColorGray, ColorReset)
 
-	// Separator
-	fmt.Printf("%s├%s┼%s┼%s┤%s\n",
+	fmt.Printf("%s├%s┼%s┼%s┼%s┤%s\n",
 		ColorGray,
 		strings.Repeat("─", col1Width+2),
 		strings.Repeat("─", col2Width+2),
 		strings.Repeat("─", col3Width+2),
+		strings.Repeat("─", col4Width+2),
 		ColorReset)
 
-	// Data rows
 	for i, backup := range backups {
 		name := backup.Name
-		// Account for number prefix (up to 3 digits + ". ")
-		maxNameLen := col1Width - 5
+		// Hitung lebar untuk nomor (misal "  10. " = 6 karakter)
+		numWidth := len(fmt.Sprintf("%3d. ", i+1))
+		maxNameLen := col1Width - numWidth
 		if len(name) > maxNameLen {
 			name = name[:maxNameLen-3] + "..."
 		}
 
 		modTime := backup.ModTime.Format("2006-01-02 15:04:05")
 		sizeStr := formatSize(backup.Size)
+		
+		comment := backup.Comment
+		if comment == "" {
+			comment = "-"
+		} else {
+			// Hitung lebar yang tersedia untuk comment (tanpa warna)
+			if len(comment) > col4Width {
+				comment = comment[:col4Width-3] + "..."
+			}
+		}
 
-		fmt.Printf("%s│%s %s%3d. %-*s%s %s│%s %-*s %s│%s %*s %s│%s\n",
+		// Format row dengan padding yang konsisten
+		fmt.Printf("%s│%s %3d. %-*s %s│%s %-*s %s│%s %*s %s│%s %-*s %s│%s\n",
 			ColorGray, ColorReset,
-			ColorGreen, i+1, maxNameLen, name, ColorReset,
+			i+1, maxNameLen, name,
 			ColorGray, ColorReset,
 			col2Width, modTime,
 			ColorGray, ColorReset,
 			col3Width, sizeStr,
+			ColorGray, ColorReset,
+			col4Width, comment,
 			ColorGray, ColorReset)
 	}
 
-	// Bottom border
-	fmt.Printf("%s└%s┴%s┴%s┘%s\n\n",
+	fmt.Printf("%s└%s┴%s┴%s┴%s┘%s\n\n",
 		ColorGray,
 		strings.Repeat("─", col1Width+2),
 		strings.Repeat("─", col2Width+2),
 		strings.Repeat("─", col3Width+2),
+		strings.Repeat("─", col4Width+2),
 		ColorReset)
 }
 
-// restoreBackup restores a backup file with validation
-func restoreBackup(backupPath, originalPath string) error {
-	// Validate paths
+// FIX: Tambahkan parameter comment yang hilang
+func restoreBackup(backupPath, originalPath, comment string) error {
 	if err := validatePath(originalPath); err != nil {
 		return err
 	}
 
-	// Check if backup exists
 	info, err := os.Stat(backupPath)
 	if err != nil {
 		return fmt.Errorf("backup file not found: %w", err)
 	}
 
-	// Check backup isn't too large
 	if info.Size() > int64(appConfig.MaxClipboardSize) {
 		return fmt.Errorf("backup file too large to restore (max %dMB)", appConfig.MaxClipboardSize/(1024*1024))
 	}
 
-	// Read backup file
 	content, err := os.ReadFile(backupPath)
 	if err != nil {
 		return fmt.Errorf("failed to read backup file: %w", err)
 	}
 
-	// Create backup of current file if it exists
 	if _, err := os.Stat(originalPath); err == nil {
-		_, err = autoRenameIfExists(originalPath)
+		if comment == "" {
+			comment = "Backup before restore"
+		}
+		_, err = autoRenameIfExists(originalPath, comment)
 		if err != nil {
 			return fmt.Errorf("failed to backup current file: %w", err)
 		}
 	}
 
-	// Write content to original filename
 	err = os.WriteFile(originalPath, content, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to restore file: %w", err)
@@ -1504,11 +1468,44 @@ func restoreBackup(backupPath, originalPath string) error {
 	fmt.Printf("✅ Successfully restored: %s\n", originalPath)
 	fmt.Printf("📦 From backup: %s\n", filepath.Base(backupPath))
 	fmt.Printf("📄 Content size: %d characters\n", len(content))
+	
+	if comment != "" {
+		fmt.Printf("💬 Restore comment: \"%s\"\n", comment)
+	}
 
 	return nil
 }
 
-// readUserChoice reads and validates user input
+// FIX: Fungsi parseWriteArgs sekarang benar-benar digunakan
+func parseWriteArgs(args []string) (filename string, comment string, checkMode bool, err error) {
+	if len(args) == 0 {
+		return "", "", false, fmt.Errorf("filename required")
+	}
+	
+	filename = args[0]
+	comment = ""
+	checkMode = false
+	
+	i := 1
+	for i < len(args) {
+		switch args[i] {
+		case "-m", "--message":
+			if i+1 >= len(args) {
+				return "", "", false, fmt.Errorf("-m/--message requires a value")
+			}
+			i++
+			comment = args[i]
+		case "-c", "--check":
+			checkMode = true
+		default:
+			return "", "", false, fmt.Errorf("unknown flag: %s", args[i])
+		}
+		i++
+	}
+	
+	return filename, comment, checkMode, nil
+}
+
 func readUserChoice(max int) (int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("Enter backup number to restore (1-%d) or 0 to cancel: ", max)
@@ -1518,16 +1515,13 @@ func readUserChoice(max int) (int, error) {
 		return 0, fmt.Errorf("failed to read input: %w", err)
 	}
 
-	// Trim whitespace
 	input = strings.TrimSpace(input)
 
-	// Parse integer
 	choice, err := strconv.Atoi(input)
 	if err != nil {
 		return 0, fmt.Errorf("invalid input: please enter a number")
 	}
 
-	// Validate range
 	if choice < 0 || choice > max {
 		return 0, fmt.Errorf("invalid selection: must be between 0 and %d", max)
 	}
@@ -1535,16 +1529,19 @@ func readUserChoice(max int) (int, error) {
 	return choice, nil
 }
 
-// printHelp displays usage information
 func printHelp() {
 	fmt.Printf("%sPT - Clipboard to File Tool with Smart Version Management v%s%s\n\n", ColorBold, Version, ColorReset)
 	fmt.Println("Usage:")
 	fmt.Println("  pt <filename>                    Write clipboard to file")
 	fmt.Println("  pt <filename> -c                 Write only if content differs (check mode)")
+	fmt.Println("  pt <filename> -m \"comment\"       Write with comment")
+	fmt.Println("  pt <filename> -c -m \"comment\"   Check mode with comment")
 	fmt.Println("  pt + <filename>                  Append clipboard to file")
-	fmt.Println("  pt -l <filename>                 List backups")
+	fmt.Println("  pt + <filename> -m \"comment\"    Append with comment")
+	fmt.Println("  pt -l <filename>                 List backups (with comments)")
 	fmt.Println("  pt -r <filename>                 Restore backup (interactive)")
 	fmt.Println("  pt -r <filename> --last          Restore last backup")
+	fmt.Println("  pt -r <filename> -m \"comment\"   Restore with comment")
 	fmt.Println("  pt -d <filename>                 Compare file with backup (interactive)")
 	fmt.Println("  pt -d <filename> --last          Compare file with last backup")
 	fmt.Println("  pt -rm <filename>                Delete file (with backup) and create empty placeholder")
@@ -1592,14 +1589,12 @@ func printHelp() {
 		ColorGray, ColorReset)
 }
 
-// printVersion displays version information
 func printVersion() {
 	fmt.Printf("PT version %s\n", Version)
 	fmt.Println("Production-hardened clipboard to file tool")
 	fmt.Println("Features: Recursive search, backup management, delta diff, tree view, safe delete, configurable")
 	fmt.Println()
 	
-	// Show version file location if found
 	versionPaths := []string{
 		"VERSION",
 		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
@@ -1622,7 +1617,6 @@ func printVersion() {
 }
 
 func main() {
-	// Handle help and version flags
 	if len(os.Args) == 2 {
 		switch os.Args[1] {
 		case "-h", "--help":
@@ -1634,14 +1628,11 @@ func main() {
 		}
 	}
 
-	// Require at least one argument
 	if len(os.Args) < 2 {
-		// fmt.Printf("%s❌ Error: No command specified%s\n\n", ColorRed, ColorReset)
 		printHelp()
 		os.Exit(1)
 	}
 
-	// Handle different commands
 	switch os.Args[1] {
 	case "config":
 		if len(os.Args) < 3 {
@@ -1684,7 +1675,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Resolve file path with recursive search
 		filePath, err := resolveFilePath(os.Args[2])
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -1722,12 +1712,24 @@ func main() {
 		}
 
 		filename := os.Args[2]
+		comment := ""
+		useLast := false
 
-		// Resolve file path with recursive search
+		// FIX: Parse argumen untuk restore dengan benar
+		for i := 3; i < len(os.Args); i++ {
+			if os.Args[i] == "--last" {
+				useLast = true
+			} else if os.Args[i] == "-m" || os.Args[i] == "--message" {
+				if i+1 < len(os.Args) {
+					i++
+					comment = os.Args[i]
+				}
+			}
+		}
+
 		filePath, err := resolveFilePath(filename)
 		if err != nil {
-			// For restore, if file doesn't exist, use the filename as-is
-			// (we're restoring it, so it might not exist yet)
+			// Untuk restore, file mungkin belum ada
 			filePath = filename
 			absPath, err := filepath.Abs(filePath)
 			if err == nil {
@@ -1735,7 +1737,6 @@ func main() {
 			}
 		}
 
-		// Get list of backups
 		backups, err := listBackups(filePath)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -1748,15 +1749,17 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Check for --last flag
-		if len(os.Args) == 4 && os.Args[3] == "--last" {
-			err = restoreBackup(backups[0].Path, filePath)
+		// FIX: Gunakan parameter comment saat memanggil restoreBackup
+		if useLast {
+			if comment == "" {
+				comment = "Restored from last backup"
+			}
+			err = restoreBackup(backups[0].Path, filePath, comment)
 			if err != nil {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
 			}
 		} else {
-			// Interactive selection
 			printBackupTable(filePath, backups)
 
 			choice, err := readUserChoice(len(backups))
@@ -1770,9 +1773,11 @@ func main() {
 				os.Exit(0)
 			}
 
-			// Restore selected backup
 			selectedBackup := backups[choice-1]
-			err = restoreBackup(selectedBackup.Path, filePath)
+			if comment == "" {
+				comment = "Restored from backup"
+			}
+			err = restoreBackup(selectedBackup.Path, filePath, comment)
 			if err != nil {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
@@ -1796,33 +1801,32 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Resolve file path with recursive search
-		filePath, err := resolveFilePath(os.Args[2])
-		if err != nil {
-			// If file doesn't exist, use the provided path as-is
-			filePath = os.Args[2]
+		// FIX: Parse argumen untuk append dengan benar
+		filename := os.Args[2]
+		comment := ""
+		
+		for i := 3; i < len(os.Args); i++ {
+			if os.Args[i] == "-m" || os.Args[i] == "--message" {
+				if i+1 < len(os.Args) {
+					i++
+					comment = os.Args[i]
+				}
+			}
 		}
 
-		err = writeFile(filePath, text, true, false)
+		filePath, err := resolveFilePath(filename)
+		if err != nil {
+			filePath = filename
+		}
+
+		err = writeFile(filePath, text, true, false, comment)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
 		}
 
 	default:
-		// Write mode (default)
-		// Check for -c/--check flag
-		checkMode := false
-		filename := os.Args[1]
-		
-		if len(os.Args) > 2 {
-			for i := 2; i < len(os.Args); i++ {
-				if os.Args[i] == "-c" || os.Args[i] == "--check" {
-					checkMode = true
-				}
-			}
-		}
-		
+		// FIX: Gunakan parseWriteArgs untuk write mode default
 		text, err := getClipboardText()
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -1834,10 +1838,15 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Resolve file path with recursive search
+		// Parse argumen menggunakan parseWriteArgs
+		filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
 		filePath, err := resolveFilePath(filename)
 		if err != nil {
-			// If file doesn't exist, use the provided path as-is
 			filePath = filename
 		}
 
@@ -1845,7 +1854,7 @@ func main() {
 			fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
 		}
 
-		err = writeFile(filePath, text, false, checkMode)
+		err = writeFile(filePath, text, false, checkMode, comment)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)

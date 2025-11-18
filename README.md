@@ -1,22 +1,24 @@
-# 📋 `pt` — Clipboard to File Tool with Smart Version Management
+# 📋 `pt` – Clipboard to File Tool with Smart Version Management
 
 [![Go Version](https://img.shields.io/badge/Go-1.16+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.18-blue.svg)](https://github.com/cumulus13/pt-go)
+[![Version](https://img.shields.io/badge/version-1.0.19-blue.svg)](https://github.com/cumulus13/pt-go)
 
-> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file — with automatic timestamped backups, **recursive file search**, **delta diff comparison**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager — it's a complete version control system for your files!**
+> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
 
 ## ✨ Features
 
 ### Core Features
 - 📝 **Quick Save** - Write clipboard content to file with one command
 - 📦 **Auto Backup** - Automatic timestamped backups stored in `./backup/` directory
+- 💬 **Backup Comments** - Add descriptive comments to track why changes were made ✨ NEW!
 - ➕ **Append Mode** - Add content without creating backups
-- 🔄 **Restore** - Interactive or quick restore from backups
-- 📊 **Beautiful Listings** - Formatted table view of all backups with sizes
+- 🔄 **Restore** - Interactive or quick restore from backups with comments
+- 📊 **Beautiful Listings** - Formatted table view of all backups with sizes and comments ✨ NEW!
 - 🔒 **Production Hardened** - Path validation, size limits, error handling
 - 🎨 **Colorful Output** - ANSI colors for better readability
 - 📈 **Audit Logging** - All operations logged for tracking
+- ✅ **Check Mode** - Skip writes if content unchanged (saves disk space) ✨ NEW!
 
 ### Advanced Features
 - 🔍 **Recursive File Search** - Automatically finds files in subdirectories up to 10 levels deep
@@ -27,15 +29,18 @@
 - ⚙️ **Exception Filtering** - Exclude specific files/folders from tree view
 - 🎯 **Multi-File Selection** - Interactive prompt when multiple files found
 - 🚀 **Smart Path Resolution** - Finds files anywhere in your project
+- ⚙️ **Configurable** - Customize behavior via `pt.yml` config file ✨ NEW!
 
-### Version Management Capabilities
-**PT acts as a lightweight version control system:**
-- 📜 **Complete Version History** - Every file change is preserved
-- 📙 **Easy Rollback** - Restore any previous version instantly
+### Version Management Capabilities with Comments ✨ NEW!
+**PT acts as a lightweight version control system with descriptive comments:**
+- 📜 **Complete Version History** - Every file change is preserved with optional comments
+- 💬 **Comment System** - Track why changes were made, not just when
+- 📝 **Contextual Notes** - Add meaningful descriptions to each backup
+- 🔙 **Easy Rollback** - Restore any previous version instantly, see why it was saved
 - 📊 **Version Comparison** - Diff any two versions visually with delta
 - 🎯 **Zero Data Loss** - Never lose work, automatic backup before every write
 - 💾 **Space Efficient** - Only changed files are backed up
-- 🏷️ **Timestamped Versions** - Microsecond precision timestamps
+- 🏷️ **Timestamped Versions** - Microsecond precision timestamps + human-readable comments
 
 ## 🚀 Installation
 
@@ -98,9 +103,9 @@ scoop install delta
 
 ```bash
 pt --version
-# PT version 2.1.0
+# PT version 1.0.19
 # Production-hardened clipboard to file tool
-# Features: Recursive search, backup management, delta diff, tree view, safe delete
+# Features: Recursive search, backup management, delta diff, tree view, safe delete, configurable, comments
 ```
 
 ## 📖 Usage
@@ -111,17 +116,35 @@ pt --version
 # Write clipboard to file (creates backup if exists)
 pt myfile.txt
 
+# Write with comment ✨ NEW!
+pt myfile.txt -m "Fixed bug in authentication logic"
+
+# Write with check mode (skip if unchanged) ✨ NEW!
+pt myfile.txt -c
+
+# Combine check mode with comment ✨ NEW!
+pt myfile.txt -c -m "Updated configuration"
+
 # Append clipboard to file (no backup)
 pt + myfile.txt
 
-# List all backups with sizes and timestamps
+# Append with comment ✨ NEW!
+pt + myfile.txt -m "Added new log entry"
+
+# List all backups with sizes, timestamps, and comments ✨ NEW!
 pt -l myfile.txt
 
 # Restore backup (interactive selection)
 pt -r myfile.txt
 
+# Restore with comment ✨ NEW!
+pt -r myfile.txt -m "Rolled back to stable version"
+
 # Restore last backup directly
 pt -r myfile.txt --last
+
+# Restore last backup with comment ✨ NEW!
+pt -r myfile.txt --last -m "Emergency rollback"
 
 # Show help
 pt --help
@@ -130,7 +153,21 @@ pt --help
 pt --version
 ```
 
-### Advanced Commands (NEW!)
+### Configuration Commands
+
+```bash
+# Initialize configuration file
+pt config init              # Creates pt.yml in current directory
+pt config init ~/.pt.yml    # Create in custom location
+
+# Show current configuration
+pt config show
+
+# Show config file location
+pt config path
+```
+
+### Advanced Commands
 
 ```bash
 # 🔍 RECURSIVE SEARCH - Automatically finds files in subdirectories
@@ -151,55 +188,152 @@ pt -t /path -e build,dist   # Combine path and exceptions
 
 # 🗑️ SAFE DELETE - Backup before deletion
 pt -rm old_file.txt         # Backup, delete, create empty placeholder
+pt -rm old_file.txt -m "Deprecated old implementation"  # With comment ✨ NEW!
 pt --remove script.py       # Alternative syntax
 ```
 
 ## 📚 Examples
 
-### 1. Quick Note Taking
+### 1. Quick Note Taking with Comments ✨ NEW!
 
 ```bash
 # Copy some text to clipboard, then:
-pt notes.txt
+pt notes.txt -m "Meeting notes from sprint planning"
 # ✅ Successfully written to: notes.txt
-# 📝 Content size: 142 characters
+# 📄 Content size: 142 characters
+# 💬 Comment: "Meeting notes from sprint planning"
 ```
 
-### 2. Append to Log Files
+### 2. Version Control for Code Changes ✨ NEW!
 
 ```bash
-# Copy error message, then:
-pt + errors.log
+# Before making risky changes
+pt main.go -m "Working version before refactoring"
+# 📦 Backup created: main_go.20251118_141241...
+# 💬 Comment: "Working version before refactoring"
+
+# After changes (only saves if different)
+pt main.go -c -m "Refactored authentication module"
+# 🔍 Content differs, proceeding with backup and write
+# ✅ Successfully written to: main.go
+
+# View version history with comments
+pt -l main.go
+# Shows table with comments for each version
+```
+
+### 3. Configuration Management with Context ✨ NEW!
+
+```bash
+# Save production config
+pt config.json -m "Production config for v2.1.0 release"
+
+# Later, update for testing
+pt config.json -m "Testing new cache settings"
+
+# View all config versions with comments
+pt -l config.json
+# ┌────────────┬─────────────┬──────┬────────────────────────────┐
+# │ File Name  │ Modified    │ Size │ Comment                    │
+# ├────────────┼─────────────┼──────┼────────────────────────────┤
+# │ 1. config..│ 14:12:41    │ 2 KB │ Testing new cache settings │
+# │ 2. config..│ 10:30:15    │ 2 KB │ Production config v2.1.0   │
+# └────────────┴─────────────┴──────┴────────────────────────────┘
+
+# Restore production config
+pt -r config.json -m "Reverting to production config"
+```
+
+### 4. Check Mode - Save Disk Space ✨ NEW!
+
+```bash
+# Only write if content actually changed
+pt data.json -c
+# ℹ️  Content identical to current file, no changes needed
+# 📄 File: data.json
+
+# Or with comment if it does change
+pt data.json -c -m "Updated user preferences"
+# 🔍 Content differs, proceeding with backup and write
+# 📦 Backup created with comment
+```
+
+### 5. Safe Delete with Context ✨ NEW!
+
+```bash
+# Delete old implementation with explanation
+pt -rm legacy_auth.py -m "Replaced by new OAuth2 implementation"
+# 📦 Backup created: legacy_auth_py.20251118_141241...
+# 💬 Comment: "Replaced by new OAuth2 implementation"
+# 🗑️  File deleted: legacy_auth.py
+# 📄 Created empty placeholder: legacy_auth.py
+```
+
+### 6. Append Mode with Comments ✨ NEW!
+
+```bash
+# Append log entries with context
+pt + errors.log -m "Error logs from production incident"
 # ✅ Successfully appended to: errors.log
 # 📝 Content size: 87 characters
+# 💬 Comment: "Error logs from production incident"
 ```
 
-### 3. Code Snippet Management with Version Control
+### 7. Interactive Restore with Comment History ✨ NEW!
 
 ```bash
-# Copy code from browser
-pt snippet.py
+pt -r main.go
 
-# Later, copy another snippet (creates backup automatically)
-pt snippet.py
-# 📦 Backup created: snippet_py.20251115_151804177132.12345_a1b2c3d4
-
-# List all versions with sizes
-pt -l snippet.py
-# 📂 Backup files for 'snippet.py'
+# 📂 Backup files for 'main.go'
 # Total: 5 backup(s) (stored in ./backup/)
-# [Beautiful table showing all versions]
-
-# Compare current with previous version
-pt -d snippet.py --last
-# [Beautiful colored diff output powered by delta]
-
-# Restore a specific version
-pt -r snippet.py
-# [Shows table, select version number]
+# 
+# ┌──────────────────────────┬─────────────────────┬──────────┬────────────────────────────────┐
+# │ File Name                │ Modified            │     Size │ Comment                        │
+# ├──────────────────────────┼─────────────────────┼──────────┼────────────────────────────────┤
+# │ 1. main_go.20251118...   │ 2025-11-18 14:12:41 │  50.5 KB │ Add comment system             │
+# │ 2. main_go.20251118...   │ 2025-11-18 14:11:24 │  57.0 KB │ Working version before refactor│
+# │ 3. main_go.20251118...   │ 2025-11-18 13:43:01 │  52.6 KB │ Fixed authentication bug       │
+# │ 4. main_go.20251113...   │ 2025-11-13 11:47:02 │  49.2 KB │ -                              │
+# │ 5. main_go.20251113...   │ 2025-11-13 11:39:49 │  49.2 KB │ -                              │
+# └──────────────────────────┴─────────────────────┴──────────┴────────────────────────────────┘
+# 
+# Enter backup number to restore (1-5) or 0 to cancel: 2
+# ✅ Successfully restored: main.go
+# 📦 From backup: main_go.20251118_141124...
+# 💬 Restore comment: "Restored from backup"
 ```
 
-### 4. Recursive File Search (NEW!)
+### 8. Configuration File ✨ NEW!
+
+```bash
+# Create configuration file
+pt config init
+
+# Edit pt.yml
+cat > pt.yml << EOF
+# PT Configuration File
+max_clipboard_size: 104857600    # 100MB
+max_backup_count: 100            # Keep 100 backups
+max_filename_length: 200         # Max filename length
+backup_dir_name: backup          # Backup directory name
+max_search_depth: 10             # Max recursive search depth
+EOF
+
+# View current config
+pt config show
+# 
+# Current PT Configuration:
+# 
+# Max Clipboard Size: 104857600 bytes (100.0 MB)
+# Max Backup Count: 100
+# Max Filename Length: 200 characters
+# Backup Directory: backup/
+# Max Search Depth: 10 levels
+# 
+# Config loaded from: ./pt.yml
+```
+
+### 9. Recursive File Search
 
 ```bash
 # File not in current directory? PT finds it automatically!
@@ -223,13 +357,13 @@ pt README.md
 # ✓ Using: ./README.md
 ```
 
-### 5. Visual Diff Comparison (NEW!)
+### 10. Visual Diff Comparison
 
 ```bash
 # Interactive diff - choose which backup to compare
 pt -d main.go
 # 📂 Backup files for 'main.go'
-# [Shows list of backups]
+# [Shows list of backups with comments]
 # Enter backup number to compare (1-5) or 0 to cancel: 1
 # 📊 Comparing with backup: main_go.20251115_120000...
 # [Beautiful side-by-side diff powered by delta]
@@ -242,7 +376,7 @@ pt -d main.go --last
 # [Beautiful colored diff output]
 ```
 
-### 6. Directory Tree Visualization
+### 11. Directory Tree Visualization
 
 ```bash
 # Show current directory tree
@@ -260,156 +394,41 @@ pt -t
 
 # Exclude specific folders
 pt -t -e node_modules,.git,dist
-# Using .gitignore (12 patterns)
-# Exceptions: node_modules, .git, dist
-
-# Tree of specific directory with exceptions
-pt -t ~/projects/myapp -e build,vendor,tmp
-```
-
-### 7. Safe File Deletion
-
-```bash
-# Delete file with automatic backup
-pt -rm old_script.py
-# 📦 Backup created: old_script_py.20251115_151804...
-# 🗑️  File deleted: old_script.py
-# 📝 Created empty placeholder: old_script.py
-# ℹ️  Original content (1.2 KB) backed up to ./backup/
-
-# Restore if needed
-pt -r old_script.py --last
-# ✅ Successfully restored: old_script.py
-```
-
-### 8. Working with Files in Subdirectories (NEW!)
-
-```bash
-# PT automatically searches subdirectories
-cd ~/myproject
-
-# These commands work even if files are in subdirectories:
-pt app.config           # Finds ./src/config/app.config
-pt -l database.sql      # Lists backups for ./db/migrations/database.sql
-pt -d styles.css --last # Diffs ./frontend/css/styles.css with backup
-pt -r utils.js          # Restores ./lib/helpers/utils.js
-
-# If multiple files with same name exist, PT shows selection prompt
-pt config.yaml
-# 🔍 Found 2 matching file(s)
-# 1. ./config.yaml
-# 2. ./docker/config.yaml
-# Enter file number to use (1-2) or 0 to cancel:
 ```
 
 ## 🎨 Output Examples
 
-### Backup Listing with Sizes
+### Backup Listing with Comments ✨ NEW!
 
 ```
 📂 Backup files for 'myfile.txt'
 Total: 5 backup(s) (stored in ./backup/)
 
-┌────────────────────────────────────────────────────┬─────────────────────┬─────────────────┐
-│ File Name                                          │ Modified            │ Size            │
-├────────────────────────────────────────────────────┼─────────────────────┼─────────────────┤
-│  1. myfile_txt.20251115_151804177132.12345_a1b2   │ 2025-11-15 15:18:04 │       2.45 KB   │
-│  2. myfile_txt.20251115_143022123456.12344_b2c3   │ 2025-11-15 14:30:22 │       2.40 KB   │
-│  3. myfile_txt.20251115_120000000000.12343_c3d4   │ 2025-11-15 12:00:00 │       1.98 KB   │
-│  4. myfile_txt.20251114_180000000000.12342_d4e5   │ 2025-11-14 18:00:00 │       1.85 KB   │
-│  5. myfile_txt.20251114_100000000000.12341_e5f6   │ 2025-11-14 10:00:00 │       1.52 KB   │
-└────────────────────────────────────────────────────┴─────────────────────┴─────────────────┘
+┌──────────────────────────────────────┬─────────────────────┬──────────────┬──────────────────────────────────────┐
+│ File Name                            │ Modified            │         Size │ Comment                              │
+├──────────────────────────────────────┼─────────────────────┼──────────────┼──────────────────────────────────────┤
+│ 1. myfile_txt.20251118_141241...     │ 2025-11-18 14:12:41 │      2.45 KB │ Add comment system                   │
+│ 2. myfile_txt.20251118_140030...     │ 2025-11-18 14:00:30 │      2.40 KB │ Fixed bug in auth logic              │
+│ 3. myfile_txt.20251118_120000...     │ 2025-11-18 12:00:00 │      1.98 KB │ Updated configuration                │
+│ 4. myfile_txt.20251114_180000...     │ 2025-11-14 18:00:00 │      1.85 KB │ -                                    │
+│ 5. myfile_txt.20251114_100000...     │ 2025-11-14 10:00:00 │      1.52 KB │ -                                    │
+└──────────────────────────────────────┴─────────────────────┴──────────────┴──────────────────────────────────────┘
 ```
 
-### Recursive File Search Results (NEW!)
-
-```
-🔍 Found 3 file(s):
-
-┌──────┬──────────────────────────────────────────────────────────────┬─────────────────────┬──────────────┐
-│   #  │ Path                                                         │ Modified            │ Size         │
-├──────┼──────────────────────────────────────────────────────────────┼─────────────────────┼──────────────┤
-│    1 │ ./config.json                                                │ 2025-11-15 10:30:45 │     1.2 KB   │
-│    2 │ ./src/config/config.json                                     │ 2025-11-15 09:15:20 │     856 B    │
-│    3 │ ./tests/fixtures/config.json                                 │ 2025-11-14 16:20:10 │     512 B    │
-└──────┴──────────────────────────────────────────────────────────────┴─────────────────────┴──────────────┘
-
-Enter file number to use (1-3) or 0 to cancel:
-```
-
-### Enhanced Help Message (NEW!)
+### Check Mode Output ✨ NEW!
 
 ```bash
-pt --help
+# When content is identical
+pt data.json -c
+# ℹ️  Content identical to current file, no changes needed
+# 📄 File: data.json
 
-╔══════════════════════════════════════════════════════════════╗
-║  PT - Clipboard to File Tool v2.1.0                          ║
-╚══════════════════════════════════════════════════════════════╝
-
-📝 BASIC OPERATIONS:
-  pt <filename>               Write clipboard to file
-  pt + <filename>             Append clipboard to file
-
-📦 BACKUP OPERATIONS:
-  pt -l <filename>            List all backups
-  pt -r <filename>            Restore backup (interactive)
-  pt -r <filename> --last     Restore most recent backup
-
-📊 DIFF OPERATIONS:
-  pt -d <filename>            Compare with backup (interactive)
-  pt -d <filename> --last     Compare with most recent backup
-
-ℹ️  INFORMATION:
-  pt -h, --help               Show this help message
-  pt -v, --version            Show version information
-
-💡 EXAMPLES:
-  $ pt notes.txt                # Save clipboard to notes.txt
-  $ pt + log.txt                # Append clipboard to log.txt
-  $ pt -l notes.txt             # List all backups
-  $ pt -r notes.txt             # Interactive restore
-  $ pt -d notes.txt --last      # Diff with most recent backup
-
-🔍 RECURSIVE SEARCH:
-  • If file not found in current directory, searches recursively
-  • Maximum search depth: 10 levels
-  • If multiple files found, prompts for selection
-  • Skips ./backup/ directories automatically
-
-📂 BACKUP SYSTEM:
-  • Location: ./backup/ directory (auto-created)
-  • Naming: <filename>_<ext>.<timestamp>.<unique-id>
-  • Retention: Keeps most recent 100 backups per file
-  • Auto-backup: Creates backup before overwriting existing files
-  • Empty files: Not backed up (skipped automatically)
-
-⚙️  SYSTEM LIMITS:
-  • Max file size: 100MB
-  • Max filename: 200 characters
-  • Max backups: 100 per file
-  • Search depth: 10 levels
-
-🔧 REQUIREMENTS:
-  • delta: Required for diff operations
-    Install: https://github.com/dandavison/delta
-    - macOS:     brew install git-delta
-    - Linux:     cargo install git-delta
-    - Windows:   scoop install delta
-
-🛡️  SECURITY FEATURES:
-  • Path traversal protection (blocks '..' in paths)
-  • System directory protection (blocks /etc, /sys, etc.)
-  • Write permission validation
-  • File size validation
-  • Atomic-like backup operations
-
-📋 NOTES:
-  • All operations are logged to stderr for audit trail
-  • Backup timestamps use microsecond precision
-  • Files are synced to disk after writing
-  • Supports cross-platform operation (Linux, macOS, Windows)
-
-📄 LICENSE: MIT | AUTHOR: Hadi Cahyadi <cumulus13@gmail.com>
+# When content differs
+pt data.json -c -m "Updated schema"
+# 🔍 Content differs, proceeding with backup and write
+# 📦 Backup created: data_json.20251118_141241...
+# 💬 Comment: "Updated schema"
+# ✅ Successfully written to: data.json
 ```
 
 ## 🗂️ Project Structure
@@ -418,20 +437,23 @@ pt --help
 pt/
 ├── backup/                         # Auto-created backup directory
 │   ├── main_go.20251115_163913... # Timestamped backups
+│   ├── main_go.20251115_163913.....meta.json # Metadata with comments ✨ NEW!
 │   └── main_go.20251115_151804...
 ├── go.mod                          # Go module definition
 ├── go.sum                          # Dependency checksums
 ├── pt/
 │   └── main.go                     # Main application code
+├── pt.yml                          # Configuration file (optional) ✨ NEW!
 ├── README.md                       # This file
 ├── LICENSE                         # MIT License
+├── VERSION                         # Version file
 ├── .gitignore                      # Git ignore rules
 └── install.sh                      # Installation script (optional)
 ```
 
-### Backup Directory Structure
+### Backup Metadata Format ✨ NEW!
 
-All backups are stored in a `./backup/` subdirectory relative to the file location:
+All backups are stored in a `./backup/` subdirectory relative to the file location. Each backup now has an associated `.meta.json` file:
 
 ```
 project/
@@ -447,30 +469,60 @@ project/
 └── other_files.txt
 ```
 
+```json
+{
+  "comment": "Fixed authentication bug",
+  "timestamp": "2025-11-18T14:12:41.500000Z",
+  "size": 51712,
+  "original_file": "/path/to/main.go"
+}
+```
+
 ## 🔧 Configuration
 
-### Environment Variables
+### Configuration File (pt.yml) ✨ NEW!
 
-Currently, PT uses hardcoded limits for safety:
+PT now supports configuration via `pt.yml` file. Search locations (in order):
+
+1. `./pt.yml` or `./pt.yaml` (current directory)
+2. `~/.config/pt/pt.yml` or `~/.config/pt/pt.yaml`
+3. `~/pt.yml` or `~/pt.yaml` (home directory)
+
+#### Create Config File
+
+```bash
+# Generate sample config
+pt config init
+
+# Or create manually
+cat > pt.yml << EOF
+# PT Configuration File
+max_clipboard_size: 104857600    # 100MB (1-1GB)
+max_backup_count: 100            # 100 backups (1-10000)
+max_filename_length: 200         # 200 chars (1-1000)
+backup_dir_name: backup          # "backup" directory
+max_search_depth: 10             # 10 levels (1-100)
+EOF
+```
+
+#### Configuration Options
 
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
-| **Max Clipboard Size** | 100MB | 1-1GB | Maximum content size |
-| **Max Backup Count** | 100 | 1-10000 | Backups kept per file |
-| **Max Filename Length** | 200 | 1-1000 | Maximum filename chars |
-| **Max Search Depth** | 10 | 1-100 | Recursive search depth |
-| **Backup Dir Name** | `backup` | - | Backup directory name |
+| **max_clipboard_size** | 104857600 (100MB) | 1 - 1073741824 (1GB) | Maximum clipboard content size |
+| **max_backup_count** | 100 | 1 - 10000 | Maximum backups kept per file |
+| **max_filename_length** | 200 | 1 - 1000 | Maximum filename length |
+| **backup_dir_name** | backup | - | Backup directory name |
+| **max_search_depth** | 10 | 1 - 100 | Recursive search depth |
 
-To customize, edit constants in `main.go`:
+#### View Configuration
 
-```go
-const (
-    MaxClipboardSize = 100 * 1024 * 1024 // 100MB
-    MaxBackupCount   = 100
-    MaxFilenameLen   = 200
-    BackupDirName    = "backup"
-    MaxSearchDepth   = 10                 // NEW!
-)
+```bash
+# Show current config
+pt config show
+
+# Show config file location
+pt config path
 ```
 
 ### Backup Naming Format
@@ -483,6 +535,7 @@ originalname_ext.YYYYMMDD_HHMMSS_MICROSECONDS.PID_RANDOMID
 Example:
 ```
 notes_txt.20251115_151804177132.12345_a1b2c3d4
+notes_txt.20251115_151804177132.12345_a1b2c3d4.meta.json  ✨ NEW!
 ```
 
 Components:
@@ -490,6 +543,7 @@ Components:
 - `20251115_151804177132` - Timestamp with microsecond precision
 - `12345` - Process ID
 - `a1b2c3d4` - Random 8-character hex ID
+- `.meta.json` - Metadata file with comment ✨ NEW!
 
 This ensures **zero collision** risk even with:
 - Multiple concurrent PT instances
@@ -504,10 +558,11 @@ This ensures **zero collision** risk even with:
 - ✅ Blocks writes to system directories (`/etc`, `/sys`, `C:\Windows`)
 - ✅ Validates filename length limits
 - ✅ Sanitizes all file paths
-- ✅ Validates recursive search depth (NEW!)
+- ✅ Validates recursive search depth
+- ✅ Validates configuration values ✨ NEW!
 
 ### Size Limits
-- ✅ Maximum 100MB clipboard content
+- ✅ Maximum 100MB clipboard content (configurable) ✨ NEW!
 - ✅ Prevents disk exhaustion attacks
 - ✅ Validates disk space before writing
 - ✅ Checks write permissions
@@ -517,14 +572,16 @@ This ensures **zero collision** risk even with:
 - ✅ Numeric inputs validated for range
 - ✅ Graceful handling of malformed input
 - ✅ Protected against command injection
-- ✅ Safe file selection in multi-match scenarios (NEW!)
+- ✅ Safe file selection in multi-match scenarios
+- ✅ Configuration file validation ✨ NEW!
 
 ### Safe Operations
 - ✅ Atomic-like file operations
 - ✅ Verification of write completion
 - ✅ Automatic rollback on errors
 - ✅ Backup before destructive operations
-- ✅ Backup directory exclusion from search (NEW!)
+- ✅ Backup directory exclusion from search
+- ✅ Metadata integrity checks ✨ NEW!
 
 ## ⚠️ Limitations
 
@@ -533,8 +590,9 @@ This ensures **zero collision** risk even with:
 3. **Local Only** - No network or cloud storage support
 4. **Platform Support** - Requires clipboard access (may need X11 on Linux headless)
 5. **Delta Required** - Diff feature requires delta to be installed
-6. **Search Depth** - Recursive search limited to 10 levels by default
-7. **Backup Exclusion** - `./backup/` directories are automatically excluded from search
+6. **Search Depth** - Recursive search limited to configurable depth (default 10)
+7. **Backup Exclusion** - Configured backup directories excluded from search
+8. **Comment Length** - No enforced limit on comment length ✨ NEW!
 
 ## 🛠 Troubleshooting
 
@@ -554,7 +612,7 @@ This ensures **zero collision** risk even with:
 ```bash
 ❌ Error: clipboard content too large (max 100MB)
 ```
-**Solution**: Content exceeds safety limit. Save directly from source application
+**Solution**: Content exceeds safety limit. Increase `max_clipboard_size` in config or save directly
 
 ### File Not Found (NEW!)
 ```bash
@@ -566,12 +624,17 @@ This ensures **zero collision** risk even with:
 - Ensure file exists somewhere in the directory tree
 - Use absolute path if outside search scope
 
-### Multiple Files Found (NEW!)
+### Config File Issues ✨ NEW!
 ```bash
-🔍 Found 3 matching file(s)
-[Table showing options]
-Enter file number to use (1-3) or 0 to cancel:
+⚠️  Warning: invalid max_clipboard_size, using default
 ```
+**Solution**: Check config file syntax and value ranges. Use `pt config show` to verify
+
+### Content Unchanged (Check Mode) ✨ NEW!
+```bash
+ℹ️  Content identical to current file, no changes needed
+```
+**This is normal**: Check mode (`-c`) prevents unnecessary writes when content hasn't changed
 **Solution**: Select the file number you want to work with, or press 0 to cancel
 
 ### Linux Clipboard Issues
@@ -691,58 +754,44 @@ go test ./...
 
 ## 🎯 Use Cases
 
-### 1. Version Control System
-Use PT as a lightweight version control for any text file:
-- Track every change automatically
-- Compare versions visually with delta (NEW!)
+### 1. Version Control System with Context ✨ NEW!
+Use PT as a lightweight version control with meaningful comments:
+- Track every change with why it was made
+- Compare versions visually with delta
 - Restore any previous version instantly
+- **See the context** of each change through comments
 - No git repository needed
-- Works with any file, anywhere (recursive search) (NEW!)
 
-### 2. Quick Note Management
-Perfect for rapid note-taking:
-- Copy from anywhere, paste to file
-- All versions preserved
-- Easy to find and restore
-- Find notes even if you forgot the exact location (NEW!)
+### 2. Configuration Management with Audit Trail ✨ NEW!
+Perfect for tracking config changes:
+- Document why each config change was made
+- Check mode prevents duplicate backups
+- Compare configurations visually
+- Easy rollback with context
+- Complete audit trail with comments
 
-### 3. Code Snippet Library
-Build your snippet collection:
-- Save snippets with one command
-- Version history included
-- Compare different versions with beautiful diffs (NEW!)
-- Organize snippets in subdirectories (NEW!)
+### 3. Code Snippet Library with Notes ✨ NEW!
+Build your snippet collection with context:
+- Save snippets with descriptive comments
+- Version history with reasons for changes
+- Compare different versions
+- Organize with meaningful metadata
 
-### 4. Configuration Management
-Track configuration changes:
-- Backup before every edit
-- Compare with previous configs using delta (NEW!)
-- Easy rollback on mistakes
-- See what changed and when
-- Find configs in complex project structures (NEW!)
-
-### 5. Log File Management
-Efficient log handling:
-- Append mode for logs
-- Tree view of log directories
-- Compare log versions
-- Safe cleanup with backups
-- Track logs across different locations (NEW!)
-
-### 6. Documentation Workflow
+### 4. Documentation Workflow with Tracking ✨ NEW!
 Better documentation management:
-- Track all documentation changes
-- Visual diff of updates with delta (NEW!)
+- Track all changes with explanations
+- Visual diff of updates
 - Restore previous versions
-- Organized backup history
-- Work with docs in any subdirectory (NEW!)
+- **Know why changes were made**
+- Organized backup history with comments
 
-### 7. Multi-Project Workspace (NEW!)
-Perfect for working across multiple projects:
-- Quickly save files in any project subdirectory
-- Automatic file location discovery
-- Compare versions across project restructures
-- Never lose track of where files are located
+### 5. Emergency Rollback with Context ✨ NEW!
+Quick recovery with understanding:
+- Instant rollback to any version
+- See why each version was saved
+- Compare what changed
+- Document the rollback reason
+- Complete incident tracking
 
 ## 🤝 Contributing
 
@@ -780,14 +829,16 @@ golangci-lint run
 ### Feature Ideas
 
 Want to contribute? Here are some ideas:
-- [ ] Config file support (`.ptrc`)
-- [ ] Custom backup directory location
+- [x] Config file support (`.ptrc`) (✅ DONE in v1.0.19)
+- [x] Backup comments/metadata (✅ DONE in v1.0.19)
+- [x] Check mode to skip identical content (✅ DONE in v1.0.19)
+- [ ] Custom backup directory location (absolute path)
 - [ ] Backup compression (gzip)
 - [ ] Backup to cloud storage (S3, GCS)
 - [ ] Web UI for backup management
 - [ ] Backup cleanup strategies (by age, size)
 - [ ] File watching mode (auto-backup on change)
-- [ ] Backup metadata (tags, comments)
+- [ ] Backup tags (additional metadata)
 - [ ] Multi-file operations
 - [ ] Backup encryption
 - [x] Recursive file search (✅ DONE in v2.1.0)
@@ -837,7 +888,7 @@ SOFTWARE.
 
 **Made with ❤️ by Hadi Cahyadi**
 
-*Your complete file version management system in a single command.* ⚡
+*Your complete file version management system with contextual history in a single command.* ⚡
 
 If you find PT useful, consider supporting its development and please consider giving it a star on GitHub! ⭐:
 
@@ -847,17 +898,17 @@ If you find PT useful, consider supporting its development and please consider g
  
 [Support me on Patreon](https://www.patreon.com/cumulus13)
 
-## � Acknowledgments
+## 🙏 Acknowledgments
 
 - [atotto/clipboard](https://github.com/atotto/clipboard) - Cross-platform clipboard library
 - [dandavison/delta](https://github.com/dandavison/delta) - Beautiful diff viewer
+- [gopkg.in/yaml.v3](https://gopkg.in/yaml.v3) - YAML parser for Go
 - Go community for excellent tooling and documentation
 - All contributors and users
 
-
-> 🌟 **PT: More than a clipboard tool — it's your file version manager!** 
+> 🌟 **PT: More than a clipboard tool – it's your file version manager with context!** 
 > 
-> Save, compare, restore, diff, and manage all your file versions effortlessly. Never lose work again!
+> Save, compare, restore, diff, and manage all your file versions effortlessly with meaningful comments. Never lose work again, and always know why changes were made!
 
 ## 🎓 Quick Start Tutorial
 
@@ -867,29 +918,36 @@ If you find PT useful, consider supporting its development and please consider g
 # 1. Install PT
 go install github.com/cumulus13/pt-go/pt@latest
 
-# 2. Save your first file
-echo "Hello PT" | pbcopy  # Copy something
-pt notes.txt              # Save to file
+# 2. Save your first file with a comment ✨ NEW!
+echo "Hello PT" | pbcopy
+pt notes.txt -m "Initial version"
 
-# 3. Make changes
+# 3. Make changes with context ✨ NEW!
 echo "Hello PT v2" | pbcopy
-pt notes.txt              # Creates backup automatically
+pt notes.txt -m "Added version number"
 
-# 4. See your versions
-pt -l notes.txt           # List all versions
+# 4. See your versions with comments ✨ NEW!
+pt -l notes.txt
+# Shows table with all versions and their comments
 
-# 5. Compare versions
-pt -d notes.txt --last    # Visual diff
+# 5. Use check mode to save space ✨ NEW!
+echo "Hello PT v2" | pbcopy  # Same content
+pt notes.txt -c -m "Attempted update"
+# ℹ️  Content identical, no backup created
 
-# 6. Restore if needed
-pt -r notes.txt --last    # Restore previous version
+# 6. Compare versions
+pt -d notes.txt --last
 
-# 7. Explore your project
-pt -t                     # See file tree
+# 7. Restore if needed with context ✨ NEW!
+pt -r notes.txt --last -m "Rollback for testing"
 
-# Congratulations! You're now a PT expert! 🎉
+# 8. Set up your preferences ✨ NEW!
+pt config init
+pt config show
+
+# Congratulations! You're now a PT expert with version context! 🎉
 ```
 
 ---
 
-**🔥 Start managing your file versions like a pro today!**
+**🔥 Start managing your file versions with meaningful context like a pro today!**
