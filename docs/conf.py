@@ -87,6 +87,10 @@ html_css_files = [
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
 ]
 
+html_sidebars = {
+    "**": ["logo-text.html", "globaltoc.html", "localtoc.html", "searchbox.html"]
+}
+
 # Use monospace font for code blocks and inline code (via CSS)
 # html_context = { ... } # Removed, as it's not needed for CSS inclusion
 
