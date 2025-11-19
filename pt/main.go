@@ -1,7 +1,7 @@
-// File: pt\main.go
+// File: pt/main.go
 // Author: Hadi Cahyadi <cumulus13@gmail.com>
 // Date: 2025-11-18
-// Description: Clipboard to File Tool with Smart Version Management
+// Description: Production-hardened clipboard-to-file tool with security, validation, Git-like .pt directory and smart version management
 // License: MIT
 
 package main
@@ -30,7 +30,7 @@ const (
 	DefaultMaxClipboardSize = 100 * 1024 * 1024 // 100MB max
 	DefaultMaxBackupCount   = 100                // Keep max 100 backups
 	DefaultMaxFilenameLen   = 200                // Max filename length
-	DefaultBackupDirName    = "backup"           // Backup directory name
+	DefaultBackupDirName    = ".pt"              // Git-like hidden directory
 	DefaultMaxSearchDepth   = 10                 // Max directory depth for recursive search
 )
 
@@ -241,6 +241,281 @@ func loadConfig() *Config {
 	return config
 }
 
+// findPTRoot searches for .pt directory in current and parent directories (like .git)
+// It starts from the given path and walks up the directory tree until it finds .pt or reaches root
+func findPTRoot(startPath string) (string, error) {
+	// If startPath is a file, get its directory
+	info, err := os.Stat(startPath)
+	if err == nil && !info.IsDir() {
+		startPath = filepath.Dir(startPath)
+	}
+
+	absPath, err := filepath.Abs(startPath)
+	if err != nil {
+		return "", err
+	}
+
+	current := absPath
+	
+	// Search up the directory tree until we find .pt or reach filesystem root
+	for {
+		ptDir := filepath.Join(current, appConfig.BackupDirName)
+		if info, err := os.Stat(ptDir); err == nil && info.IsDir() {
+			logger.Printf("Found %s directory at: %s", appConfig.BackupDirName, ptDir)
+			return ptDir, nil
+		}
+
+		parent := filepath.Dir(current)
+		
+		// Reached filesystem root (parent == current means we can't go up anymore)
+		if parent == current {
+			break
+		}
+		
+		current = parent
+	}
+
+	// No .pt directory found in any parent
+	logger.Printf("No %s directory found in tree from: %s", appConfig.BackupDirName, absPath)
+	return "", nil
+}
+
+// ensurePTDir creates .pt directory if it doesn't exist
+// Returns the absolute path to the .pt directory (could be in parent dir)
+// This function mimics git behavior - searches upward for existing .pt
+func ensurePTDir(filePath string) (string, error) {
+	// Get directory of the target file (or use current dir if it's already a dir)
+	dir := filePath
+	info, err := os.Stat(filePath)
+	if err == nil && !info.IsDir() {
+		dir = filepath.Dir(filePath)
+	} else if err != nil {
+		// File doesn't exist yet, get its directory
+		dir = filepath.Dir(filePath)
+	}
+	
+	if dir == "." || dir == "" {
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get current directory: %w", err)
+		}
+	}
+
+	// Try to find existing .pt directory by walking up the tree
+	ptRoot, err := findPTRoot(dir)
+	if err != nil {
+		return "", err
+	}
+
+	// If found in parent directory, use that (like git)
+	if ptRoot != "" {
+		ptParent := filepath.Dir(ptRoot)
+		cwd, _ := os.Getwd()
+		relPath, _ := filepath.Rel(cwd, ptParent)
+		if relPath != "" && relPath != "." {
+			logger.Printf("Using existing %s from parent: %s", appConfig.BackupDirName, ptParent)
+			fmt.Printf("📁 Using %s from: %s%s/%s\n", appConfig.BackupDirName, ColorCyan, relPath, ColorReset)
+		}
+		return ptRoot, nil
+	}
+
+	// No .pt directory found in tree, create one in the file's immediate directory
+	// Get the absolute path of the directory where we'll create .pt
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	
+	ptDir := filepath.Join(absDir, appConfig.BackupDirName)
+
+	// Check if .pt directory exists at this level
+	info, err = os.Stat(ptDir)
+	if os.IsNotExist(err) {
+		// Create .pt directory with appropriate permissions
+		err = os.MkdirAll(ptDir, 0755)
+		if err != nil {
+			return "", fmt.Errorf("failed to create %s directory: %w", appConfig.BackupDirName, err)
+		}
+		logger.Printf("Created %s directory: %s", appConfig.BackupDirName, ptDir)
+		fmt.Printf("📁 Created %s directory: %s\n", appConfig.BackupDirName, ptDir)
+		
+		// Create .gitignore to ignore .pt directory
+		createPTGitignore(absDir)
+	} else if err != nil {
+		return "", fmt.Errorf("failed to check %s directory: %w", appConfig.BackupDirName, err)
+	} else if !info.IsDir() {
+		return "", fmt.Errorf("%s exists but is not a directory: %s", appConfig.BackupDirName, ptDir)
+	}
+
+	return ptDir, nil
+}
+
+// createPTGitignore creates/updates .gitignore to exclude .pt directory
+func createPTGitignore(dir string) {
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	
+	// Check if .gitignore exists
+	content, err := os.ReadFile(gitignorePath)
+	if err != nil && !os.IsNotExist(err) {
+		return // Skip on error
+	}
+
+	gitignoreContent := string(content)
+	
+	// Check if .pt is already ignored
+	ptPattern := appConfig.BackupDirName + "/"
+	if strings.Contains(gitignoreContent, ptPattern) || strings.Contains(gitignoreContent, appConfig.BackupDirName+"\n") {
+		return // Already ignored
+	}
+
+	// Append .pt to .gitignore
+	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return // Skip on error
+	}
+	defer f.Close()
+
+	// Add newline if file doesn't end with one
+	if len(content) > 0 && content[len(content)-1] != '\n' {
+		f.WriteString("\n")
+	}
+
+	f.WriteString("# PT backup directory\n")
+	f.WriteString(ptPattern + "\n")
+	
+	logger.Printf("Added %s to .gitignore", ptPattern)
+}
+
+// getRelativePath gets relative path from .pt root to file
+func getRelativePath(ptRoot, filePath string) (string, error) {
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	// Get the directory containing .pt
+	ptParent := filepath.Dir(ptRoot)
+	
+	relPath, err := filepath.Rel(ptParent, absFilePath)
+	if err != nil {
+		return "", err
+	}
+
+	return relPath, nil
+}
+
+// getBackupDir returns the backup directory path for a file within .pt
+// The backup directory name is based on the file's relative path from .pt parent
+// Examples:
+//   ./main.go          -> .pt/main.go/
+//   ./pt/main.go       -> .pt/pt_main.go/
+//   ./src/lib/util.go  -> .pt/src_lib_util.go/
+func getBackupDir(ptRoot, filePath string) (string, error) {
+	relPath, err := getRelativePath(ptRoot, filePath)
+	if err != nil {
+		return "", err
+	}
+
+	// Clean the relative path
+	relPath = filepath.Clean(relPath)
+	
+	// Get the base filename
+	baseName := filepath.Base(relPath)
+	
+	// Get the directory part (if any)
+	dirPart := filepath.Dir(relPath)
+	
+	var backupSubdir string
+	
+	// If file is directly in .pt parent (no subdirectory)
+	if dirPart == "." {
+		// Just use the filename
+		backupSubdir = baseName
+	} else {
+		// File is in a subdirectory, preserve the path structure
+		// Replace path separators with underscores
+		// e.g., pt/main.go -> pt_main.go
+		//       src/lib/util.go -> src_lib_util.go
+		fullPath := relPath
+		fullPath = strings.ReplaceAll(fullPath, string(os.PathSeparator), "_")
+		fullPath = strings.ReplaceAll(fullPath, "/", "_")  // Unix
+		fullPath = strings.ReplaceAll(fullPath, "\\", "_") // Windows
+		backupSubdir = fullPath
+	}
+	
+	backupDir := filepath.Join(ptRoot, backupSubdir)
+	
+	logger.Printf("Backup dir for %s: %s (relative: %s)", filePath, backupDir, relPath)
+	
+	return backupDir, nil
+}
+
+// loadIgnorePatterns loads patterns from .ptignore and .gitignore
+func loadIgnorePatterns(startPath string) []string {
+	patterns := make([]string, 0)
+	
+	// Try to find .pt root first
+	ptRoot, _ := findPTRoot(startPath)
+	var searchDir string
+	if ptRoot != "" {
+		searchDir = filepath.Dir(ptRoot)
+	} else {
+		searchDir = startPath
+	}
+
+	// Load .ptignore (higher priority)
+	ptignorePath := filepath.Join(searchDir, ".ptignore")
+	if content, err := os.ReadFile(ptignorePath); err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				patterns = append(patterns, line)
+			}
+		}
+		logger.Printf("Loaded %d patterns from .ptignore", len(patterns))
+	}
+
+	// Load .gitignore
+	gitignorePath := filepath.Join(searchDir, ".gitignore")
+	if content, err := os.ReadFile(gitignorePath); err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				patterns = append(patterns, line)
+			}
+		}
+		logger.Printf("Loaded patterns from .gitignore")
+	}
+
+	// Always ignore .pt directory
+	patterns = append(patterns, appConfig.BackupDirName, appConfig.BackupDirName+"/")
+
+	return patterns
+}
+
+// shouldIgnore checks if a path matches ignore patterns
+func shouldIgnore(path string, patterns []string) bool {
+	baseName := filepath.Base(path)
+	
+	for _, pattern := range patterns {
+		// Simple pattern matching
+		if pattern == baseName {
+			return true
+		}
+		if strings.HasSuffix(pattern, "/") && baseName == strings.TrimSuffix(pattern, "/") {
+			return true
+		}
+		if strings.Contains(path, pattern) {
+			return true
+		}
+	}
+	
+	return false
+}
+
 func generateSampleConfig(path string) error {
 	config := getDefaultConfig()
 	
@@ -309,7 +584,7 @@ func handleConfigCommand(args []string) error {
 			ColorCyan, ColorReset, appConfig.MaxClipboardSize, float64(appConfig.MaxClipboardSize)/(1024*1024))
 		fmt.Printf("%sMax Backup Count:%s %d\n", ColorCyan, ColorReset, appConfig.MaxBackupCount)
 		fmt.Printf("%sMax Filename Length:%s %d characters\n", ColorCyan, ColorReset, appConfig.MaxFilenameLen)
-		fmt.Printf("%sBackup Directory:%s %s/\n", ColorCyan, ColorReset, appConfig.BackupDirName)
+		fmt.Printf("%sBackup Directory:%s %s/ (Git-like structure)\n", ColorCyan, ColorReset, appConfig.BackupDirName)
 		fmt.Printf("%sMax Search Depth:%s %d levels\n\n", ColorCyan, ColorReset, appConfig.MaxSearchDepth)
 		
 		configPath := findConfigFile()
@@ -422,6 +697,11 @@ func loadGitIgnore(rootPath string) (*GitIgnore, error) {
 
 func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
 	baseName := filepath.Base(path)
+	
+	// Always ignore .pt directory
+	if baseName == appConfig.BackupDirName {
+		return true
+	}
 	
 	for _, pattern := range gi.patterns {
 		if strings.HasSuffix(pattern, "/") {
@@ -629,7 +909,8 @@ func handleTreeCommand(args []string) error {
 	}
 
 	if gitignore != nil && len(gitignore.patterns) > 0 {
-		fmt.Printf("%sUsing .gitignore (%d patterns)%s\n", ColorGray, len(gitignore.patterns), ColorReset)
+		fmt.Printf("%sUsing .gitignore (%d patterns) + %s is always excluded%s\n", 
+			ColorGray, len(gitignore.patterns), appConfig.BackupDirName, ColorReset)
 	}
 
 	return nil
@@ -703,7 +984,7 @@ func handleRemoveCommand(args []string) error {
 
 	logger.Printf("Created empty placeholder: %s", filePath)
 	fmt.Printf("📄 Created empty placeholder: %s\n", filePath)
-	fmt.Printf("ℹ️  Original content (%d bytes) backed up to ./%s/\n", len(content), appConfig.BackupDirName)
+	fmt.Printf("ℹ️  Original content (%d bytes) backed up to %s/\n", len(content), appConfig.BackupDirName)
 
 	return nil
 }
@@ -714,6 +995,9 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
+
+	// Load ignore patterns
+	ignorePatterns := loadIgnorePatterns(cwd)
 
 	currentPath := filepath.Join(cwd, filename)
 	if info, err := os.Stat(currentPath); err == nil && !info.IsDir() {
@@ -731,8 +1015,12 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 			return nil
 		}
 
-		if info.IsDir() && info.Name() == appConfig.BackupDirName {
-			return filepath.SkipDir
+		// Check ignore patterns
+		if shouldIgnore(path, ignorePatterns) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		relPath, err := filepath.Rel(cwd, path)
@@ -937,7 +1225,7 @@ func handleDiffCommand(args []string) error {
 	}
 
 	if len(backups) == 0 {
-		return fmt.Errorf("no backups found for: %s (check ./%s/ directory)", filePath, appConfig.BackupDirName)
+		return fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
 	}
 
 	var selectedBackup BackupInfo
@@ -1107,12 +1395,25 @@ func autoRenameIfExists(filePath, comment string) (string, error) {
 		return filePath, nil
 	}
 
-	backupDir, err := ensureBackupDir(filePath)
+	// Ensure .pt directory exists (searches parent dirs)
+	ptRoot, err := ensurePTDir(filePath)
 	if err != nil {
 		return filePath, err
 	}
 
 	backupFileName := generateUniqueBackupName(filePath)
+	
+	// Get backup directory for this file within .pt
+	backupDir, err := getBackupDir(ptRoot, filePath)
+	if err != nil {
+		return filePath, err
+	}
+
+	// Create subdirectory if needed
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		return filePath, fmt.Errorf("failed to create backup subdirectory: %w", err)
+	}
+
 	backupPath := filepath.Join(backupDir, backupFileName)
 
 	content, err := os.ReadFile(filePath)
@@ -1214,22 +1515,55 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		return nil, err
 	}
 
-	dir := filepath.Dir(filePath)
-	if dir == "." {
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return nil, err
-		}
+	// Get absolute path of the file
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, err
 	}
 	
-	backupDir := filepath.Join(dir, appConfig.BackupDirName)
+	// Get the directory of the file (or use current if file doesn't exist yet)
+	dir := filepath.Dir(absFilePath)
+	
+	// Find .pt root (searches parent directories like git)
+	ptRoot, err := findPTRoot(dir)
+	if err != nil {
+		return nil, err
+	}
 
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+	if ptRoot == "" {
+		// No .pt directory exists yet in the entire tree
+		logger.Printf("No .pt directory found in tree")
 		return []BackupInfo{}, nil
 	}
 
-	baseName := filepath.Base(filePath)
+	// Get backup directory for this file within .pt
+	backupDir, err := getBackupDir(ptRoot, absFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Printf("Looking for backups in: %s", backupDir)
+
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		logger.Printf("Backup directory does not exist: %s", backupDir)
+		
+		// Try to find backups with just the filename (in case file was moved)
+		// This handles the case where file was originally ./main.go (backup in .pt/main.go/)
+		// but is now ./pt/main.go (would look in .pt/pt_main.go/)
+		baseName := filepath.Base(absFilePath)
+		alternateBackupDir := filepath.Join(ptRoot, baseName)
+		
+		if stat, err := os.Stat(alternateBackupDir); err == nil && stat.IsDir() {
+			logger.Printf("Found backups using base filename: %s", alternateBackupDir)
+			fmt.Printf("%sℹ️  Note: Using backups from %s (file may have been moved)%s\n", 
+				ColorYellow, filepath.Base(alternateBackupDir), ColorReset)
+			backupDir = alternateBackupDir
+		} else {
+			return []BackupInfo{}, nil
+		}
+	}
+
+	baseName := filepath.Base(absFilePath)
 	ext := filepath.Ext(baseName)
 	nameWithoutExt := strings.TrimSuffix(baseName, ext)
 	extWithoutDot := strings.TrimPrefix(ext, ".")
@@ -1311,6 +1645,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 	}
 
 	if len(backups) == 0 {
+		logger.Printf("No backups found matching pattern: %s", pattern)
 		return backups, nil
 	}
 
@@ -1322,6 +1657,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		backups = backups[:appConfig.MaxBackupCount]
 	}
 
+	logger.Printf("Found %d backup(s)", len(backups))
 	return backups, nil
 }
 
@@ -1333,10 +1669,21 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 		col4Width = 30  // Smaller for comments
 	)
 
+	// Find .pt root to show in message
+	dir := filepath.Dir(filePath)
+	ptRoot, _ := findPTRoot(dir)
+	ptLocation := appConfig.BackupDirName
+	if ptRoot != "" {
+		relPT, _ := filepath.Rel(".", ptRoot)
+		if relPT != "" {
+			ptLocation = relPT
+		}
+	}
+
 	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
 		ColorCyan, ColorBold, filePath, ColorReset, ColorCyan, ColorReset)
-	fmt.Printf("%sTotal: %d backup(s) (stored in ./%s/)%s\n\n", 
-		ColorGray, len(backups), appConfig.BackupDirName, ColorReset)
+	fmt.Printf("%sTotal: %d backup(s) (stored in %s/)%s\n\n", 
+		ColorGray, len(backups), ptLocation, ColorReset)
 
 	fmt.Printf("%s┌%s┬%s┬%s┬%s┐%s\n",
 		ColorGray,
@@ -1367,7 +1714,6 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 
 	for i, backup := range backups {
 		name := backup.Name
-		// Hitung lebar untuk nomor (misal "  10. " = 6 karakter)
 		numWidth := len(fmt.Sprintf("%3d. ", i+1))
 		maxNameLen := col1Width - numWidth
 		if len(name) > maxNameLen {
@@ -1381,13 +1727,11 @@ func printBackupTable(filePath string, backups []BackupInfo) {
 		if comment == "" {
 			comment = "-"
 		} else {
-			// Hitung lebar yang tersedia untuk comment (tanpa warna)
 			if len(comment) > col4Width {
 				comment = comment[:col4Width-3] + "..."
 			}
 		}
 
-		// Format row dengan padding yang konsisten
 		fmt.Printf("%s│%s %3d. %-*s %s│%s %-*s %s│%s %*s %s│%s %-*s %s│%s\n",
 			ColorGray, ColorReset,
 			i+1, maxNameLen, name,
@@ -1509,69 +1853,106 @@ func readUserChoice(max int) (int, error) {
 }
 
 func printHelp() {
-	fmt.Printf("%sPT - Clipboard to File Tool with Smart Version Management v%s%s\n\n", ColorBold, Version, ColorReset)
-	fmt.Println("Usage:")
-	fmt.Println("  pt <filename>                    Write clipboard to file")
-	fmt.Println("  pt <filename> -c                 Write only if content differs (check mode)")
-	fmt.Println("  pt <filename> -m \"comment\"       Write with comment")
-	fmt.Println("  pt <filename> -c -m \"comment\"   Check mode with comment")
-	fmt.Println("  pt + <filename>                  Append clipboard to file")
-	fmt.Println("  pt + <filename> -m \"comment\"    Append with comment")
-	fmt.Println("  pt -l <filename>                 List backups (with comments)")
-	fmt.Println("  pt -r <filename>                 Restore backup (interactive)")
-	fmt.Println("  pt -r <filename> --last          Restore last backup")
-	fmt.Println("  pt -r <filename> -m \"comment\"   Restore with comment")
-	fmt.Println("  pt -d <filename>                 Compare file with backup (interactive)")
-	fmt.Println("  pt -d <filename> --last          Compare file with last backup")
-	fmt.Println("  pt -rm <filename>                Delete file (with backup) and create empty placeholder")
-	fmt.Println("  pt -t [path]                     Show directory tree with file sizes")
-	fmt.Println("  pt -t [path] -e file1,file2      Tree with exceptions (comma-separated)")
-	fmt.Println("  pt config <subcommand>           Manage configuration")
-	fmt.Println("  pt -h, --help                    Show this help")
-	fmt.Println("  pt -v, --version                 Show version")
-	fmt.Println("\nConfiguration Commands:")
-	fmt.Println("  pt config init [path]            Create sample config file (default: pt.yml)")
-	fmt.Println("  pt config show                   Show current configuration")
-	fmt.Println("  pt config path                   Show config file location")
-	fmt.Println("\nExamples:")
-	fmt.Println("  pt notes.txt                     # Save clipboard to notes.txt")
-	fmt.Println("  pt notes.txt -c                  # Save only if content changed")
-	fmt.Println("  pt notes.txt --check             # Same as above")
-	fmt.Println("  pt + log.txt                     # Append clipboard to log.txt")
-	fmt.Println("  pt -l notes.txt                  # List all backups")
-	fmt.Println("  pt -r notes.txt                  # Interactive restore")
-	fmt.Println("  pt -r notes.txt --last           # Restore most recent backup")
-	fmt.Println("  pt -d notes.txt                  # Interactive diff with backup")
-	fmt.Println("  pt -d notes.txt --last           # Diff with most recent backup")
-	fmt.Println("  pt -rm notes.txt                 # Delete notes.txt (backup first)")
-	fmt.Println("  pt -t                            # Show tree of current directory")
-	fmt.Println("  pt -t /path/to/dir               # Show tree of specific directory")
-	fmt.Println("  pt -t -e node_modules,.git       # Tree excluding node_modules and .git")
-	fmt.Println("  pt config init                   # Create pt.yml config file")
-	fmt.Println("  pt config show                   # View current settings")
-	fmt.Printf("\n%sFeatures:%s\n", ColorBold, ColorReset)
-	fmt.Printf("  • %sRecursive Search:%s If file not in current dir, searches subdirectories\n", ColorCyan, ColorReset)
-	fmt.Printf("  • %sDiff Support:%s Uses 'delta' CLI tool for beautiful diffs\n", ColorCyan, ColorReset)
-	fmt.Printf("  • %sTree View:%s Display directory structure with file sizes\n", ColorCyan, ColorReset)
-	fmt.Printf("  • %sGitignore Support:%s Respects .gitignore patterns in tree view\n", ColorCyan, ColorReset)
-	fmt.Printf("  • %sSafe Delete:%s Backup before delete, create empty placeholder\n", ColorCyan, ColorReset)
-	fmt.Printf("  • %sConfigurable:%s Customize via pt.yml config file\n", ColorCyan, ColorReset)
-	fmt.Printf("  • %sCheck Mode:%s Skip write if content unchanged (save disk space)\n", ColorCyan, ColorReset)
-	fmt.Printf("\n%sBackup Location: All backups stored in ./%s/ directory%s\n", ColorCyan, appConfig.BackupDirName, ColorReset)
-	fmt.Printf("%sLimits: Max file size %dMB, Max %d backups kept%s\n",
-		ColorGray, appConfig.MaxClipboardSize/(1024*1024), appConfig.MaxBackupCount, ColorReset)
-	fmt.Printf("\n%sConfig File Locations (searched in order):%s\n", ColorGray, ColorReset)
-	fmt.Println("  • ./pt.yml or ./pt.yaml (current directory)")
-	fmt.Println("  • ~/.config/pt/pt.yml or ~/.config/pt/pt.yaml")
-	fmt.Println("  • ~/pt.yml or ~/pt.yaml (home directory)")
-	fmt.Printf("\n%sNote: Install 'delta' for diff functionality: https://github.com/dandavison/delta%s\n",
-		ColorGray, ColorReset)
+	fmt.Printf("\n%s╔══════════════════════════════════════════════════════════╗%s\n", ColorCyan, ColorReset)
+	fmt.Printf("%s║%s          %sPT - Clipboard to File Tool v%s%s             %s║%s\n", 
+		ColorCyan, ColorReset, ColorBold, Version, ColorReset, ColorCyan, ColorReset)
+	fmt.Printf("%s║                                                          ║%s\n", ColorCyan, ColorReset)
+    fmt.Printf("%s║                     by cumulus13                         ║%s\n", ColorCyan, ColorReset)
+	fmt.Printf("%s╚══════════════════════════════════════════════════════════╝%s\n\n", ColorCyan, ColorReset)
+	
+	fmt.Printf("%s📝 BASIC OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt <filename>%s               Write clipboard to file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt <filename> -c%s            Write only if content differs\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt <filename> -m \"msg\"%s      Write with comment\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt + <filename>%s             Append clipboard to file\n", ColorGreen, ColorReset)
+	
+	fmt.Printf("\n%s📦 BACKUP OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt -l <filename>%s            List all backups (with comments)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -r <filename>%s            Restore backup (interactive)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -r <filename> --last%s     Restore most recent backup\n", ColorGreen, ColorReset)
+	
+	fmt.Printf("\n%s📊 DIFF OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt -d <filename>%s            Compare with backup (interactive)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> --last%s     Compare with most recent backup\n", ColorGreen, ColorReset)
+	
+	fmt.Printf("\n%s🌳 TREE & UTILITIES:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt -t [path]%s                Show directory tree\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -t [path] -e items,items%s       Tree with exceptions\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -rm <filename>%s           Safe delete (backup first)\n", ColorGreen, ColorReset)
+	
+	fmt.Printf("\n%s⚙️  CONFIGURATION:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt config init%s              Create sample config file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt config show%s              Show current configuration\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt config path%s              Show config file location\n", ColorGreen, ColorReset)
+	
+	fmt.Printf("\n%sℹ️  INFORMATION:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt -h, --help%s               Show this help message\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -v, --version%s            Show version information\n", ColorGreen, ColorReset)
+	
+	fmt.Printf("\n%s💡 EXAMPLES:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  %s$%s pt notes.txt                %s# Save clipboard%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt notes.txt -c             %s# Save only if changed%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -l notes.txt             %s# List all backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -d notes.txt --last      %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -t -e node_modules,.git %s# Tree excluding items%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	
+	fmt.Printf("\n%s🔍 RECURSIVE SEARCH:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • If file not in current directory, searches recursively\n")
+	fmt.Printf("  • Maximum search depth: %d levels\n", appConfig.MaxSearchDepth)
+	fmt.Printf("  • If multiple files found, prompts for selection\n")
+	fmt.Printf("  • Respects %s.ptignore%s and %s.gitignore%s patterns\n", ColorYellow, ColorReset, ColorYellow, ColorReset)
+	
+	fmt.Printf("\n%s📂 %s DIRECTORY (Git-like structure):%s\n", ColorBold+ColorCyan, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • Location: %s%s/%s directory (like .git)\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • Searches parent directories for existing %s%s/%s\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • If found in parent, uses that (like git)\n")
+	fmt.Printf("  • If not found, creates %s%s/%s in current directory\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • Automatically added to %s.gitignore%s\n", ColorYellow, ColorReset)
+	fmt.Printf("  • Backups organized by file path inside %s%s/%s\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	
+	fmt.Printf("\n%s📄 IGNORE FILES:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • %s.ptignore%s: PT-specific ignore patterns (higher priority)\n", ColorYellow, ColorReset)
+	fmt.Printf("  • %s.gitignore%s: Also respected for recursive search\n", ColorYellow, ColorReset)
+	fmt.Printf("  • Format: One pattern per line, # for comments\n")
+	fmt.Printf("  • %s%s/%s directory always excluded from search\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	
+	fmt.Printf("\n%s⚙️  SYSTEM LIMITS:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • Max file size: %s%dMB%s\n", ColorYellow, appConfig.MaxClipboardSize/(1024*1024), ColorReset)
+	fmt.Printf("  • Max filename: %s%d characters%s\n", ColorYellow, appConfig.MaxFilenameLen, ColorReset)
+	fmt.Printf("  • Max backups: %s%d per file%s\n", ColorYellow, appConfig.MaxBackupCount, ColorReset)
+	fmt.Printf("  • Search depth: %s%d levels%s\n", ColorYellow, appConfig.MaxSearchDepth, ColorReset)
+	
+	fmt.Printf("\n%s🔧 REQUIREMENTS:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • %sdelta%s: Required for diff operations\n", ColorYellow, ColorReset)
+	fmt.Printf("    Install: %shttps://github.com/dandavison/delta%s\n", ColorGray, ColorReset)
+	fmt.Printf("    %s- macOS:%s     brew install git-delta\n", ColorGray, ColorReset)
+	fmt.Printf("    %s- Linux:%s     cargo install git-delta\n", ColorGray, ColorReset)
+	fmt.Printf("    %s- Windows:%s   scoop install delta\n", ColorGray, ColorReset)
+	
+	fmt.Printf("\n%s🛡️  SECURITY FEATURES:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • Path traversal protection (blocks '..' in paths)\n")
+	fmt.Printf("  • System directory protection (blocks /etc, /sys, etc.)\n")
+	fmt.Printf("  • Write permission validation\n")
+	fmt.Printf("  • File size validation\n")
+	fmt.Printf("  • Atomic-like backup operations\n")
+	
+	fmt.Printf("\n%s📋 NOTES:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • All operations are logged to stderr for audit trail\n")
+	fmt.Printf("  • Backup timestamps use microsecond precision\n")
+	fmt.Printf("  • Files are synced to disk after writing\n")
+	fmt.Printf("  • Supports cross-platform operation (Linux, macOS, Windows)\n")
+	fmt.Printf("  • %s%s/%s directory works like %s.git/%s - searches upward\n", 
+		ColorYellow, appConfig.BackupDirName, ColorReset, ColorYellow, ColorReset)
+	
+	fmt.Printf("\n%s📄 LICENSE:%s MIT | %sAUTHOR:%s Hadi Cahyadi <cumulus13@gmail.com>\n", 
+		ColorBold, ColorReset, ColorBold, ColorReset)
+	fmt.Println()
 }
 
 func printVersion() {
 	fmt.Printf("PT version %s\n", Version)
-	fmt.Println("Production-hardened clipboard to file tool")
-	fmt.Println("Features: Recursive search, backup management, delta diff, tree view, safe delete, configurable")
+	fmt.Printf("Production-hardened clipboard to file tool\n")
+	fmt.Printf("Features: Git-like %s structure, recursive search, backup management, delta diff\n", appConfig.BackupDirName)
 	fmt.Println()
 	
 	versionPaths := []string{
@@ -1667,7 +2048,7 @@ func main() {
 		}
 
 		if len(backups) == 0 {
-			fmt.Printf("ℹ️  No backups found for: %s (check ./%s/ directory)\n", filePath, appConfig.BackupDirName)
+			fmt.Printf("ℹ️  No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
 		} else {
 			printBackupTable(filePath, backups)
 		}
@@ -1722,12 +2103,11 @@ func main() {
 		}
 
 		if len(backups) == 0 {
-			fmt.Printf("%s❌ Error: No backups found for: %s (check ./%s/ directory)%s\n", 
+			fmt.Printf("%s❌ Error: No backups found for: %s (check %s/ directory)%s\n", 
 				ColorRed, filePath, appConfig.BackupDirName, ColorReset)
 			os.Exit(1)
 		}
 
-		// Use the comment parameter when calling restoreBackup
 		if useLast {
 			if comment == "" {
 				comment = "Restored from last backup"
@@ -1839,3 +2219,4 @@ func main() {
 		}
 	}
 }
+
