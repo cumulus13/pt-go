@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.16+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.21-blue.svg)](https://github.com/cumulus13/pt-go)
+[![Version](https://img.shields.io/badge/version-1.0.30-blue.svg)](https://github.com/cumulus13/pt-go)
 
 > **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
 
@@ -844,9 +844,9 @@ Want to contribute? Here are some ideas:
 - [ ] Backup tags (additional metadata)
 - [ ] Multi-file operations
 - [ ] Backup encryption
-- [x] Recursive file search (✅ DONE in v2.1.0)
-- [x] Delta diff integration (✅ DONE in v2.1.0)
-- [x] Interactive file selection (✅ DONE in v2.1.0)
+- [x] Recursive file search (✅ DONE in v1.0.25)
+- [x] Delta diff integration (✅ DONE in v1.0.25)
+- [x] Interactive file selection (✅ DONE in v1.0.25)
 
 ## 📄 License
 
