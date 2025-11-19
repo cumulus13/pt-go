@@ -78,7 +78,448 @@ type BackupMetadata struct {
 	Original  string    `json:"original_file"`
 }
 
-// FileSearchResult stores information about found files
+// FileStatus represents the status of a file compared to its last backup
+type FileStatus int
+
+const (
+	FileStatusUnchanged FileStatus = iota
+	FileStatusModified
+	FileStatusNew
+	FileStatusDeleted
+)
+
+func (fs FileStatus) String() string {
+	switch fs {
+	case FileStatusUnchanged:
+		return "unchanged"
+	case FileStatusModified:
+		return "modified"
+	case FileStatusNew:
+		return "new"
+	case FileStatusDeleted:
+		return "deleted"
+	default:
+		return "unknown"
+	}
+}
+
+func (fs FileStatus) Color() string {
+	switch fs {
+	case FileStatusUnchanged:
+		return ColorGreen
+	case FileStatusModified:
+		return ColorYellow
+	case FileStatusNew:
+		return ColorCyan
+	case FileStatusDeleted:
+		return ColorRed
+	default:
+		return ColorReset
+	}
+}
+
+// FileStatusInfo holds file status information
+type FileStatusInfo struct {
+	Path     string
+	RelPath  string
+	Status   FileStatus
+	Size     int64
+	ModTime  time.Time
+	IsDir    bool
+	Children []*FileStatusInfo
+}
+
+// compareFileWithBackup compares a file with its last backup
+func compareFileWithBackup(filePath string) (FileStatus, error) {
+	// Check if file exists
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		return FileStatusDeleted, nil
+	}
+	if err != nil {
+		return FileStatusUnchanged, err
+	}
+
+	// Get last backup
+	backups, err := listBackups(filePath)
+	if err != nil {
+		return FileStatusUnchanged, err
+	}
+
+	// No backups = new file
+	if len(backups) == 0 {
+		return FileStatusNew, nil
+	}
+
+	// Get last backup content
+	lastBackup := backups[0]
+	backupContent, err := os.ReadFile(lastBackup.Path)
+	if err != nil {
+		return FileStatusUnchanged, fmt.Errorf("failed to read backup: %w", err)
+	}
+
+	// Get current file content
+	currentContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return FileStatusUnchanged, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Compare content
+	if string(backupContent) == string(currentContent) {
+		return FileStatusUnchanged, nil
+	}
+
+	return FileStatusModified, nil
+}
+
+// buildStatusTree builds a tree with file status information
+func buildStatusTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*FileStatusInfo, error) {
+	if depth > maxDepth {
+		return nil, nil
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	baseName := filepath.Base(path)
+	
+	if exceptions[baseName] {
+		return nil, nil
+	}
+
+	if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
+		return nil, nil
+	}
+
+	relPath, _ := filepath.Rel(".", path)
+	
+	node := &FileStatusInfo{
+		Path:    path,
+		RelPath: relPath,
+		IsDir:   info.IsDir(),
+		Size:    info.Size(),
+		ModTime: info.ModTime(),
+		Status:  FileStatusUnchanged,
+	}
+
+	// Check status for files only
+	if !info.IsDir() {
+		status, err := compareFileWithBackup(path)
+		if err != nil {
+			logger.Printf("Warning: failed to check status for %s: %v", path, err)
+			node.Status = FileStatusUnchanged
+		} else {
+			node.Status = status
+		}
+	}
+
+	if info.IsDir() {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return node, nil
+		}
+
+		for _, entry := range entries {
+			childPath := filepath.Join(path, entry.Name())
+			childNode, err := buildStatusTree(childPath, gitignore, exceptions, depth+1, maxDepth)
+			if err != nil || childNode == nil {
+				continue
+			}
+			node.Children = append(node.Children, childNode)
+		}
+
+		sort.Slice(node.Children, func(i, j int) bool {
+			if node.Children[i].IsDir != node.Children[j].IsDir {
+				return node.Children[i].IsDir
+			}
+			return node.Children[i].Path < node.Children[j].Path
+		})
+	}
+
+	return node, nil
+}
+
+// printStatusTree prints tree with status information
+func printStatusTree(node *FileStatusInfo, prefix string, isLast bool) {
+	if node == nil {
+		return
+	}
+
+	connector := "├── "
+	if isLast {
+		connector = "└── "
+	}
+
+	displayName := filepath.Base(node.Path)
+	statusStr := ""
+	sizeStr := ""
+
+	if node.IsDir {
+		displayName = ColorCyan + displayName + "/" + ColorReset
+	} else {
+		// Color based on status
+		statusColor := node.Status.Color()
+		
+		if node.Status != FileStatusUnchanged {
+			displayName = statusColor + displayName + ColorReset
+			statusStr = fmt.Sprintf(" %s[%s]%s", statusColor, node.Status.String(), ColorReset)
+		} else {
+			displayName = ColorGreen + displayName + ColorReset
+		}
+		
+		sizeStr = ColorGray + " (" + formatSize(node.Size) + ")" + ColorReset
+	}
+
+	fmt.Printf("%s%s%s%s%s\n", prefix, connector, displayName, sizeStr, statusStr)
+
+	if node.IsDir && len(node.Children) > 0 {
+		childPrefix := prefix
+		if isLast {
+			childPrefix += "    "
+		} else {
+			childPrefix += "│   "
+		}
+
+		for i, child := range node.Children {
+			printStatusTree(child, childPrefix, i == len(node.Children)-1)
+		}
+	}
+}
+
+// countStatusFiles counts files by status
+func countStatusFiles(node *FileStatusInfo) map[FileStatus]int {
+	counts := make(map[FileStatus]int)
+	
+	var count func(*FileStatusInfo)
+	count = func(n *FileStatusInfo) {
+		if !n.IsDir {
+			counts[n.Status]++
+		}
+		for _, child := range n.Children {
+			count(child)
+		}
+	}
+	
+	count(node)
+	return counts
+}
+
+// handleCheckCommand handles the check/status command
+func handleCheckCommand(args []string) error {
+	// If filename provided, check single file (existing behavior)
+	if len(args) > 0 && args[0] != "" && args[0] != "-c" && args[0] != "--check" {
+		filename := args[0]
+		filePath, err := resolveFilePath(filename)
+		if err != nil {
+			return err
+		}
+
+		status, err := compareFileWithBackup(filePath)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("\n%sFile Status:%s %s\n", ColorBold, ColorReset, filePath)
+		statusColor := status.Color()
+		fmt.Printf("Status: %s%s%s\n", statusColor, status.String(), ColorReset)
+
+		if status == FileStatusModified {
+			backups, _ := listBackups(filePath)
+			if len(backups) > 0 {
+				fmt.Printf("Last backup: %s\n", backups[0].ModTime.Format("2006-01-02 15:04:05"))
+			}
+		} else if status == FileStatusNew {
+			fmt.Printf("No backups found (new file)\n")
+		}
+
+		return nil
+	}
+
+	// No filename = check all files (like git status)
+	fmt.Printf("\n%s📊 PT Status (like git status)%s\n\n", ColorBold+ColorCyan, ColorReset)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Load gitignore
+	gitignore, err := loadGitIgnore(cwd)
+	if err != nil {
+		logger.Printf("Warning: failed to load .gitignore: %v", err)
+	}
+
+	exceptions := make(map[string]bool)
+	exceptions[appConfig.BackupDirName] = true
+
+	// Build status tree
+	tree, err := buildStatusTree(cwd, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
+	if err != nil {
+		return fmt.Errorf("failed to build status tree: %w", err)
+	}
+
+	if tree == nil {
+		return fmt.Errorf("no files to display")
+	}
+
+	// Print tree with status
+	fmt.Printf("%s%s%s\n", ColorBold, filepath.Base(cwd), ColorReset)
+	if tree.IsDir && len(tree.Children) > 0 {
+		for i, child := range tree.Children {
+			printStatusTree(child, "", i == len(tree.Children)-1)
+		}
+	}
+	fmt.Println()
+
+	// Count and display summary
+	counts := countStatusFiles(tree)
+	
+	hasChanges := counts[FileStatusModified] > 0 || counts[FileStatusNew] > 0 || counts[FileStatusDeleted] > 0
+	
+	if hasChanges {
+		fmt.Printf("%sSummary:%s\n", ColorBold, ColorReset)
+		if counts[FileStatusModified] > 0 {
+			fmt.Printf("  %s%d modified%s\n", ColorYellow, counts[FileStatusModified], ColorReset)
+		}
+		if counts[FileStatusNew] > 0 {
+			fmt.Printf("  %s%d new%s\n", ColorCyan, counts[FileStatusNew], ColorReset)
+		}
+		if counts[FileStatusDeleted] > 0 {
+			fmt.Printf("  %s%d deleted%s\n", ColorRed, counts[FileStatusDeleted], ColorReset)
+		}
+		if counts[FileStatusUnchanged] > 0 {
+			fmt.Printf("  %s%d unchanged%s\n", ColorGreen, counts[FileStatusUnchanged], ColorReset)
+		}
+		fmt.Println()
+		fmt.Printf("%sUse 'pt commit -m \"message\"' to backup all changes%s\n", ColorCyan, ColorReset)
+	} else {
+		fmt.Printf("%s✓ No changes detected. All files match their last backups.%s\n", ColorGreen, ColorReset)
+	}
+
+	return nil
+}
+
+// collectChangedFiles collects all files that need to be backed up
+func collectChangedFiles(node *FileStatusInfo, changedFiles *[]string) {
+	if !node.IsDir {
+		if node.Status == FileStatusModified || node.Status == FileStatusNew {
+			*changedFiles = append(*changedFiles, node.Path)
+		}
+	}
+	
+	for _, child := range node.Children {
+		collectChangedFiles(child, changedFiles)
+	}
+}
+
+// handleCommitCommand handles the commit command (backup all changed files)
+func handleCommitCommand(args []string) error {
+	// Parse commit message
+	commitMessage := ""
+	for i := 0; i < len(args); i++ {
+		if args[i] == "-m" || args[i] == "--message" {
+			if i+1 < len(args) {
+				commitMessage = args[i+1]
+				break
+			}
+		}
+	}
+
+	if commitMessage == "" {
+		return fmt.Errorf("commit message required. Use: pt commit -m \"your message\"")
+	}
+
+	// Add "commit: " prefix to message
+	commitMessage = "commit: " + commitMessage
+
+	fmt.Printf("\n%s📦 Committing changes...%s\n\n", ColorBold+ColorCyan, ColorReset)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Load gitignore
+	gitignore, err := loadGitIgnore(cwd)
+	if err != nil {
+		logger.Printf("Warning: failed to load .gitignore: %v", err)
+	}
+
+	exceptions := make(map[string]bool)
+	exceptions[appConfig.BackupDirName] = true
+
+	// Build status tree to find changed files
+	tree, err := buildStatusTree(cwd, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
+	if err != nil {
+		return fmt.Errorf("failed to build status tree: %w", err)
+	}
+
+	if tree == nil {
+		return fmt.Errorf("no files found")
+	}
+
+	// Collect all changed files
+	var changedFiles []string
+	collectChangedFiles(tree, &changedFiles)
+
+	if len(changedFiles) == 0 {
+		fmt.Printf("%s✓ No changes to commit. All files are up to date.%s\n", ColorGreen, ColorReset)
+		return nil
+	}
+
+	fmt.Printf("Files to backup:\n")
+	for i, file := range changedFiles {
+		relPath, _ := filepath.Rel(cwd, file)
+		status, _ := compareFileWithBackup(file)
+		statusColor := status.Color()
+		fmt.Printf("  %d. %s%s%s %s[%s]%s\n", 
+			i+1, ColorGreen, relPath, ColorReset, 
+			statusColor, status.String(), ColorReset)
+	}
+	fmt.Println()
+
+	// Ask for confirmation
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("Commit %d file(s) with message \"%s\"? (y/N): ", len(changedFiles), strings.TrimPrefix(commitMessage, "commit: "))
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+	
+	if input != "y" && input != "yes" {
+		fmt.Println("❌ Commit cancelled")
+		return nil
+	}
+
+	// Backup all changed files
+	successCount := 0
+	failCount := 0
+
+	for _, file := range changedFiles {
+		relPath, _ := filepath.Rel(cwd, file)
+		
+		// Create backup
+		_, err := autoRenameIfExists(file, commitMessage)
+		if err != nil {
+			fmt.Printf("%s✗%s %s: %v\n", ColorRed, ColorReset, relPath, err)
+			failCount++
+		} else {
+			fmt.Printf("%s✓%s %s\n", ColorGreen, ColorReset, relPath)
+			successCount++
+		}
+	}
+
+	fmt.Println()
+	fmt.Printf("%s📦 Commit Summary:%s\n", ColorBold, ColorReset)
+	fmt.Printf("  %s✓ %d files backed up%s\n", ColorGreen, successCount, ColorReset)
+	if failCount > 0 {
+		fmt.Printf("  %s✗ %d files failed%s\n", ColorRed, failCount, ColorReset)
+	}
+	fmt.Printf("  💬 Message: \"%s\"\n", strings.TrimPrefix(commitMessage, "commit: "))
+
+	return nil
+}
+
 type FileSearchResult struct {
 	Path     string
 	Dir      string
@@ -1270,35 +1711,6 @@ func handleDiffCommand(args []string) error {
 	return nil
 }
 
-func ensureBackupDir(filePath string) (string, error) {
-	dir := filepath.Dir(filePath)
-	if dir == "." {
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("failed to get current directory: %w", err)
-		}
-	}
-
-	backupDir := filepath.Join(dir, appConfig.BackupDirName)
-
-	info, err := os.Stat(backupDir)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(backupDir, 0755)
-		if err != nil {
-			return "", fmt.Errorf("failed to create backup directory: %w", err)
-		}
-		logger.Printf("Created backup directory: %s", backupDir)
-		fmt.Printf("📁 Created backup directory: %s\n", backupDir)
-	} else if err != nil {
-		return "", fmt.Errorf("failed to check backup directory: %w", err)
-	} else if !info.IsDir() {
-		return "", fmt.Errorf("backup path exists but is not a directory: %s", backupDir)
-	}
-
-	return backupDir, nil
-}
-
 func validatePath(filePath string) error {
 	if filePath == "" {
 		return fmt.Errorf("filename cannot be empty")
@@ -1521,6 +1933,8 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		return nil, err
 	}
 	
+	logger.Printf("Listing backups for: %s", absFilePath)
+	
 	// Get the directory of the file (or use current if file doesn't exist yet)
 	dir := filepath.Dir(absFilePath)
 	
@@ -1536,63 +1950,86 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		return []BackupInfo{}, nil
 	}
 
+	logger.Printf("Found .pt root: %s", ptRoot)
+
+	// Get file basename and extension once
+	fileBaseName := filepath.Base(absFilePath)
+	fileExt := filepath.Ext(fileBaseName)
+	fileNameWithoutExt := strings.TrimSuffix(fileBaseName, fileExt)
+	fileExtWithoutDot := strings.TrimPrefix(fileExt, ".")
+	
 	// Get backup directory for this file within .pt
 	backupDir, err := getBackupDir(ptRoot, absFilePath)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Printf("Looking for backups in: %s", backupDir)
+	logger.Printf("Expected backup directory: %s", backupDir)
 
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		logger.Printf("Backup directory does not exist: %s", backupDir)
+	// Check if expected backup directory exists
+	backupDirExists := false
+	if stat, err := os.Stat(backupDir); err == nil && stat.IsDir() {
+		backupDirExists = true
+		logger.Printf("Backup directory exists: %s", backupDir)
+	} else {
+		logger.Printf("Backup directory does not exist: %s (error: %v)", backupDir, err)
+	}
+
+	// If expected directory doesn't exist, try fallback to base filename only
+	if !backupDirExists {
+		alternateBackupDir := filepath.Join(ptRoot, fileBaseName)
 		
-		// Try to find backups with just the filename (in case file was moved)
-		// This handles the case where file was originally ./main.go (backup in .pt/main.go/)
-		// but is now ./pt/main.go (would look in .pt/pt_main.go/)
-		baseName := filepath.Base(absFilePath)
-		alternateBackupDir := filepath.Join(ptRoot, baseName)
+		logger.Printf("Trying alternate backup directory (base filename only): %s", alternateBackupDir)
 		
 		if stat, err := os.Stat(alternateBackupDir); err == nil && stat.IsDir() {
 			logger.Printf("Found backups using base filename: %s", alternateBackupDir)
-			fmt.Printf("%sℹ️  Note: Using backups from %s (file may have been moved)%s\n", 
-				ColorYellow, filepath.Base(alternateBackupDir), ColorReset)
+			fmt.Printf("%sℹ️  Note: Using backups from '%s/' (file may have been moved)%s\n", 
+				ColorYellow, fileBaseName, ColorReset)
 			backupDir = alternateBackupDir
+			backupDirExists = true
 		} else {
-			return []BackupInfo{}, nil
+			logger.Printf("Alternate backup directory also not found: %s (error: %v)", alternateBackupDir, err)
 		}
 	}
 
-	baseName := filepath.Base(absFilePath)
-	ext := filepath.Ext(baseName)
-	nameWithoutExt := strings.TrimSuffix(baseName, ext)
-	extWithoutDot := strings.TrimPrefix(ext, ".")
+	// If still no backup directory found, return empty
+	if !backupDirExists {
+		logger.Printf("No backup directory found for file")
+		return []BackupInfo{}, nil
+	}
+
+	// Pattern for backup files: filename_ext.timestamp...
+	pattern := fmt.Sprintf("%s_%s.", fileNameWithoutExt, fileExtWithoutDot)
 	
-	pattern := fmt.Sprintf("%s_%s.", nameWithoutExt, extWithoutDot)
-	
-	logger.Printf("Looking for backups with pattern: %s in directory: %s", pattern, backupDir)
+	logger.Printf("Looking for backup files with pattern: %s", pattern)
 
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
+		logger.Printf("Failed to read backup directory: %v", err)
 		return nil, fmt.Errorf("failed to read backup directory: %w", err)
 	}
+
+	logger.Printf("Found %d entries in backup directory", len(entries))
 
 	backups := make([]BackupInfo, 0)
 
 	for _, entry := range entries {
 		if entry.IsDir() {
+			logger.Printf("Skipping directory: %s", entry.Name())
 			continue
 		}
 
 		name := entry.Name()
 		
 		if strings.HasSuffix(name, ".meta.json") {
+			logger.Printf("Skipping metadata file: %s", name)
 			continue
 		}
 		
 		logger.Printf("Checking file: %s against pattern: %s", name, pattern)
 		
 		if !strings.HasPrefix(name, pattern) {
+			logger.Printf("Skipping (doesn't match pattern '%s'): %s", pattern, name)
 			continue
 		}
 
@@ -1601,7 +2038,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		logger.Printf("Extracted timestamp: %s (length: %d)", timestamp, len(timestamp))
 		
 		if len(timestamp) < 20 {
-			logger.Printf("Skipping %s: timestamp too short", name)
+			logger.Printf("Skipping (timestamp too short): %s", name)
 			continue
 		}
 
@@ -1630,7 +2067,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 
 		backupPath := filepath.Join(backupDir, name)
 		comment, err := loadBackupMetadata(backupPath)
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			logger.Printf("Warning: failed to load metadata for %s: %v", name, err)
 		}
 
@@ -1645,7 +2082,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 	}
 
 	if len(backups) == 0 {
-		logger.Printf("No backups found matching pattern: %s", pattern)
+		logger.Printf("No valid backups found matching pattern: %s", pattern)
 		return backups, nil
 	}
 
@@ -1657,7 +2094,7 @@ func listBackups(filePath string) ([]BackupInfo, error) {
 		backups = backups[:appConfig.MaxBackupCount]
 	}
 
-	logger.Printf("Found %d backup(s)", len(backups))
+	logger.Printf("Returning %d backup(s)", len(backups))
 	return backups, nil
 }
 
@@ -1866,6 +2303,11 @@ func printHelp() {
 	fmt.Printf("  %spt <filename> -m \"msg\"%s      Write with comment\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt + <filename>%s             Append clipboard to file\n", ColorGreen, ColorReset)
 	
+	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW (NEW!):%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt check%s                    Show status of all files (like git status)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt check <filename>%s         Check single file status\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt commit -m \"message\"%s     Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
+	
 	fmt.Printf("\n%s📦 BACKUP OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -l <filename>%s            List all backups (with comments)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -r <filename>%s            Restore backup (interactive)\n", ColorGreen, ColorReset)
@@ -1891,10 +2333,81 @@ func printHelp() {
 	
 	fmt.Printf("\n%s💡 EXAMPLES:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %s$%s pt notes.txt                %s# Save clipboard%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt notes.txt -c             %s# Save only if changed%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt -l notes.txt             %s# List all backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt check                    %s# Show all file statuses%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt commit -m \"fix bugs\"    %s# Backup all changes%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -l notes.txt             %s# List backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt --last      %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt -t -e node_modules,.git %s# Tree excluding items%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	
+	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  1. %spt check%s                  - See what files changed (like git status)\n", ColorYellow, ColorReset)
+	fmt.Printf("  2. %spt commit -m \"msg\"%s        - Backup all changes (like git commit)\n", ColorYellow, ColorReset)
+	fmt.Printf("  3. %spt -l <file>%s              - View commit history\n", ColorYellow, ColorReset)
+	fmt.Printf("  4. %spt -d <file> --last%s       - See what changed\n", ColorYellow, ColorReset)
+	fmt.Printf("  5. %spt -r <file> --last%s       - Rollback if needed\n", ColorYellow, ColorReset)
+	
+	fmt.Printf("\n%s📊 CHECK/STATUS OUTPUT:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • %sGreen%s   = Unchanged (matches last backup)\n", ColorGreen, ColorReset)
+	fmt.Printf("  • %sYellow%s  = Modified (content changed)\n", ColorYellow, ColorReset)
+	fmt.Printf("  • %sCyan%s    = New (no backup exists yet)\n", ColorCyan, ColorReset)
+	fmt.Printf("  • %sRed%s     = Deleted (backup exists but file gone)\n", ColorRed, ColorReset)
+	
+	fmt.Printf("\n%s📦 COMMIT BEHAVIOR:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • Only backs up %smodified%s and %snew%s files\n", ColorYellow, ColorReset, ColorCyan, ColorReset)
+	fmt.Printf("  • Skips %sunchanged%s files (no backup needed)\n", ColorGreen, ColorReset)
+	fmt.Printf("  • All backups tagged with \"commit: message\"\n")
+	fmt.Printf("  • Confirmation prompt before backing up\n")
+	
+	fmt.Printf("\n%s🔍 RECURSIVE SEARCH:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • If file not in current directory, searches recursively\n")
+	fmt.Printf("  • Maximum search depth: %d levels\n", appConfig.MaxSearchDepth)
+	fmt.Printf("  • If multiple files found, prompts for selection\n")
+	fmt.Printf("  • Respects %s.ptignore%s and %s.gitignore%s patterns\n", ColorYellow, ColorReset, ColorYellow, ColorReset)
+	
+	fmt.Printf("\n%s📂 %s DIRECTORY (Git-like structure):%s\n", ColorBold+ColorCyan, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • Location: %s%s/%s directory (like .git)\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • Searches parent directories for existing %s%s/%s\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • If found in parent, uses that (like git)\n")
+	fmt.Printf("  • If not found, creates %s%s/%s in current directory\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	fmt.Printf("  • Automatically added to %s.gitignore%s\n", ColorYellow, ColorReset)
+	fmt.Printf("  • Backups organized by file path inside %s%s/%s\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	
+	fmt.Printf("\n%s📄 IGNORE FILES:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • %s.ptignore%s: PT-specific ignore patterns (higher priority)\n", ColorYellow, ColorReset)
+	fmt.Printf("  • %s.gitignore%s: Also respected for recursive search\n", ColorYellow, ColorReset)
+	fmt.Printf("  • Format: One pattern per line, # for comments\n")
+	fmt.Printf("  • %s%s/%s directory always excluded from search\n", ColorYellow, appConfig.BackupDirName, ColorReset)
+	
+	fmt.Printf("\n%s⚙️  SYSTEM LIMITS:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • Max file size: %s%dMB%s\n", ColorYellow, appConfig.MaxClipboardSize/(1024*1024), ColorReset)
+	fmt.Printf("  • Max filename: %s%d characters%s\n", ColorYellow, appConfig.MaxFilenameLen, ColorReset)
+	fmt.Printf("  • Max backups: %s%d per file%s\n", ColorYellow, appConfig.MaxBackupCount, ColorReset)
+	fmt.Printf("  • Search depth: %s%d levels%s\n", ColorYellow, appConfig.MaxSearchDepth, ColorReset)
+	
+	fmt.Printf("\n%s🔧 REQUIREMENTS:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • %sdelta%s: Required for diff operations\n", ColorYellow, ColorReset)
+	fmt.Printf("    Install: %shttps://github.com/dandavison/delta%s\n", ColorGray, ColorReset)
+	fmt.Printf("    %s- macOS:%s     brew install git-delta\n", ColorGray, ColorReset)
+	fmt.Printf("    %s- Linux:%s     cargo install git-delta\n", ColorGray, ColorReset)
+	fmt.Printf("    %s- Windows:%s   scoop install delta\n", ColorGray, ColorReset)
+	
+	fmt.Printf("\n%s🛡️  SECURITY FEATURES:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • Path traversal protection (blocks '..' in paths)\n")
+	fmt.Printf("  • System directory protection (blocks /etc, /sys, etc.)\n")
+	fmt.Printf("  • Write permission validation\n")
+	fmt.Printf("  • File size validation\n")
+	fmt.Printf("  • Atomic-like backup operations\n")
+	
+	fmt.Printf("\n%s📋 NOTES:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  • All operations are logged to stderr for audit trail\n")
+	fmt.Printf("  • Backup timestamps use microsecond precision\n")
+	fmt.Printf("  • Files are synced to disk after writing\n")
+	fmt.Printf("  • Supports cross-platform operation (Linux, macOS, Windows)\n")
+	fmt.Printf("  • %s%s/%s directory works like %s.git/%s - searches upward\n", 
+		ColorYellow, appConfig.BackupDirName, ColorReset, ColorYellow, ColorReset)
+	
+	fmt.Printf("\n%s📄 LICENSE:%s MIT | %sAUTHOR:%s Hadi Cahyadi <cumulus13@gmail.com>\n", 
+		ColorBold, ColorReset, ColorBold, ColorReset)
+	fmt.Println()
 	
 	fmt.Printf("\n%s🔍 RECURSIVE SEARCH:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  • If file not in current directory, searches recursively\n")
@@ -1994,229 +2507,244 @@ func main() {
 	}
 
 	switch os.Args[1] {
-	case "config":
-		if len(os.Args) < 3 {
-			fmt.Printf("%s❌ Error: Config subcommand required%s\n", ColorRed, ColorReset)
-			fmt.Println("\nAvailable subcommands:")
-			fmt.Println("  pt config init [path]  - Create sample config file")
-			fmt.Println("  pt config show         - Show current configuration")
-			fmt.Println("  pt config path         - Show config file location")
-			os.Exit(1)
-		}
+		case "check", "-c", "--check":
+			// Handle both single file check and full status
+			err := handleCheckCommand(os.Args[2:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+		case "commit":
+			err := handleCommitCommand(os.Args[2:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+		case "config":
+			if len(os.Args) < 3 {
+				fmt.Printf("%s❌ Error: Config subcommand required%s\n", ColorRed, ColorReset)
+				fmt.Println("\nAvailable subcommands:")
+				fmt.Println("  pt config init [path]  - Create sample config file")
+				fmt.Println("  pt config show         - Show current configuration")
+				fmt.Println("  pt config path         - Show config file location")
+				os.Exit(1)
+			}
+			
+			err := handleConfigCommand(os.Args[2:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
 		
-		err := handleConfigCommand(os.Args[2:])
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+		default:
+			// Use parseWriteArgs for the default write mode
+			text, err := getClipboardText()
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-	case "-t", "--tree":
-		err := handleTreeCommand(os.Args[2:])
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+			if text == "" {
+				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+				os.Exit(1)
+			}
 
-	case "-rm", "--remove":
-		if len(os.Args) < 3 {
-			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-			os.Exit(1)
-		}
+			// Parse arguments using parseWriteArgs
+			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-		err := handleRemoveCommand(os.Args[2:])
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+			filePath, err := resolveFilePath(filename)
+			if err != nil {
+				filePath = filename
+			}
 
-	case "-l", "--list":
-		if len(os.Args) < 3 {
-			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-			os.Exit(1)
-		}
+			if checkMode {
+				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+			}
 
-		filePath, err := resolveFilePath(os.Args[2])
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+			err = writeFile(filePath, text, false, checkMode, comment)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-		backups, err := listBackups(filePath)
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+		case "-t", "--tree":
+			err := handleTreeCommand(os.Args[2:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-		if len(backups) == 0 {
-			fmt.Printf("ℹ️  No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
-		} else {
-			printBackupTable(filePath, backups)
-		}
+		case "-rm", "--remove":
+			if len(os.Args) < 3 {
+				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+				os.Exit(1)
+			}
 
-	case "-d", "--diff":
-		if len(os.Args) < 3 {
-			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-			os.Exit(1)
-		}
+			err := handleRemoveCommand(os.Args[2:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-		err := handleDiffCommand(os.Args[2:])
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+		case "-l", "--list":
+			if len(os.Args) < 3 {
+				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+				os.Exit(1)
+			}
 
-	case "-r", "--restore":
-		if len(os.Args) < 3 {
-			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-			os.Exit(1)
-		}
+			filePath, err := resolveFilePath(os.Args[2])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-		filename := os.Args[2]
-		comment := ""
-		useLast := false
+			backups, err := listBackups(filePath)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-		for i := 3; i < len(os.Args); i++ {
-			if os.Args[i] == "--last" {
-				useLast = true
-			} else if os.Args[i] == "-m" || os.Args[i] == "--message" {
-				if i+1 < len(os.Args) {
-					i++
-					comment = os.Args[i]
+			if len(backups) == 0 {
+				fmt.Printf("ℹ️  No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
+			} else {
+				printBackupTable(filePath, backups)
+			}
+
+		case "-d", "--diff":
+			if len(os.Args) < 3 {
+				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+				os.Exit(1)
+			}
+
+			err := handleDiffCommand(os.Args[2:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+		case "-r", "--restore":
+			if len(os.Args) < 3 {
+				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+				os.Exit(1)
+			}
+
+			filename := os.Args[2]
+			comment := ""
+			useLast := false
+
+			for i := 3; i < len(os.Args); i++ {
+				if os.Args[i] == "--last" {
+					useLast = true
+				} else if os.Args[i] == "-m" || os.Args[i] == "--message" {
+					if i+1 < len(os.Args) {
+						i++
+						comment = os.Args[i]
+					}
 				}
 			}
-		}
 
-		filePath, err := resolveFilePath(filename)
-		if err != nil {
-			// To restore, the file may not exist yet
-			filePath = filename
-			absPath, err := filepath.Abs(filePath)
-			if err == nil {
-				filePath = absPath
-			}
-		}
-
-		backups, err := listBackups(filePath)
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
-
-		if len(backups) == 0 {
-			fmt.Printf("%s❌ Error: No backups found for: %s (check %s/ directory)%s\n", 
-				ColorRed, filePath, appConfig.BackupDirName, ColorReset)
-			os.Exit(1)
-		}
-
-		if useLast {
-			if comment == "" {
-				comment = "Restored from last backup"
-			}
-			err = restoreBackup(backups[0].Path, filePath, comment)
+			filePath, err := resolveFilePath(filename)
 			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
-		} else {
-			printBackupTable(filePath, backups)
-
-			choice, err := readUserChoice(len(backups))
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
-
-			if choice == 0 {
-				fmt.Println("❌ Restore cancelled")
-				os.Exit(0)
-			}
-
-			selectedBackup := backups[choice-1]
-			if comment == "" {
-				comment = "Restored from backup"
-			}
-			err = restoreBackup(selectedBackup.Path, filePath, comment)
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
-		}
-
-	case "+":
-		if len(os.Args) < 3 {
-			fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-			os.Exit(1)
-		}
-
-		text, err := getClipboardText()
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
-
-		if text == "" {
-			fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
-			os.Exit(1)
-		}
-
-		// Parse the arguments for append correctly
-		filename := os.Args[2]
-		comment := ""
-		
-		for i := 3; i < len(os.Args); i++ {
-			if os.Args[i] == "-m" || os.Args[i] == "--message" {
-				if i+1 < len(os.Args) {
-					i++
-					comment = os.Args[i]
+				filePath = filename
+				absPath, err := filepath.Abs(filePath)
+				if err == nil {
+					filePath = absPath
 				}
 			}
-		}
 
-		filePath, err := resolveFilePath(filename)
-		if err != nil {
-			filePath = filename
-		}
+			backups, err := listBackups(filePath)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 
-		err = writeFile(filePath, text, true, false, comment)
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+			if len(backups) == 0 {
+				fmt.Printf("%s❌ Error: No backups found for: %s (check %s/ directory)%s\n", 
+					ColorRed, filePath, appConfig.BackupDirName, ColorReset)
+				os.Exit(1)
+			}
 
-	default:
-		// Use parseWriteArgs for the default write mode
-		text, err := getClipboardText()
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+			if useLast {
+				if comment == "" {
+					comment = "Restored from last backup"
+				}
+				err = restoreBackup(backups[0].Path, filePath, comment)
+				if err != nil {
+					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+					os.Exit(1)
+				}
+			} else {
+				printBackupTable(filePath, backups)
 
-		if text == "" {
-			fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
-			os.Exit(1)
-		}
+				choice, err := readUserChoice(len(backups))
+				if err != nil {
+					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+					os.Exit(1)
+				}
 
-		// Parse arguments using parseWriteArgs
-		filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+				if choice == 0 {
+					fmt.Println("❌ Restore cancelled")
+					os.Exit(0)
+				}
 
-		filePath, err := resolveFilePath(filename)
-		if err != nil {
-			filePath = filename
-		}
+				selectedBackup := backups[choice-1]
+				if comment == "" {
+					comment = "Restored from backup"
+				}
+				err = restoreBackup(selectedBackup.Path, filePath, comment)
+				if err != nil {
+					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+					os.Exit(1)
+				}
+			}
 
-		if checkMode {
-			fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
-		}
+		case "+":
+			if len(os.Args) < 3 {
+				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+				os.Exit(1)
+			}
 
-		err = writeFile(filePath, text, false, checkMode, comment)
-		if err != nil {
-			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-			os.Exit(1)
-		}
+			text, err := getClipboardText()
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+			if text == "" {
+				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+				os.Exit(1)
+			}
+
+			// Parse the arguments for append correctly
+			filename := os.Args[2]
+			comment := ""
+			
+			for i := 3; i < len(os.Args); i++ {
+				if os.Args[i] == "-m" || os.Args[i] == "--message" {
+					if i+1 < len(os.Args) {
+						i++
+						comment = os.Args[i]
+					}
+				}
+			}
+
+			filePath, err := resolveFilePath(filename)
+			if err != nil {
+				filePath = filename
+			}
+
+			err = writeFile(filePath, text, true, false, comment)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
 	}
-}
-
+}	
