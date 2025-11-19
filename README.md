@@ -108,6 +108,9 @@ pt --version
 # Features: Recursive search, backup management, delta diff, tree view, safe delete, configurable, comments
 ```
 
+[Documentation] (https://pt.readthedocs.io/en/latest)
+
+
 ## 📖 Usage
 
 ### Basic Commands
