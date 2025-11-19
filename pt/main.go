@@ -48,18 +48,65 @@ type Config struct {
 
 // Global config instance
 var appConfig *Config
+var debugMode bool = false
 
 // ANSI color codes for pretty output
 const (
-	ColorReset  = "\033[0m"
-	ColorCyan   = "\033[96m"
-	ColorYellow = "\033[93m"
-	ColorGreen  = "\033[92m"
-	ColorGray   = "\033[90m"
-	ColorBold   = "\033[1m"
-	ColorRed    = "\033[91m"
-	ColorBlue   = "\033[94m"
+    // Reset
+    ColorReset = "\033[0m"
+
+    // Regular Colors
+    ColorBlack   = "\033[30m"
+    ColorRed     = "\033[91m"
+    ColorGreen   = "\033[92m"
+    ColorGray    = "\033[90m"
+    ColorYellow  = "\033[93m"
+    ColorBlue    = "\033[34m"
+    ColorMagenta = "\033[95m"
+    ColorCyan    = "\033[96m"
+    ColorWhite   = "\033[97m"
+
+    // Bright Colors
+    ColorBrightBlack   = "\033[90m"
+    ColorBrightRed     = "\033[31m"
+    ColorBrightGreen   = "\033[32m"
+    ColorBrightYellow  = "\033[33m"
+    ColorBrightBlue    = "\033[94m"
+    ColorBrightMagenta = "\033[35m"
+    ColorBrightCyan    = "\033[36m"
+    ColorBrightWhite   = "\033[37m"
+
+    // Background Colors
+    BgBlack   = "\033[40m"
+    BgRed     = "\033[41m"
+    BgGreen   = "\033[42m"
+    BgYellow  = "\033[43m"
+    BgBlue    = "\033[44m"
+    BgMagenta = "\033[45m"
+    BgCyan    = "\033[46m"
+    BgWhite   = "\033[47m"
+
+    // Bright Backgrounds
+    BgBrightBlack   = "\033[100m"
+    BgBrightRed     = "\033[101m"
+    BgBrightGreen   = "\033[102m"
+    BgBrightYellow  = "\033[103m"
+    BgBrightBlue    = "\033[104m"
+    BgBrightMagenta = "\033[105m"
+    BgBrightCyan    = "\033[106m"
+    BgBrightWhite   = "\033[107m"
+
+    // Text Effects
+    ColorBold      = "\033[1m"
+    ColorDim       = "\033[2m"
+    ColorItalic    = "\033[3m"
+    ColorUnderline = "\033[4m"
+    ColorBlink     = "\033[5m"
+    ColorReverse   = "\033[7m"
+    ColorHidden    = "\033[8m"
+    ColorStrike    = "\033[9m"
 )
+
 
 // BackupInfo stores information about a backup file
 type BackupInfo struct {
@@ -346,7 +393,7 @@ func handleCheckCommand(args []string) error {
 	}
 
 	// Load gitignore
-	gitignore, err := loadGitIgnore(cwd)
+	gitignore, err := loadGitIgnoreAndPtIgnore(cwd)
 	if err != nil {
 		logger.Printf("Warning: failed to load .gitignore: %v", err)
 	}
@@ -442,7 +489,7 @@ func handleCommitCommand(args []string) error {
 	}
 
 	// Load gitignore
-	gitignore, err := loadGitIgnore(cwd)
+	gitignore, err := loadGitIgnoreAndPtIgnore(cwd)
 	if err != nil {
 		logger.Printf("Warning: failed to load .gitignore: %v", err)
 	}
@@ -545,10 +592,28 @@ type GitIgnore struct {
 // Logger for audit trail
 var logger *log.Logger
 
+// discardWriter implements io.Writer and discards all writes.
+type discardWriter struct{}
+
+func (d *discardWriter) Write(p []byte) (n int, err error) {
+    return len(p), nil // Discard all data
+}
+
+// setupLogger initializes the global logger based on the debugMode flag.
+func setupLogger() {
+    if debugMode {
+        logger = log.New(os.Stderr, "", log.LstdFlags)
+    } else {
+        logger = log.New(&discardWriter{}, "", log.LstdFlags)
+    }
+}
+
 func init() {
-	logger = log.New(os.Stderr, "", log.LstdFlags)
-	Version = loadVersion()
-	appConfig = loadConfig()
+    // Initialize logger to discard by default in init.
+    // It will be set correctly in main() after flag parsing.
+    logger = log.New(&discardWriter{}, "", log.LstdFlags)
+    Version = loadVersion()
+    appConfig = loadConfig()
 }
 
 // loadVersion loads version from VERSION file
@@ -1111,29 +1176,83 @@ func loadBackupMetadata(backupPath string) (string, error) {
 	return metadata.Comment, nil
 }
 
-func loadGitIgnore(rootPath string) (*GitIgnore, error) {
-	gitignorePath := filepath.Join(rootPath, ".gitignore")
-	gi := &GitIgnore{patterns: make([]string, 0)}
+// func loadGitIgnore(rootPath string) (*GitIgnore, error) {
+// 	gitignorePath := filepath.Join(rootPath, ".gitignore")
+// 	gi := &GitIgnore{patterns: make([]string, 0)}
 	
-	file, err := os.Open(gitignorePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return gi, nil
-		}
-		return nil, err
-	}
-	defer file.Close()
+// 	file, err := os.Open(gitignorePath)
+// 	if err != nil {
+// 		if os.IsNotExist(err) {
+// 			return gi, nil
+// 		}
+// 		return nil, err
+// 	}
+// 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		gi.patterns = append(gi.patterns, line)
-	}
+// 	scanner := bufio.NewScanner(file)
+// 	for scanner.Scan() {
+// 		line := strings.TrimSpace(scanner.Text())
+// 		if line == "" || strings.HasPrefix(line, "#") {
+// 			continue
+// 		}
+// 		gi.patterns = append(gi.patterns, line)
+// 	}
 
-	return gi, scanner.Err()
+// 	return gi, scanner.Err()
+// }
+
+// loadGitIgnoreAndPtIgnore loads patterns from .gitignore and .ptignore in the root path
+func loadGitIgnoreAndPtIgnore(rootPath string) (*GitIgnore, error) {
+    gitignorePath := filepath.Join(rootPath, ".gitignore")
+    ptignorePath := filepath.Join(rootPath, ".ptignore")
+
+    gi := &GitIgnore{patterns: make([]string, 0)}
+
+    // Load .gitignore
+    file, err := os.Open(gitignorePath)
+    if err != nil {
+        if !os.IsNotExist(err) {
+            logger.Printf("Warning: failed to read .gitignore: %v", err)
+        }
+        // Continue to load .ptignore even if .gitignore fails
+    } else {
+        defer file.Close()
+        scanner := bufio.NewScanner(file)
+        for scanner.Scan() {
+            line := strings.TrimSpace(scanner.Text())
+            if line == "" || strings.HasPrefix(line, "#") {
+                continue
+            }
+            gi.patterns = append(gi.patterns, line)
+        }
+        if err := scanner.Err(); err != nil {
+            logger.Printf("Warning: error reading .gitignore: %v", err)
+        }
+    }
+
+    // Load .ptignore
+    ptFile, err := os.Open(ptignorePath)
+    if err != nil {
+        if !os.IsNotExist(err) {
+            logger.Printf("Warning: failed to read .ptignore: %v", err)
+        }
+        // Continue even if .ptignore fails
+    } else {
+        defer ptFile.Close()
+        scanner := bufio.NewScanner(ptFile)
+        for scanner.Scan() {
+            line := strings.TrimSpace(scanner.Text())
+            if line == "" || strings.HasPrefix(line, "#") {
+                continue
+            }
+            gi.patterns = append(gi.patterns, line)
+        }
+        if err := scanner.Err(); err != nil {
+            logger.Printf("Warning: error reading .ptignore: %v", err)
+        }
+    }
+
+    return gi, nil
 }
 
 func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
@@ -1143,6 +1262,11 @@ func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
 	if baseName == appConfig.BackupDirName {
 		return true
 	}
+
+	// Always ignore .git directory
+    if baseName == ".git" {
+        return true
+    }
 	
 	for _, pattern := range gi.patterns {
 		if strings.HasSuffix(pattern, "/") {
@@ -1297,7 +1421,7 @@ func handleTreeCommand(args []string) error {
 
 	var gitignore *GitIgnore
 	if info.IsDir() {
-		gitignore, err = loadGitIgnore(absPath)
+		gitignore, err = loadGitIgnoreAndPtIgnore(absPath)
 		if err != nil {
 			logger.Printf("Warning: failed to load .gitignore: %v", err)
 		}
@@ -2306,7 +2430,7 @@ func printHelp() {
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW (NEW!):%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt check%s                    Show status of all files (like git status)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt check <filename>%s         Check single file status\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt commit -m \"message\"%s     Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt commit -m \"message\"%s      Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
 	
 	fmt.Printf("\n%s📦 BACKUP OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -l <filename>%s            List all backups (with comments)\n", ColorGreen, ColorReset)
@@ -2322,19 +2446,22 @@ func printHelp() {
 	fmt.Printf("  %spt -t [path] -e items,items%s       Tree with exceptions\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -rm <filename>%s           Safe delete (backup first)\n", ColorGreen, ColorReset)
 	
-	fmt.Printf("\n%s⚙️  CONFIGURATION:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("\n%s⚙️ CONFIGURATION:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt config init%s              Create sample config file\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt config show%s              Show current configuration\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt config path%s              Show config file location\n", ColorGreen, ColorReset)
 	
-	fmt.Printf("\n%sℹ️  INFORMATION:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("\n%sℹ️ INFORMATION:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -h, --help%s               Show this help message\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -v, --version%s            Show version information\n", ColorGreen, ColorReset)
+
+	fmt.Printf("\n%s🪲 DEBUGGING:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt --debug%s                  Show debug/logging\n", ColorGreen, ColorReset)
 	
 	fmt.Printf("\n%s💡 EXAMPLES:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %s$%s pt notes.txt                %s# Save clipboard%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt check                    %s# Show all file statuses%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt commit -m \"fix bugs\"    %s# Backup all changes%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt commit -m \"fix bugs\"     %s# Backup all changes%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -l notes.txt             %s# List backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt --last      %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	
@@ -2457,8 +2584,8 @@ func printHelp() {
 	fmt.Printf("  • %s%s/%s directory works like %s.git/%s - searches upward\n", 
 		ColorYellow, appConfig.BackupDirName, ColorReset, ColorYellow, ColorReset)
 	
-	fmt.Printf("\n%s📄 LICENSE:%s MIT | %sAUTHOR:%s Hadi Cahyadi <cumulus13@gmail.com>\n", 
-		ColorBold, ColorReset, ColorBold, ColorReset)
+	fmt.Printf("\n%s📄 LICENSE:%s MIT | %sAUTHOR:%s %s%sHadi Cahyadi%s %s%s<cumulus13@gmail.com>%s\n", 
+		ColorBrightGreen, ColorReset, ColorBrightBlue, ColorReset, ColorWhite, BgBlue, ColorReset, ColorWhite, ColorMagenta, ColorReset)
 	fmt.Println()
 }
 
@@ -2505,6 +2632,16 @@ func main() {
 		printHelp()
 		os.Exit(1)
 	}
+
+	// Parse global flags first
+    for _, arg := range os.Args[1:] {
+        if arg == "--debug" {
+            debugMode = true
+            break
+        }
+    }
+    // Setup logger based on the parsed debug flag
+    setupLogger()
 
 	switch os.Args[1] {
 		case "check", "-c", "--check":
