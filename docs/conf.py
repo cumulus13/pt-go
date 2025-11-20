@@ -6,38 +6,44 @@
 
 import os
 import sys
+import subprocess
 
 # -- Version Reader (no external dependencies) ---------------------------
 def get_version():
     """Read version from VERSION file or git tags."""
-    # Try VERSION file in docs/ or parent directory
-    version_files = [
+    
+    # Try VERSION file
+    possible_paths = [
         os.path.join(os.path.dirname(__file__), 'VERSION'),
         os.path.join(os.path.dirname(__file__), '..', 'VERSION'),
         os.path.join(os.path.abspath('..'), 'VERSION'),
     ]
     
-    for vf in version_files:
-        if os.path.exists(vf):
-            with open(vf, 'r') as f:
-                return f.read().strip()
+    for path in possible_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    return f.read().strip()
+            except:
+                pass
     
-    # Fallback to git describe
+    # Try git describe
     try:
-        import subprocess
         result = subprocess.run(['git', 'describe', '--tags'], 
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
-            return result.stdout.strip()
+            return result.stdout.strip().lstrip('v')
     except:
         pass
     
-    return '1.0.36'  # Hardcoded fallback
+    # Fallback
+    return '1.0.37'
 
 # -- Project information -------------------------------------------------
 project = 'PT'
 copyright = '2025, Hadi Cahyadi'
 author = 'Hadi Cahyadi'
+
 version = get_version()
 release = version
 

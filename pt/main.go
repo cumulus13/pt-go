@@ -9,6 +9,8 @@ package main
 import (
 	"bufio"
 	// "bytes"
+	"runtime"
+	"syscall"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -870,48 +872,56 @@ func loadConfig() *Config {
 	return config
 }
 
-// findPTRoot searches for .pt directory in current and parent directories (like .git)
-// It starts from the given path and walks up the directory tree until it finds .pt or reaches root
+// findPTRoot searches for .pt or .git directory in current and parent directories (like .git)
+// It starts from the given path and walks up the directory tree until it finds .pt or .git or reaches root.
+// If .pt is found, returns its path.
+// If .git is found (and no .pt was found above it), returns the parent directory of .git (where .pt should be).
+// If neither is found, returns "".
 func findPTRoot(startPath string) (string, error) {
 	// If startPath is a file, get its directory
 	info, err := os.Stat(startPath)
 	if err == nil && !info.IsDir() {
 		startPath = filepath.Dir(startPath)
 	}
-
 	absPath, err := filepath.Abs(startPath)
 	if err != nil {
 		return "", err
 	}
-
 	current := absPath
-	
-	// Search up the directory tree until we find .pt or reach filesystem root
+	// Search up the directory tree until we find .pt or .git or reach filesystem root
 	for {
+		// Check the .pt first
 		ptDir := filepath.Join(current, appConfig.BackupDirName)
 		if info, err := os.Stat(ptDir); err == nil && info.IsDir() {
 			logger.Printf("Found %s directory at: %s", appConfig.BackupDirName, ptDir)
-			return ptDir, nil
+			return ptDir, nil // Return the FULL PATH to the found .pt
+		}
+
+		// Cek .git
+		gitDir := filepath.Join(current, ".git")
+		if info, err := os.Stat(gitDir); err == nil && (info.IsDir() || info.Mode().IsRegular()) {
+			// logger.Printf("Found .git directory/file at: %s", gitDir)
+			// Return the directory WHERE .git IS located (not the path to .git itself)
+			// logger.Printf("Will use parent of .git for %s: %s", appConfig.BackupDirName, current)
+			return current, nil // <-- Main change: return 'current' instead of 'gitDir'
 		}
 
 		parent := filepath.Dir(current)
-		
 		// Reached filesystem root (parent == current means we can't go up anymore)
 		if parent == current {
 			break
 		}
-		
 		current = parent
 	}
-
-	// No .pt directory found in any parent
+	// No .pt or .git directory found in any parent
+	// logger.Printf("No %s or .git directory found in tree from: %s", appConfig.BackupDirName, absPath)
 	logger.Printf("No %s directory found in tree from: %s", appConfig.BackupDirName, absPath)
 	return "", nil
 }
 
 // ensurePTDir creates .pt directory if it doesn't exist
 // Returns the absolute path to the .pt directory (could be in parent dir)
-// This function mimics git behavior - searches upward for existing .pt
+// This function mimics git behavior - searches upward for existing .pt or .git
 func ensurePTDir(filePath string) (string, error) {
 	// Get directory of the target file (or use current dir if it's already a dir)
 	dir := filePath
@@ -922,7 +932,6 @@ func ensurePTDir(filePath string) (string, error) {
 		// File doesn't exist yet, get its directory
 		dir = filepath.Dir(filePath)
 	}
-	
 	if dir == "." || dir == "" {
 		var err error
 		dir, err = os.Getwd()
@@ -931,53 +940,89 @@ func ensurePTDir(filePath string) (string, error) {
 		}
 	}
 
-	// Try to find existing .pt directory by walking up the tree
-	ptRoot, err := findPTRoot(dir)
+	// Try to find existing .pt directory or the parent directory indicated by .git by walking up the tree
+	ptRootResult, err := findPTRoot(dir)
 	if err != nil {
 		return "", err
 	}
 
-	// If found in parent directory, use that (like git)
-	if ptRoot != "" {
-		ptParent := filepath.Dir(ptRoot)
-		cwd, _ := os.Getwd()
-		relPath, _ := filepath.Rel(cwd, ptParent)
-		if relPath != "" && relPath != "." {
-			logger.Printf("Using existing %s from parent: %s", appConfig.BackupDirName, ptParent)
-			fmt.Printf("📁 Using %s from: %s%s/%s\n", appConfig.BackupDirName, ColorCyan, relPath, ColorReset)
+	// If findPTRoot found an existing .pt directory (not just the parent for a new one)
+	// ptRootResult will be the path to the .pt directory itself.
+	// If findPTRoot found .git or reached root without finding either,
+	// ptRootResult will be the directory *where .pt should be created*.
+	// We need to differentiate.
+
+	if ptRootResult != "" {
+		// Check if ptRootResult is actually the path to an existing .pt directory
+		ptBaseName := filepath.Base(ptRootResult)
+		if ptBaseName == appConfig.BackupDirName {
+			// Yes, ptRootResult is the existing .pt directory path
+			logger.Printf("Using existing %s from parent tree: %s", appConfig.BackupDirName, ptRootResult)
+			// Print relative path from current working directory for user clarity
+			cwd, _ := os.Getwd()
+			relPath, _ := filepath.Rel(cwd, ptRootResult)
+			if relPath != "" && relPath != "." {
+				fmt.Printf("📁 Using existing %s from: %s%s/%s", appConfig.BackupDirName, ColorCyan, relPath, ColorReset)
+			}
+			return ptRootResult, nil
+		} else {
+			// ptRootResult is the directory where .pt should be created (e.g., where .git was found)
+			logger.Printf("Found parent context (.git or root) at: %s. Will create %s here.", ptRootResult, appConfig.BackupDirName)
+			// Proceed to create .pt in ptRootResult
+			absDir := ptRootResult // Use the path returned by findPTRoot as the base directory
+			ptDir := filepath.Join(absDir, appConfig.BackupDirName)
+
+			// Check if .pt directory exists at this level (this handles the case where findPTRoot returned a parent, and .pt was created there between calls)
+			info, err = os.Stat(ptDir)
+			if os.IsNotExist(err) {
+				// Create .pt directory with appropriate permissions
+				err = os.MkdirAll(ptDir, 0755)
+				if err != nil {
+					return "", fmt.Errorf("failed to create %s directory: %w", appConfig.BackupDirName, err)
+				}
+				logger.Printf("Created %s directory: %s", appConfig.BackupDirName, ptDir)
+				fmt.Printf("📁 Created %s directory: %s", appConfig.BackupDirName, ptDir)
+				// Create .gitignore to ignore .pt directory in the *same parent directory* (absDir)
+				createPTGitignore(absDir)
+			} else if err != nil {
+				return "", fmt.Errorf("failed to check %s directory: %w", appConfig.BackupDirName, err)
+			} else if !info.IsDir() {
+				return "", fmt.Errorf("%s exists but is not a directory: %s", appConfig.BackupDirName, ptDir)
+			}
+			// Return the path to the .pt directory we found or created
+			return ptDir, nil
 		}
-		return ptRoot, nil
-	}
-
-	// No .pt directory found in tree, create one in the file's immediate directory
-	// Get the absolute path of the directory where we'll create .pt
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", err
-	}
-	
-	ptDir := filepath.Join(absDir, appConfig.BackupDirName)
-
-	// Check if .pt directory exists at this level
-	info, err = os.Stat(ptDir)
-	if os.IsNotExist(err) {
-		// Create .pt directory with appropriate permissions
-		err = os.MkdirAll(ptDir, 0755)
+	} else {
+		// No .pt or .git found anywhere in the parent tree, create .pt in the immediate directory of the file
+		// logger.Printf("No .pt or .git found in tree. Creating %s in file's directory: %s", appConfig.BackupDirName, dir)
+		logger.Printf("No .pt found in tree. Creating %s in file's directory: %s", appConfig.BackupDirName, dir)
+		// Get the absolute path of the directory where we'll create .pt
+		absDir, err := filepath.Abs(dir)
 		if err != nil {
-			return "", fmt.Errorf("failed to create %s directory: %w", appConfig.BackupDirName, err)
+			return "", err
 		}
-		logger.Printf("Created %s directory: %s", appConfig.BackupDirName, ptDir)
-		fmt.Printf("📁 Created %s directory: %s\n", appConfig.BackupDirName, ptDir)
-		
-		// Create .gitignore to ignore .pt directory
-		createPTGitignore(absDir)
-	} else if err != nil {
-		return "", fmt.Errorf("failed to check %s directory: %w", appConfig.BackupDirName, err)
-	} else if !info.IsDir() {
-		return "", fmt.Errorf("%s exists but is not a directory: %s", appConfig.BackupDirName, ptDir)
-	}
+		ptDir := filepath.Join(absDir, appConfig.BackupDirName)
 
-	return ptDir, nil
+		// Check if .pt directory exists at this level
+		info, err = os.Stat(ptDir)
+		if os.IsNotExist(err) {
+			// Create .pt directory with appropriate permissions
+			err = os.MkdirAll(ptDir, 0755)
+			if err != nil {
+				return "", fmt.Errorf("failed to create %s directory: %w", appConfig.BackupDirName, err)
+			}
+			logger.Printf("Created %s directory: %s", appConfig.BackupDirName, ptDir)
+			fmt.Printf("📁 Created %s directory: %s", appConfig.BackupDirName, ptDir)
+			// Create .gitignore to ignore .pt directory in the *same parent directory* (absDir)
+			createPTGitignore(absDir)
+		} else if err != nil {
+			return "", fmt.Errorf("failed to check %s directory: %w", appConfig.BackupDirName, err)
+		} else if !info.IsDir() {
+			return "", fmt.Errorf("%s exists but is not a directory: %s", appConfig.BackupDirName, ptDir)
+		}
+		// Return the path to the .pt directory we created
+		return ptDir, nil
+	}
 }
 
 // createPTGitignore creates/updates .gitignore to exclude .pt directory
