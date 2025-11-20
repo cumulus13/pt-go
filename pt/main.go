@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sys/windows"
 	"github.com/atotto/clipboard"
 	"gopkg.in/yaml.v3"
 	"github.com/alecthomas/chroma/v2/quick" // Import chroma quick for syntax highlighting
@@ -967,7 +968,7 @@ func ensurePTDir(filePath string) (string, error) {
 			return ptRootResult, nil
 		} else {
 			// ptRootResult is the directory where .pt should be created (e.g., where .git was found)
-			logger.Printf("Found parent context (.git or root) at: %s. Will create %s here.", ptRootResult, appConfig.BackupDirName)
+			// logger.Printf("Found parent context (.git or root) at: %s. Will create %s here.", ptRootResult, appConfig.BackupDirName)
 			// Proceed to create .pt in ptRootResult
 			absDir := ptRootResult // Use the path returned by findPTRoot as the base directory
 			ptDir := filepath.Join(absDir, appConfig.BackupDirName)
@@ -975,13 +976,27 @@ func ensurePTDir(filePath string) (string, error) {
 			// Check if .pt directory exists at this level (this handles the case where findPTRoot returned a parent, and .pt was created there between calls)
 			info, err = os.Stat(ptDir)
 			if os.IsNotExist(err) {
-				// Create .pt directory with appropriate permissions
-				err = os.MkdirAll(ptDir, 0755)
+				// Create .pt directory with appropriate permissions (0755)
+				// On Unix-like systems, the leading dot makes it conventionally hidden.
+				// On Windows, we need to explicitly set the hidden attribute after creation.
+				err = os.Mkdir(ptDir, 0755) // Use Mkdir instead of MkdirAll for the single directory
 				if err != nil {
 					return "", fmt.Errorf("failed to create %s directory: %w", appConfig.BackupDirName, err)
 				}
 				logger.Printf("Created %s directory: %s", appConfig.BackupDirName, ptDir)
 				fmt.Printf("📁 Created %s directory: %s", appConfig.BackupDirName, ptDir)
+
+				// Set hidden attribute on Windows
+				if runtime.GOOS == "windows" {
+					err = setWindowsHiddenAttribute(ptDir)
+					if err != nil {
+						// Log the error but don't fail the operation, as the directory was created.
+						logger.Printf("Warning: failed to set hidden attribute on Windows: %v", err)
+					} else {
+						logger.Printf("Set hidden attribute on Windows for: %s", ptDir)
+					}
+				}
+
 				// Create .gitignore to ignore .pt directory in the *same parent directory* (absDir)
 				createPTGitignore(absDir)
 			} else if err != nil {
@@ -1006,13 +1021,25 @@ func ensurePTDir(filePath string) (string, error) {
 		// Check if .pt directory exists at this level
 		info, err = os.Stat(ptDir)
 		if os.IsNotExist(err) {
-			// Create .pt directory with appropriate permissions
-			err = os.MkdirAll(ptDir, 0755)
+			// Create .pt directory with appropriate permissions (0755)
+			err = os.Mkdir(ptDir, 0755) // Use Mkdir instead of MkdirAll for the single directory
 			if err != nil {
 				return "", fmt.Errorf("failed to create %s directory: %w", appConfig.BackupDirName, err)
 			}
 			logger.Printf("Created %s directory: %s", appConfig.BackupDirName, ptDir)
 			fmt.Printf("📁 Created %s directory: %s", appConfig.BackupDirName, ptDir)
+
+			// Set hidden attribute on Windows
+			if runtime.GOOS == "windows" {
+				err = setWindowsHiddenAttribute(ptDir)
+				if err != nil {
+					// Log the error but don't fail the operation, as the directory was created.
+					logger.Printf("Warning: failed to set hidden attribute on Windows: %v", err)
+				} //else {
+				// 	logger.Printf("Set hidden attribute on Windows for: %s", ptDir)
+				// }
+			}
+
 			// Create .gitignore to ignore .pt directory in the *same parent directory* (absDir)
 			createPTGitignore(absDir)
 		} else if err != nil {
@@ -1023,6 +1050,34 @@ func ensurePTDir(filePath string) (string, error) {
 		// Return the path to the .pt directory we created
 		return ptDir, nil
 	}
+}
+
+// setWindowsHiddenAttribute sets the hidden attribute on a file or directory on Windows.
+// It uses Windows-specific system calls.
+func setWindowsHiddenAttribute(path string) error {
+	if runtime.GOOS != "windows" {
+		// This function should only be called on Windows.
+		return nil
+	}
+
+	// Convert the Go string path to a Windows UTF-16 string pointer (LPCWSTR)
+	// This is required by the Windows API function.
+	ptr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+
+	// Get current attributes
+	attributes, err := windows.GetFileAttributes(ptr)
+	if err != nil {
+		return err
+	}
+
+	// Add the hidden attribute flag
+	newAttributes := attributes | windows.FILE_ATTRIBUTE_HIDDEN
+
+	// Set the new attributes
+	return windows.SetFileAttributes(ptr, newAttributes)
 }
 
 // createPTGitignore creates/updates .gitignore to exclude .pt directory
