@@ -5,8 +5,8 @@ from version_get import VersionGet
 project = 'PT'
 copyright = '2025, Hadi Cahyadi'
 author = 'Hadi Cahyadi'
-release = VersionGet().get(True) if not VersionGet().get(True) == "1.0.0" else '1.0.35'
-version = VersionGet().get(True) if not VersionGet().get(True) == "1.0.0" else '1.0.35'
+release = VersionGet().get(True) if not VersionGet().get(True) == "1.0.0" else '1.0.36'
+version = VersionGet().get(True) if not VersionGet().get(True) == "1.0.0" else '1.0.36'
 
 # -- General configuration ---------------------------------------------------
 sys.path.insert(0, os.path.abspath('..'))
