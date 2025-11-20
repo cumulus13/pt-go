@@ -1,348 +1,290 @@
+
+
 <!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<html lang="en" data-content_root="./">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <meta name="lang:clipboard.copy" content="Copy to clipboard">
-  <meta name="lang:clipboard.copied" content="Copied to clipboard">
-  <meta name="lang:search.language" content="en">
-  <meta name="lang:search.pipeline.stopwords" content="True">
-  <meta name="lang:search.pipeline.trimmer" content="True">
-  <meta name="lang:search.result.none" content="No matching documents">
-  <meta name="lang:search.result.one" content="1 matching document">
-  <meta name="lang:search.result.other" content="# matching documents">
-  <meta name="lang:search.tokenizer" content="[\s\-]+">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PT Documentation &mdash; PT Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b20cc3f5" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=a5c4661c" />
+      <link rel="stylesheet" type="text/css" href="_static/terminal-dark.css?v=8a49e07c" />
 
   
-    <link href="https://fonts.gstatic.com/" rel="preconnect" crossorigin>
-    <link href="https://fonts.googleapis.com/css?family=Roboto+Mono:400,500,700|Roboto:300,400,400i,700&display=fallback" rel="stylesheet">
-
-    <style>
-      body,
-      input {
-        font-family: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif
-      }
-
-      code,
-      kbd,
-      pre {
-        font-family: "Roboto Mono", "Courier New", Courier, monospace
-      }
-    </style>
-  
-
-  <link rel="stylesheet" href="_static/stylesheets/application.css"/>
-  <link rel="stylesheet" href="_static/stylesheets/application-palette.css"/>
-  <link rel="stylesheet" href="_static/stylesheets/application-fixes.css"/>
-  
-  <link rel="stylesheet" href="_static/fonts/material-icons.css"/>
-  
-  <meta name="theme-color" content="#3f51b5">
-  <script src="_static/javascripts/modernizr.js"></script>
-  
-  
-  
-    <title>Welcome to PT - Clipboard to File Tool with Smart Version Management’s documentation! &#8212; PT - Clipboard to File Tool with Smart Version Management 1.0.25 documentation</title>
-    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=83e35b93" />
-    <link rel="stylesheet" type="text/css" href="_static/material.css?v=79c92029" />
-    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=bd98b3f9" />
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
-    <script src="_static/documentation_options.js?v=c22798c2"></script>
-    <script src="_static/doctools.js?v=9bcbadda"></script>
-    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="shortcut icon" href="_static/pt.svg"/>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=6d61d84b"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="_static/copybutton.js?v=1300405e"></script>
+    <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Introduction" href="introduction.html" />
-  
-   
+    <link rel="next" title="Quick Start Guide" href="quickstart.html" />
+    <link rel="stylesheet" href="_static/terminal-dark.css" type="text/css" />
 
-  </head>
-  <body dir=ltr
-        data-md-color-primary=black data-md-color-accent=green>
-  
-  <svg class="md-svg">
-    <defs data-children-count="0">
-      
-      <svg xmlns="http://www.w3.org/2000/svg" width="416" height="448" viewBox="0 0 416 448" id="__github"><path fill="currentColor" d="M160 304q0 10-3.125 20.5t-10.75 19T128 352t-18.125-8.5-10.75-19T96 304t3.125-20.5 10.75-19T128 256t18.125 8.5 10.75 19T160 304zm160 0q0 10-3.125 20.5t-10.75 19T288 352t-18.125-8.5-10.75-19T256 304t3.125-20.5 10.75-19T288 256t18.125 8.5 10.75 19T320 304zm40 0q0-30-17.25-51T296 232q-10.25 0-48.75 5.25Q229.5 240 208 240t-39.25-2.75Q130.75 232 120 232q-29.5 0-46.75 21T56 304q0 22 8 38.375t20.25 25.75 30.5 15 35 7.375 37.25 1.75h42q20.5 0 37.25-1.75t35-7.375 30.5-15 20.25-25.75T360 304zm56-44q0 51.75-15.25 82.75-9.5 19.25-26.375 33.25t-35.25 21.5-42.5 11.875-42.875 5.5T212 416q-19.5 0-35.5-.75t-36.875-3.125-38.125-7.5-34.25-12.875T37 371.5t-21.5-28.75Q0 312 0 260q0-59.25 34-99-6.75-20.5-6.75-42.5 0-29 12.75-54.5 27 0 47.5 9.875t47.25 30.875Q171.5 96 212 96q37 0 70 8 26.25-20.5 46.75-30.25T376 64q12.75 25.5 12.75 54.5 0 21.75-6.75 42 34 40 34 99.5z"/></svg>
-      
-    </defs>
-  </svg>
-  
-  <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer">
-  <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search">
-  <label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
-  <a href="#index" tabindex="1" class="md-skip"> Skip to content </a>
-  <header class="md-header" data-md-component="header">
-  <nav class="md-header-nav md-grid">
-    <div class="md-flex navheader">
-      <div class="md-flex__cell md-flex__cell--shrink">
-        <a href="#" title="PT - Clipboard to File Tool with Smart Version Management 1.0.25 documentation"
-           class="md-header-nav__button md-logo">
-          
-            &nbsp;
-          
-        </a>
-      </div>
-      <div class="md-flex__cell md-flex__cell--shrink">
-        <label class="md-icon md-icon--menu md-header-nav__button" for="__drawer"></label>
-      </div>
-      <div class="md-flex__cell md-flex__cell--stretch">
-        <div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
-          <span class="md-header-nav__topic">PT - Clipboard to File Tool with Smart Version Management</span>
-          <span class="md-header-nav__topic"> Welcome to PT - Clipboard to File Tool with Smart Version Management’s documentation! </span>
-        </div>
-      </div>
-      <div class="md-flex__cell md-flex__cell--shrink">
-        <label class="md-icon md-icon--search md-header-nav__button" for="__search"></label>
-        
-<div class="md-search" data-md-component="search" role="dialog">
-  <label class="md-search__overlay" for="__search"></label>
-  <div class="md-search__inner" role="search">
-    <form class="md-search__form" action="search.html" method="get" name="search">
-      <input type="text" class="md-search__input" name="q" placeholder=""Search""
-             autocapitalize="off" autocomplete="off" spellcheck="false"
-             data-md-component="query" data-md-state="active">
-      <label class="md-icon md-search__icon" for="__search"></label>
-      <button type="reset" class="md-icon md-search__icon" data-md-component="reset" tabindex="-1">
-        &#xE5CD;
-      </button>
-    </form>
-    <div class="md-search__output">
-      <div class="md-search__scrollwrap" data-md-scrollfix>
-        <div class="md-search-result" data-md-component="result">
-          <div class="md-search-result__meta">
-            Type to start searching
-          </div>
-          <ol class="md-search-result__list"></ol>
-        </div>
-      </div>
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #0C0C0C" >
+    <a href="#">
+        <img src="_static/pt.svg" alt="PT Logo" style="width: 80px; height: auto; border-radius: 0;">
+    </a>
+    <h3 style="color: #00FF00; font-family: 'JetBrains Mono', monospace;">PT Documentation</h3>
+    <div class="version" style="color: #608B4E; font-family: 'JetBrains Mono', monospace;">
+        1.0.32
     </div>
-  </div>
+    
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
 </div>
 
-      </div>
-      
-      
-  
-  <script src="_static/javascripts/version_dropdown.js"></script>
-  <script>
-    var json_loc = ""versions.json"",
-        target_loc = "../",
-        text = "Versions";
-    $( document ).ready( add_version_dropdown(json_loc, target_loc, text));
-  </script>
-  
-
-    </div>
-  </nav>
-</header>
-
-  
-  <div class="md-container">
-    
-    
-    
-    <main class="md-main">
-      <div class="md-main__inner md-grid" data-md-component="container">
-        
-          <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
-            <div class="md-sidebar__scrollwrap">
-              <div class="md-sidebar__inner">
-                <nav class="md-nav md-nav--primary" data-md-level="0">
-  <label class="md-nav__title md-nav__title--site" for="__drawer">
-    <a href="#" title="PT - Clipboard to File Tool with Smart Version Management 1.0.25 documentation" class="md-nav__button md-logo">
-      
-        <img src="_static/" alt=" logo" width="48" height="48">
-      
-    </a>
-    <a href="#"
-       title="PT - Clipboard to File Tool with Smart Version Management 1.0.25 documentation">PT - Clipboard to File Tool with Smart Version Management</a>
-  </label>
-  
-
-  
-  <ul class="md-nav__list">
-    <li class="md-nav__item">
-    
-      <span class="md-nav__link caption"><span class="caption-text">Contents:</span></span>
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="introduction.html" class="md-nav__link">Introduction</a>
-      
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="installation.html" class="md-nav__link">Installation</a>
-      
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="usage.html" class="md-nav__link">Usage</a>
-      
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="commands.html" class="md-nav__link">Commands</a>
-      
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="configuration.html" class="md-nav__link">Configuration</a>
-      
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="api.html" class="md-nav__link">API Documentation (Go Source)</a>
-      
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="contributing.html" class="md-nav__link">Contributing</a>
-      
-    
-    </li>
-    <li class="md-nav__item">
-    
-    
-      <a href="license.html" class="md-nav__link">License</a>
-      
-    
-    </li>
-  </ul>
-  
-
-</nav>
-              </div>
-            </div>
-          </div>
-          <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
-            <div class="md-sidebar__scrollwrap">
-              <div class="md-sidebar__inner">
-                
-<nav class="md-nav md-nav--secondary">
-    <label class="md-nav__title" for="__toc">"Contents"</label>
-  <ul class="md-nav__list" data-md-scrollfix="">
-        <li class="md-nav__item"><a href="#index--page-root" class="md-nav__link">Welcome to PT - Clipboard to File Tool with Smart Version Management’s documentation!</a>
-        </li>
-        <li class="md-nav__item"><a href="#introduction" class="md-nav__link">Introduction</a><nav class="md-nav">
-              <ul class="md-nav__list">
-        <li class="md-nav__item"><a href="#key-features" class="md-nav__link">Key Features</a>
-        </li>
-        <li class="md-nav__item"><a href="#license" class="md-nav__link">License</a>
-        </li></ul>
-            </nav>
-        </li>
-        <li class="md-nav__item"><a href="#indices-and-tables" class="md-nav__link">Indices and tables</a>
-        </li>
-    
-<li class="md-nav__item"><a class="md-nav__extra_link" href="_sources/index.rst.txt">Show Source</a> </li>
-
-<li id="searchbox" class="md-nav__item"></li>
-
-  </ul>
-</nav>
-              </div>
-            </div>
-          </div>
-        
-        <div class="md-content">
-          <article class="md-content__inner md-typeset" role="main">
-            
-  <section id="welcome-to-pt-clipboard-to-file-tool-with-smart-version-management-s-documentation">
-<h1 id="index--page-root">Welcome to PT - Clipboard to File Tool with Smart Version Management’s documentation!<a class="headerlink" href="#index--page-root" title="Link to this heading">¶</a></h1>
-<a class="reference internal image-reference" href="_images/pt.svg"><img alt="Pt icon" class="align-center" src="_images/pt.svg" style="width: 320px;"/>
-</a>
-</section>
-<section id="introduction">
-<span id="id1"></span><h1 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Link to this heading">¶</a></h1>
-<p>PT - Clipboard to File Tool with Smart Version Management is a production-hardened command-line tool designed to seamlessly transfer content from your clipboard into files. It functions similarly to Git, using a hidden <code class="docutils literal notranslate"><span class="pre">.pt</span></code> directory to store backups of file changes, enabling version control-like operations for clipboard content.</p>
-<section id="key-features">
-<h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><strong>Terminal-Style Workflow</strong>: Uses a <code class="docutils literal notranslate"><span class="pre">.pt</span></code> directory structure for backups, mirroring Git’s approach.</p></li>
-<li><p><strong>Clipboard Integration</strong>: Reads content directly from the system clipboard.</p></li>
-<li><p><strong>Backup Management</strong>: Automatically creates timestamped backups before overwriting files.</p></li>
-<li><p><strong>Status Checking</strong>: Compare current files against their last backed-up versions (like <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">status</span></code>).</p></li>
-<li><p><strong>Commit Changes</strong>: Back up all modified and new files in the current directory tree (like <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">commit</span></code>).</p></li>
-<li><p><strong>Recursive Search</strong>: Finds files by name in subdirectories, respecting <code class="docutils literal notranslate"><span class="pre">.gitignore</span></code> and <code class="docutils literal notranslate"><span class="pre">.ptignore</span></code>.</p></li>
-<li><p><strong>Diff Support</strong>: Compare files with their backups using <a class="reference external" href="https://github.com/dandavison/delta">delta</a>.</p></li>
-<li><p><strong>Safe Operations</strong>: Includes path traversal checks, system directory protection, and size limits.</p></li>
-<li><p><strong>Cross-Platform</strong>: Works on Linux, macOS, and Windows.</p></li>
-</ul>
-</section>
-<section id="license">
-<h2 id="license">License<a class="headerlink" href="#license" title="Link to this heading">¶</a></h2>
-<p>This project is licensed under the MIT License - see the <a class="reference internal" href="license.html#license"><span class="std std-ref">License</span></a> page for details.</p>
-</section>
-</section>
-<section id="indices-and-tables">
-<h1 id="indices-and-tables">Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">¶</a></h1>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+        </div>
+    <div style="padding-left: 12px;">
+        <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="introduction.html#key-features">Key Features</a></li>
-<li class="toctree-l2"><a class="reference internal" href="introduction.html#license">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="installation.html#prerequisites">Prerequisites</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#building-from-source">Building from Source</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#using-a-pre-built-binary">Using a Pre-built Binary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#install-delta">Install Delta</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#install-pt-from-source">Install PT from Source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#quick-install-linux-macos">Quick Install (Linux/macOS)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#verify-installation">Verify Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#troubleshooting">Troubleshooting</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#basic-operation">Basic Operation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#git-like-workflow">Git-like Workflow</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#command-reference">Command Reference</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="commands.html">Commands</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#write-command">Write Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#append-command">Append Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#status-command">Status Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#commit-command">Commit Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#list-command">List Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#restore-command">Restore Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#remove-command">Remove Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#diff-command">Diff Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#tree-command">Tree Command</a></li>
-<li class="toctree-l2"><a class="reference internal" href="commands.html#config-command">Config Command</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#basic-commands">Basic Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#git-like-workflow-commands">Git-Like Workflow Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#advanced-commands">Advanced Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#command-reference-table">Command Reference Table</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#default-configuration">Default Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-file-locations">Configuration File Locations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#creating-configuration-file">Creating Configuration File</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-options">Configuration Options</a></li>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#creating-a-configuration-file">Creating a Configuration File</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#viewing-configuration">Viewing Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-validation">Configuration Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#backup-directory-structure-pt">Backup Directory Structure (.pt/)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#backup-naming-format">Backup Naming Format</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="api.html">API Documentation (Go Source)</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="api.html#main-package">Main Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="features.html">Features</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="features.html#core-features">Core Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="features.html#quick-save">📝 Quick Save</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#auto-backup">📦 Auto Backup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#backup-comments">💬 Backup Comments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#append-mode">➕ Append Mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#restore">🔄 Restore</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#beautiful-listings">📊 Beautiful Listings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#production-hardened">🔒 Production Hardened</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#colorful-output">🎨 Colorful Output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#audit-logging">📈 Audit Logging</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#check-mode">✅ Check Mode</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#advanced-features">Advanced Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="features.html#recursive-file-search">🔍 Recursive File Search</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#delta-diff-integration">📊 Delta Diff Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#directory-tree-view">🌳 Directory Tree View</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#gitignore-support">📁 GitIgnore Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#safe-delete">🗑️ Safe Delete</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#exception-filtering">⚙️ Exception Filtering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#multi-file-selection">🎯 Multi-File Selection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#smart-path-resolution">🚀 Smart Path Resolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#configurable">⚙️ Configurable</a></li>
 </ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#version-management-capabilities">Version Management Capabilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="features.html#complete-version-history">📜 Complete Version History</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#comment-system">💬 Comment System</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#contextual-notes">📝 Contextual Notes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#easy-rollback">🔙 Easy Rollback</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#version-comparison">📊 Version Comparison</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#space-efficient">💾 Space Efficient</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#timestamped-versions">🏷️ Timestamped Versions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#zero-data-loss">Zero Data Loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#performance">Performance</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="workflow.html">Git-Like Workflow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-overview">Workflow Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#step-by-step-workflow">Step-by-Step Workflow</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#check-file-status">1. Check File Status</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#commit-all-changes">2. Commit All Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#view-commit-history">3. View Commit History</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#compare-changes">4. Compare Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#rollback-if-needed">5. Rollback if Needed</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-use-cases">Workflow Use Cases</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#daily-development">Daily Development</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#configuration-management">Configuration Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#emergency-rollback">Emergency Rollback</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-advantages">Workflow Advantages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#comparison-with-git">Comparison with Git</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#quick-note-taking">1. Quick Note Taking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#version-control-for-code">2. Version Control for Code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#configuration-management">3. Configuration Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#check-mode-save-disk-space">4. Check Mode - Save Disk Space</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#safe-delete-with-context">5. Safe Delete with Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#append-mode-with-comments">6. Append Mode with Comments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#interactive-restore">7. Interactive Restore</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#configuration-file-setup">8. Configuration File Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#recursive-file-search">9. Recursive File Search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#visual-diff-comparison">10. Visual Diff Comparison</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#directory-tree-visualization">11. Directory Tree Visualization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#complete-workflow-example">12. Complete Workflow Example</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#clipboard-empty-error">Clipboard Empty Error</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#no-write-permission">No Write Permission</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#file-too-large">File Too Large</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#file-not-found">File Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#delta-not-found">Delta Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#config-file-issues">Config File Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#content-unchanged-check-mode">Content Unchanged (Check Mode)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#recursive-search-issues">Recursive Search Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#multiple-file-selection">Multiple File Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#linux-clipboard-issues">Linux Clipboard Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#pt-directory-not-found">.pt Directory Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#backup-directory-confusion">Backup Directory Confusion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#windows-specific-issues">Windows-Specific Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#getting-help">Getting Help</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#development-setup">Development Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#making-changes">Making Changes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#code-style">Code Style</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#testing">Testing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#manual-testing">Manual Testing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#feature-ideas">Feature Ideas</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#completed-features">Completed Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#open-ideas">Open Ideas</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#reporting-issues">Reporting Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#pull-request-process">Pull Request Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#license">License</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="license.html#author">Author</a></li>
+<li class="toctree-l2"><a class="reference internal" href="license.html#support">Support</a></li>
+</ul>
+</li>
+</ul>
+
+    </div>
+
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #0C0C0C" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">PT</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">PT Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
 </div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pt-documentation">
+<h1>PT Documentation<a class="headerlink" href="#pt-documentation" title="Link to this heading"></a></h1>
+<a class="reference internal image-reference" href="_images/pt.svg"><img alt="PT Logo" class="align-center" src="_images/pt.svg" style="width: 100px;" />
+</a>
+<p><strong>PT</strong> is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, backup comments, recursive file search, delta diff comparison, directory tree visualization, and safe file deletion. It’s not just a clipboard manager – it’s a complete version control system for your files!</p>
+<div class="toctree-wrapper compound">
+</div>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<section id="core-features">
+<h3>Core Features<a class="headerlink" href="#core-features" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>📝 <strong>Quick Save</strong> - Write clipboard content to file with one command</p></li>
+<li><p>📦 <strong>Auto Backup</strong> - Automatic timestamped backups stored in <cite>.pt/</cite> directory</p></li>
+<li><p>💬 <strong>Backup Comments</strong> - Add descriptive comments to track why changes were made</p></li>
+<li><p>🔄 <strong>Restore</strong> - Interactive or quick restore from backups with comments</p></li>
+<li><p>📊 <strong>Beautiful Listings</strong> - Formatted table view of all backups with sizes and comments</p></li>
+<li><p>🔍 <strong>Recursive File Search</strong> - Automatically finds files in subdirectories up to 10 levels deep</p></li>
+<li><p>📊 <strong>Delta Diff Integration</strong> - Beautiful side-by-side diff comparison with backups</p></li>
+<li><p>🌳 <strong>Directory Tree View</strong> - Visual file structure with sizes (like <cite>tree</cite> command)</p></li>
+<li><p>🗑️ <strong>Safe Delete</strong> - Backup before deletion, create empty placeholder</p></li>
+<li><p>⚙️ <strong>Configurable</strong> - Customize behavior via <cite>pt.yml</cite> config file</p></li>
+</ul>
+</section>
+<section id="git-like-workflow-new">
+<h3>Git-Like Workflow (NEW!)<a class="headerlink" href="#git-like-workflow-new" title="Link to this heading"></a></h3>
+<p>PT introduces a powerful git-like workflow for version management:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pt</span> <span class="pre">check</span></code> - Show status of all files (like <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">status</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pt</span> <span class="pre">commit</span> <span class="pre">-m</span> <span class="pre">&quot;message&quot;</span></code> - Backup all changed files (like <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">commit</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pt</span> <span class="pre">-l</span> <span class="pre">&lt;file&gt;</span></code> - View commit history</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pt</span> <span class="pre">-d</span> <span class="pre">&lt;file&gt;</span> <span class="pre">--last</span></code> - See what changed (diff)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pt</span> <span class="pre">-r</span> <span class="pre">&lt;file&gt;</span> <span class="pre">--last</span></code> - Rollback if needed</p></li>
+</ul>
+</section>
+</section>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Go 1.16 or higher</p></li>
+<li><p>Git (for installation)</p></li>
+<li><p><strong>Delta</strong> (optional, for diff functionality)</p></li>
+</ul>
+</section>
+<section id="quick-start">
+<h2>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h2>
+<p>Copy text to clipboard, then:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">notes</span><span class="o">.</span><span class="n">txt</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Initial version&quot;</span>
+</pre></div>
+</div>
+<p>For more details, see the <a class="reference internal" href="quickstart.html"><span class="doc">Quick Start Guide</span></a> guide.</p>
+</section>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and Tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading"></a></h1>
 <ul class="simple">
 <li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
 <li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
@@ -351,48 +293,33 @@
 </section>
 
 
-          </article>
-        </div>
-      </div>
-    </main>
-  </div>
-  <footer class="md-footer">
-    <div class="md-footer-nav">
-      <nav class="md-footer-nav__inner md-grid">
-          
-          
-            <a href="introduction.html" title="Introduction"
-               class="md-flex md-footer-nav__link md-footer-nav__link--next"
-               rel="next">
-            <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title"><span
-                class="md-flex__ellipsis"> <span
-                class="md-footer-nav__direction"> "Next" </span> Introduction </span>
-            </div>
-            <div class="md-flex__cell md-flex__cell--shrink"><i
-                class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
-            </div>
-          
-        </a>
-        
-      </nav>
-    </div>
-    <div class="md-footer-meta md-typeset">
-      <div class="md-footer-meta__inner md-grid">
-        <div class="md-footer-copyright">
-          <div class="md-footer-copyright__highlight">
-              &#169; Copyright 2025, Hadi Cahyadi.
-              
+           </div>
           </div>
-            Created using
-            <a href="http://www.sphinx-doc.org/">Sphinx</a> 8.3.0.
-             and
-            <a href="https://github.com/bashtage/sphinx-material/">Material for
-              Sphinx</a>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quickstart.html" class="btn btn-neutral float-right" title="Quick Start Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Hadi Cahyadi.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
         </div>
       </div>
-    </div>
-  </footer>
-  <script src="_static/javascripts/application.js"></script>
-  <script>app.initialize({version: "1.0.4", url: {base: ".."}})</script>
-  </body>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
 </html>

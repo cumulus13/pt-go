@@ -1,0 +1,26 @@
+{% extends "!layout.html" %}
+
+{% block extrahead %}
+    <link rel="stylesheet" href="{{ pathto('_static/terminal-dark.css', 1) }}" type="text/css" />
+{% endblock %}
+
+{% block sidebartitle %}
+    <a href="{{ pathto(master_doc) }}">
+        <img src="{{ pathto('_static/pt.svg', 1) }}" alt="PT Logo" style="width: 80px; height: auto; border-radius: 0;">
+    </a>
+    <h3 style="color: #00FF00; font-family: 'JetBrains Mono', monospace;">PT Documentation</h3>
+    <div class="version" style="color: #608B4E; font-family: 'JetBrains Mono', monospace;">
+        {{ version }}
+    </div>
+    {% include "searchbox.html" %}
+{% endblock %}
+
+{% block sidebarsearch %}
+    {{ super() }}
+{% endblock %}
+
+{% block navigation %}
+    <div style="padding-left: 12px;">
+        {{ toctree(maxdepth=-1, collapse=False, includehidden=True) }}
+    </div>
+{% endblock %}

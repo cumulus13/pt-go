@@ -1,5 +1,3 @@
-.. _license:
-
 License
 =======
 
@@ -24,3 +22,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Author
+------
+
+`Hadi Cahyadi <mailto:cumulus13@gmail.com>`_
+
+- GitHub: `@cumulus13 <https://github.com/cumulus13>`_
+- Email: cumulus13@gmail.com
+
+Support
+-------
+
+- 🐛 **Bug Reports**: `GitHub Issues <https://github.com/cumulus13/pt-go/issues>`_
+- 💡 **Feature Requests**: `GitHub Discussions <https://github.com/cumulus13/pt-go/discussions>`_
+- 📧 **Email**: cumulus13@gmail.com

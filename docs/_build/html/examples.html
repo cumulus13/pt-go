@@ -1,0 +1,523 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Examples &mdash; PT Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b20cc3f5" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=a5c4661c" />
+      <link rel="stylesheet" type="text/css" href="_static/terminal-dark.css?v=8a49e07c" />
+
+  
+    <link rel="shortcut icon" href="_static/pt.svg"/>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=6d61d84b"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="_static/copybutton.js?v=1300405e"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Troubleshooting" href="troubleshooting.html" />
+    <link rel="prev" title="Git-Like Workflow" href="workflow.html" />
+    <link rel="stylesheet" href="_static/terminal-dark.css" type="text/css" />
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #0C0C0C" >
+    <a href="index.html">
+        <img src="_static/pt.svg" alt="PT Logo" style="width: 80px; height: auto; border-radius: 0;">
+    </a>
+    <h3 style="color: #00FF00; font-family: 'JetBrains Mono', monospace;">PT Documentation</h3>
+    <div class="version" style="color: #608B4E; font-family: 'JetBrains Mono', monospace;">
+        1.0.32
+    </div>
+    
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+        </div>
+    <div style="padding-left: 12px;">
+        <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#install-delta">Install Delta</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#install-pt-from-source">Install PT from Source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#quick-install-linux-macos">Quick Install (Linux/macOS)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#verify-installation">Verify Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#basic-commands">Basic Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#git-like-workflow-commands">Git-Like Workflow Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#advanced-commands">Advanced Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#command-reference-table">Command Reference Table</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-file-locations">Configuration File Locations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#creating-configuration-file">Creating Configuration File</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-options">Configuration Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#viewing-configuration">Viewing Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-validation">Configuration Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#backup-directory-structure-pt">Backup Directory Structure (.pt/)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#backup-naming-format">Backup Naming Format</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="features.html">Features</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="features.html#core-features">Core Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="features.html#quick-save">📝 Quick Save</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#auto-backup">📦 Auto Backup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#backup-comments">💬 Backup Comments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#append-mode">➕ Append Mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#restore">🔄 Restore</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#beautiful-listings">📊 Beautiful Listings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#production-hardened">🔒 Production Hardened</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#colorful-output">🎨 Colorful Output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#audit-logging">📈 Audit Logging</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#check-mode">✅ Check Mode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#advanced-features">Advanced Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="features.html#recursive-file-search">🔍 Recursive File Search</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#delta-diff-integration">📊 Delta Diff Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#directory-tree-view">🌳 Directory Tree View</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#gitignore-support">📁 GitIgnore Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#safe-delete">🗑️ Safe Delete</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#exception-filtering">⚙️ Exception Filtering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#multi-file-selection">🎯 Multi-File Selection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#smart-path-resolution">🚀 Smart Path Resolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#configurable">⚙️ Configurable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#version-management-capabilities">Version Management Capabilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="features.html#complete-version-history">📜 Complete Version History</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#comment-system">💬 Comment System</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#contextual-notes">📝 Contextual Notes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#easy-rollback">🔙 Easy Rollback</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#version-comparison">📊 Version Comparison</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#space-efficient">💾 Space Efficient</a></li>
+<li class="toctree-l3"><a class="reference internal" href="features.html#timestamped-versions">🏷️ Timestamped Versions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#zero-data-loss">Zero Data Loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="features.html#performance">Performance</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="workflow.html">Git-Like Workflow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-overview">Workflow Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#step-by-step-workflow">Step-by-Step Workflow</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#check-file-status">1. Check File Status</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#commit-all-changes">2. Commit All Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#view-commit-history">3. View Commit History</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#compare-changes">4. Compare Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#rollback-if-needed">5. Rollback if Needed</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-use-cases">Workflow Use Cases</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#daily-development">Daily Development</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#configuration-management">Configuration Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#emergency-rollback">Emergency Rollback</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-advantages">Workflow Advantages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#comparison-with-git">Comparison with Git</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#quick-note-taking">1. Quick Note Taking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#version-control-for-code">2. Version Control for Code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-management">3. Configuration Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#check-mode-save-disk-space">4. Check Mode - Save Disk Space</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#safe-delete-with-context">5. Safe Delete with Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#append-mode-with-comments">6. Append Mode with Comments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#interactive-restore">7. Interactive Restore</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-file-setup">8. Configuration File Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#recursive-file-search">9. Recursive File Search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#visual-diff-comparison">10. Visual Diff Comparison</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#directory-tree-visualization">11. Directory Tree Visualization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#complete-workflow-example">12. Complete Workflow Example</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#clipboard-empty-error">Clipboard Empty Error</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#no-write-permission">No Write Permission</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#file-too-large">File Too Large</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#file-not-found">File Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#delta-not-found">Delta Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#config-file-issues">Config File Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#content-unchanged-check-mode">Content Unchanged (Check Mode)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#recursive-search-issues">Recursive Search Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#multiple-file-selection">Multiple File Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#linux-clipboard-issues">Linux Clipboard Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#pt-directory-not-found">.pt Directory Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#backup-directory-confusion">Backup Directory Confusion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#windows-specific-issues">Windows-Specific Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#getting-help">Getting Help</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#development-setup">Development Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#making-changes">Making Changes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#code-style">Code Style</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#testing">Testing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#manual-testing">Manual Testing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#feature-ideas">Feature Ideas</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#completed-features">Completed Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#open-ideas">Open Ideas</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#reporting-issues">Reporting Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#pull-request-process">Pull Request Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#license">License</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="license.html#author">Author</a></li>
+<li class="toctree-l2"><a class="reference internal" href="license.html#support">Support</a></li>
+</ul>
+</li>
+</ul>
+
+    </div>
+
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #0C0C0C" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PT</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Examples</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/examples.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="examples">
+<h1>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h1>
+<p>Here are comprehensive examples showing PT’s capabilities.</p>
+<section id="quick-note-taking">
+<h2>1. Quick Note Taking<a class="headerlink" href="#quick-note-taking" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Copy meeting notes to clipboard, then:</span>
+pt<span class="w"> </span>notes.txt<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Meeting notes from sprint planning&quot;</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>✅ Successfully written to: notes.txt
+📄 Content size: 142 characters
+💬 Comment: &quot;Meeting notes from sprint planning&quot;
+</pre></div>
+</div>
+</section>
+<section id="version-control-for-code">
+<h2>2. Version Control for Code<a class="headerlink" href="#version-control-for-code" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Before making risky changes</span>
+pt<span class="w"> </span>main.go<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Working version before refactoring&quot;</span>
+
+<span class="c1"># 📦 Backup created: main_go.20251118_141241...</span>
+<span class="c1"># 💬 Comment: &quot;Working version before refactoring&quot;</span>
+
+<span class="c1"># After changes (only saves if different)</span>
+pt<span class="w"> </span>main.go<span class="w"> </span>-c<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Refactored authentication module&quot;</span>
+
+<span class="c1"># 🔍 Content differs, proceeding with backup and write</span>
+<span class="c1"># ✅ Successfully written to: main.go</span>
+
+<span class="c1"># View version history with comments</span>
+pt<span class="w"> </span>-l<span class="w"> </span>main.go
+</pre></div>
+</div>
+</section>
+<section id="configuration-management">
+<h2>3. Configuration Management<a class="headerlink" href="#configuration-management" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Save production config</span>
+pt<span class="w"> </span>config.json<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Production config for v2.1.0 release&quot;</span>
+
+<span class="c1"># Later, update for testing</span>
+pt<span class="w"> </span>config.json<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Testing new cache settings&quot;</span>
+
+<span class="c1"># View all config versions with comments</span>
+pt<span class="w"> </span>-l<span class="w"> </span>config.json
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌────────────┬─────────────┬──────┬────────────────────────────┐
+│ File Name  │ Modified    │ Size │ Comment                    │
+├────────────┼─────────────┼──────┼────────────────────────────┤
+│ 1. config..│ 14:12:41    │ 2 KB │ Testing new cache settings │
+│ 2. config..│ 10:30:15    │ 2 KB │ Production config v2.1.0   │
+└────────────┴─────────────┴──────┴────────────────────────────┘
+
+# Restore production config
+pt -r config.json --last -m &quot;Reverting to production config&quot;
+</pre></div>
+</div>
+</section>
+<section id="check-mode-save-disk-space">
+<h2>4. Check Mode - Save Disk Space<a class="headerlink" href="#check-mode-save-disk-space" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Only write if content actually changed</span>
+pt<span class="w"> </span>data.json<span class="w"> </span>-c
+
+<span class="c1"># ℹ️  Content identical to current file, no changes needed</span>
+<span class="c1"># 📄 File: data.json</span>
+
+<span class="c1"># Or with comment if it does change</span>
+pt<span class="w"> </span>data.json<span class="w"> </span>-c<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Updated user preferences&quot;</span>
+
+<span class="c1"># 🔍 Content differs, proceeding with backup and write</span>
+<span class="c1"># 📦 Backup created with comment</span>
+</pre></div>
+</div>
+</section>
+<section id="safe-delete-with-context">
+<h2>5. Safe Delete with Context<a class="headerlink" href="#safe-delete-with-context" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Delete old implementation with explanation</span>
+pt<span class="w"> </span>-rm<span class="w"> </span>legacy_auth.py<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Replaced by new OAuth2 implementation&quot;</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>📦 Backup created: legacy_auth_py.20251118_141241...
+💬 Comment: &quot;Replaced by new OAuth2 implementation&quot;
+🗑️  File deleted: legacy_auth.py
+📄 Created empty placeholder: legacy_auth.py
+</pre></div>
+</div>
+</section>
+<section id="append-mode-with-comments">
+<h2>6. Append Mode with Comments<a class="headerlink" href="#append-mode-with-comments" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Append log entries with context</span>
+pt<span class="w"> </span>+<span class="w"> </span>errors.log<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Error logs from production incident&quot;</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>✅ Successfully appended to: errors.log
+📝 Content size: 87 characters
+💬 Comment: &quot;Error logs from production incident&quot;
+</pre></div>
+</div>
+</section>
+<section id="interactive-restore">
+<h2>7. Interactive Restore<a class="headerlink" href="#interactive-restore" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pt<span class="w"> </span>-r<span class="w"> </span>main.go
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>📂 Backup files for &#39;main.go&#39;
+Total: 5 backup(s) (stored in .pt/)
+
+┌──────────────────────────┬─────────────────────┬──────────┬────────────────────────────────┐
+│ File Name                │ Modified            │     Size │ Comment                        │
+├──────────────────────────┼─────────────────────┼──────────┼────────────────────────────────┤
+│ 1. main_go.20251118...   │ 2025-11-18 14:12:41 │  50.5 KB │ Add comment system             │
+│ 2. main_go.20251118...   │ 2025-11-18 14:11:24 │  57.0 KB │ Working version before refactor│
+│ 3. main_go.20251118...   │ 2025-11-18 13:43:01 │  52.6 KB │ Fixed authentication bug       │
+│ 4. main_go.20251113...   │ 2025-11-13 11:47:02 │  49.2 KB │ -                              │
+│ 5. main_go.20251113...   │ 2025-11-13 11:39:49 │  49.2 KB │ -                              │
+└──────────────────────────┴─────────────────────┴──────────┴────────────────────────────────┘
+
+Enter backup number to restore (1-5) or 0 to cancel: 2
+✅ Successfully restored: main.go
+📦 From backup: main_go.20251118_141124...
+💬 Restore comment: &quot;Restored from backup&quot;
+</pre></div>
+</div>
+</section>
+<section id="configuration-file-setup">
+<h2>8. Configuration File Setup<a class="headerlink" href="#configuration-file-setup" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create configuration file</span>
+pt<span class="w"> </span>config<span class="w"> </span>init
+
+<span class="c1"># Edit pt.yml</span>
+cat<span class="w"> </span>&gt;<span class="w"> </span>pt.yml<span class="w"> </span><span class="s">&lt;&lt; EOF</span>
+<span class="s"># PT Configuration File</span>
+<span class="s">max_clipboard_size: 104857600    # 100MB</span>
+<span class="s">max_backup_count: 100            # Keep 100 backups</span>
+<span class="s">max_filename_length: 200         # Max filename length</span>
+<span class="s">backup_dir_name: .pt             # Git-like directory</span>
+<span class="s">max_search_depth: 10             # Max recursive search depth</span>
+<span class="s">EOF</span>
+
+<span class="c1"># View current config</span>
+pt<span class="w"> </span>config<span class="w"> </span>show
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Current</span> <span class="n">PT</span> <span class="n">Configuration</span><span class="p">:</span>
+
+<span class="n">Max</span> <span class="n">Clipboard</span> <span class="n">Size</span><span class="p">:</span> <span class="mi">104857600</span> <span class="nb">bytes</span> <span class="p">(</span><span class="mf">100.0</span> <span class="n">MB</span><span class="p">)</span>
+<span class="n">Max</span> <span class="n">Backup</span> <span class="n">Count</span><span class="p">:</span> <span class="mi">100</span>
+<span class="n">Max</span> <span class="n">Filename</span> <span class="n">Length</span><span class="p">:</span> <span class="mi">200</span> <span class="n">characters</span>
+<span class="n">Backup</span> <span class="n">Directory</span><span class="p">:</span> <span class="o">.</span><span class="n">pt</span><span class="o">/</span> <span class="p">(</span><span class="n">Git</span><span class="o">-</span><span class="n">like</span> <span class="n">structure</span><span class="p">)</span>
+<span class="n">Max</span> <span class="n">Search</span> <span class="n">Depth</span><span class="p">:</span> <span class="mi">10</span> <span class="n">levels</span>
+
+<span class="n">Config</span> <span class="n">loaded</span> <span class="n">from</span><span class="p">:</span> <span class="o">./</span><span class="n">pt</span><span class="o">.</span><span class="n">yml</span>
+</pre></div>
+</div>
+</section>
+<section id="recursive-file-search">
+<h2>9. Recursive File Search<a class="headerlink" href="#recursive-file-search" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># File not in current directory? PT finds it automatically!</span>
+pt<span class="w"> </span>config.json
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>🔍 Searching for &#39;config.json&#39; in subdirectories...
+✓ Found at: /path/to/project/src/config.json
+</pre></div>
+</div>
+<p>Multiple files found:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>🔍 Found 3 matching file(s)
+
+┌──────┬────────────────────────────┬─────────────────────┬──────────────┐
+│   #  │ Path                       │ Modified            │ Size         │
+├──────┼────────────────────────────┼─────────────────────┼──────────────┤
+│    1 │ ./config.json              │ 2025-11-15 10:30:00 │ 2.1 KB      │
+│    2 │ ./src/config.json          │ 2025-11-14 15:20:00 │ 1.8 KB       │
+│    3 │ ./examples/config.json     │ 2025-11-13 09:15:00 │ 1.2 KB       │
+└──────┴────────────────────────────┴─────────────────────┴──────────────┘
+
+Enter file number to use (1-3) or 0 to cancel: 1
+✓ Using: ./config.json
+</pre></div>
+</div>
+</section>
+<section id="visual-diff-comparison">
+<h2>10. Visual Diff Comparison<a class="headerlink" href="#visual-diff-comparison" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Interactive diff - choose which backup to compare</span>
+pt<span class="w"> </span>-d<span class="w"> </span>main.go
+
+<span class="c1"># Quick diff with last backup</span>
+pt<span class="w"> </span>-d<span class="w"> </span>main.go<span class="w"> </span>--last
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>📊 Comparing with last backup: main_go.20251115_151804...
+Current file: /path/to/main.go
+Backup file:  /path/to/.pt/main_go/main_go.20251115_151804...
+
+[Beautiful colored diff output from delta]
+</pre></div>
+</div>
+</section>
+<section id="directory-tree-visualization">
+<h2>11. Directory Tree Visualization<a class="headerlink" href="#directory-tree-visualization" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Show current directory tree</span>
+pt<span class="w"> </span>-t
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>myproject/
+├── src/
+│   ├── main.go (15.2 KB) [modified]
+│   └── utils.go (3.4 KB)
+├── .pt/
+│   ├── main_go/
+│   │   └── main_go.20251115_151804...
+│   └── utils_go/
+│       └── utils_go.20251115_143022...
+├── README.md (2.1 KB)
+└── go.mod (456 B)
+
+2 directories, 5 files, 29.2 KB total
+</pre></div>
+</div>
+<p>Exclude specific folders:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">t</span> <span class="o">-</span><span class="n">e</span> <span class="n">node_modules</span><span class="p">,</span><span class="o">.</span><span class="n">git</span><span class="p">,</span><span class="n">dist</span><span class="p">,</span><span class="n">build</span>
+</pre></div>
+</div>
+</section>
+<section id="complete-workflow-example">
+<h2>12. Complete Workflow Example<a class="headerlink" href="#complete-workflow-example" title="Link to this heading"></a></h2>
+<p>Daily development session:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start work, check status</span>
+pt<span class="w"> </span>check
+
+<span class="c1"># Make changes to files</span>
+<span class="c1"># ... edit main.go ...</span>
+
+<span class="c1"># Backup specific file with comment</span>
+pt<span class="w"> </span>main.go<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Added user authentication&quot;</span>
+
+<span class="c1"># Commit all changes at end of day</span>
+pt<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Implemented auth module and updated tests&quot;</span>
+
+<span class="c1"># Review what changed</span>
+pt<span class="w"> </span>-l<span class="w"> </span>main.go
+pt<span class="w"> </span>-d<span class="w"> </span>main.go<span class="w"> </span>--last
+
+<span class="c1"># Next day: continue working...</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="workflow.html" class="btn btn-neutral float-left" title="Git-Like Workflow" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="troubleshooting.html" class="btn btn-neutral float-right" title="Troubleshooting" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Hadi Cahyadi.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

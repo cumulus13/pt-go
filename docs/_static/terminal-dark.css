@@ -1,0 +1,363 @@
+/* Terminal Dark Theme for PT Documentation */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --terminal-bg: #0C0C0C;
+    --terminal-fg: #00FF00;
+    --terminal-comment: #608B4E;
+    --terminal-keyword: #569CD6;
+    --terminal-string: #CE9178;
+    --terminal-number: #B5CEA8;
+    --terminal-function: #DCDCAA;
+    --terminal-variable: #9CDCFE;
+    --terminal-error: #F44747;
+    --terminal-warning: #FFCC00;
+    --terminal-info: #00B7FF;
+    --terminal-border: #333333;
+    --terminal-selection: #264F78;
+}
+
+/* Dark theme overrides */
+html[data-theme='dark'], body {
+    background-color: var(--terminal-bg) !important;
+    color: var(--terminal-fg) !important;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    line-height: 1.5;
+}
+
+/* Main content area */
+.wy-nav-content {
+    background-color: var(--terminal-bg) !important;
+    color: var(--terminal-fg) !important;
+    max-width: 100% !important;
+}
+
+/* Sidebar */
+.wy-nav-side, .wy-side-nav-search {
+    background-color: #1A1A1A !important;
+    border-right: 1px solid var(--terminal-border) !important;
+}
+
+.wy-nav-top {
+    background-color: #1A1A1A !important;
+    border-bottom: 1px solid var(--terminal-border) !important;
+}
+
+/* Add padding specifically to menu items */
+.wy-menu-vertical {
+    padding-left: 12px !important;
+}
+
+.wy-menu-vertical a {
+    color: #CCCCCC !important;
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+.wy-menu-vertical a:hover {
+    background-color: #2A2A2A !important;
+    color: var(--terminal-fg) !important;
+}
+
+.wy-menu-vertical .current > a {
+    background-color: #252525 !important;
+    color: var(--terminal-fg) !important;
+    border: none !important;
+}
+
+/* Code blocks */
+.highlight {
+    background-color: #1A1A1A !important;
+    border: 1px solid var(--terminal-border) !important;
+    border-radius: 4px !important;
+}
+
+.highlight pre {
+    background-color: #1A1A1A !important;
+    color: var(--terminal-fg) !important;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    font-size: 14px !important;
+}
+
+/* Inline code */
+code.literal {
+    background-color: #1A1A1A !important;
+    color: var(--terminal-fg) !important;
+    border: 1px solid var(--terminal-border) !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 13px !important;
+}
+
+/* Code syntax highlighting - Monokai-like */
+.highlight .c { color: var(--terminal-comment) !important; } /* Comment */
+.highlight .k { color: var(--terminal-keyword) !important; } /* Keyword */
+.highlight .s { color: var(--terminal-string) !important; } /* String */
+.highlight .mi { color: var(--terminal-number) !important; } /* Number */
+.highlight .nf { color: var(--terminal-function) !important; } /* Function */
+.highlight .nv { color: var(--terminal-variable) !important; } /* Variable */
+.highlight .err { color: var(--terminal-error) !important; } /* Error */
+
+/* Tables */
+.wy-table-responsive table {
+    background-color: #1A1A1A !important;
+    border: 1px solid var(--terminal-border) !important;
+}
+
+.wy-table-responsive table td, .wy-table-responsive table th {
+    background-color: #1A1A1A !important;
+    color: var(--terminal-fg) !important;
+    border: 1px solid var(--terminal-border) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Admonitions */
+.admonition {
+    background-color: #1A1A1A !important;
+    border: 1px solid var(--terminal-border) !important;
+    border-radius: 4px !important;
+}
+
+.admonition.note {
+    border-left: 4px solid var(--terminal-info) !important;
+}
+
+.admonition.warning {
+    border-left: 4px solid var(--terminal-warning) !important;
+}
+
+.admonition.danger {
+    border-left: 4px solid var(--terminal-error) !important;
+}
+
+.admonition-title {
+    background-color: #252525 !important;
+    color: var(--terminal-fg) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Lists */
+ul, ol {
+    color: var(--terminal-fg) !important;
+}
+
+li {
+    margin-bottom: 8px !important;
+}
+
+/* Links */
+a {
+    color: #569CD6 !important;
+    text-decoration: none !important;
+}
+
+a:hover {
+    color: #00B7FF !important;
+    text-decoration: underline !important;
+}
+
+a:visited {
+    color: #9CDCFE !important;
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--terminal-fg) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 500 !important;
+    border-bottom: 1px solid var(--terminal-border) !important;
+    margin-top: 24px !important;
+    margin-bottom: 16px !important;
+}
+
+h1 { font-size: 2.2em !important; }
+h2 { font-size: 1.8em !important; }
+h3 { font-size: 1.5em !important; }
+
+/* Logo */
+html div.sphinxsidebar p.logo {
+    text-align: center !important;
+}
+
+/* Search box */
+.wy-side-nav-search input[type="text"] {
+    background-color: #1A1A1A !important;
+    color: var(--terminal-fg) !important;
+    border: 1px solid var(--terminal-border) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    margin-left: 5px !important;
+    width: calc(100% - 10px) !important;
+}
+
+/* Buttons */
+.btn {
+    background-color: #1A1A1A !important;
+    color: var(--terminal-fg) !important;
+    border: 1px solid var(--terminal-border) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+.btn:hover {
+    background-color: #2A2A2A !important;
+}
+
+/* Version info */
+.wy-nav-content .version {
+    color: var(--terminal-comment) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Footer */
+footer {
+    color: var(--terminal-comment) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    border-top: 1px solid var(--terminal-border) !important;
+}
+
+/* Selection */
+::selection {
+    background-color: var(--terminal-selection) !important;
+    color: var(--terminal-fg) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1A1A1A;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444444;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555555;
+}
+
+/* Prevent logo cycling/duplication in sidebar */
+.wy-side-nav-search > a {
+    display: block !important;
+    text-align: center !important;
+    margin-bottom: 1em !important;
+    padding: 0 !important;
+    background: none !important;
+}
+
+/* Ensure logo appears only once with correct sizing */
+.wy-side-nav-search > a > img.logo {
+    display: inline-block !important;
+    width: 80px !important;  /* Adjust to your preference */
+    height: 80px !important;
+    margin: 0 auto !important;
+    padding: 10px 0 !important;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    float: none !important;
+}
+
+/* Hide any duplicate text/icon elements */
+.wy-side-nav-search .icon-home,
+.wy-side-nav-search .project {
+    display: none !important;
+}
+
+.wy-nav-side {
+    padding-left: 15px !important;
+}
+
+/* Remove any background patterns */
+.wy-nav-side, .wy-side-nav-search {
+    background-image: none !important;
+    background-repeat: no-repeat !important;
+}
+
+/* =========================================
+   FIX LOGO CYCLING/CIRCULAR ISSUE
+   Make logo square and prevent duplication
+   ========================================= */
+
+/* Force logo container to show only the logo without circular styling */
+.wy-side-nav-search > a {
+    display: block !important;
+    text-align: center !important;
+    padding: 0 !important;
+    margin-bottom: 1em !important;
+    background: none !important;
+    border: none !important;
+}
+
+/* CRITICAL: Remove circular styling and make logo square */
+.wy-side-nav-search .icon img.logo,
+.wy-side-nav-search a img.logo,
+.wy-side-nav-search > a > img {
+    display: inline-block !important;
+    width: 80px !important;        /* Set your desired size */
+    height: 80px !important;       /* Make equal to width for square */
+    margin: 0 auto !important;
+    padding: 10px 0 !important;
+    background: none !important;
+    border: none !important;
+    border-radius: 0 !important;   /* THIS IS KEY - removes circular effect */
+    box-shadow: none !important;
+    float: none !important;
+}
+
+/* Hide all other logo/text elements */
+.wy-side-nav-search .icon-home,
+.wy-side-nav-search .project,
+.wy-side-nav-search .brand {
+    display: none !important;
+}
+
+/* Remove any background patterns */
+.wy-nav-side, .wy-side-nav-search {
+    background-image: none !important;
+}
+
+/* Prevent any pseudo-elements from showing */
+.wy-side-nav-search > a::before,
+.wy-side-nav-search > a::after {
+    display: none !important;
+    content: none !important;
+}
+
+/* =========================================
+   FORCE SEARCH BOX TO SHOW
+   ========================================= */
+
+.wy-side-nav-search {
+    display: block !important;
+    padding: 1em 1em !important;  /* Added left/right padding */
+}
+
+/* Ensure search form appears */
+.wy-side-nav-search .wy-form {
+    display: block !important;
+    margin-top: 15px !important;
+}
+
+/* Style the search input */
+.wy-side-nav-search input[type="text"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 85% !important;
+    padding: 8px 12px !important;
+    background: #1A1A1A !important;
+    border: 1px solid #444 !important;
+    border-radius: 4px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    color: #00FF00 !important;
+    box-shadow: none !important;
+}
+
+/* Remove any conflicting styles */
+.wy-side-nav-search .wy-form input {
+    display: block !important;
+}

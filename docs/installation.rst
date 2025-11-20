@@ -1,36 +1,96 @@
-.. _installation:
-
 Installation
 ============
 
 Prerequisites
 -------------
 
-* **Go Compiler**: If building from source, ensure you have Go installed (e.g., Go 1.19 or later).
-* **Delta (Optional)**: For ``pt -d`` (diff) functionality, install `delta <https://github.com/dandavison/delta>`_.
+- Go 1.16 or higher
+- Git (for installation)
+- **Delta** (optional, for diff functionality) - `Install from here <https://github.com/dandavison/delta>`_
 
-Building from Source
---------------------
+Install Delta
+-------------
 
-1. Clone or download the source code containing ``pt/main.go``.
-2. Navigate to the directory containing ``pt/main.go``.
-3. Run the following command to build the executable:
+macOS::
 
-   * On Linux/macOS:
+   brew install git-delta
 
-     .. code-block:: bash
+Ubuntu/Debian::
 
-        go build -o pt main.go
+   sudo apt install git-delta
 
-   * On Windows:
+Arch Linux::
 
-     .. code-block:: batch
+   sudo pacman -S git-delta
 
-        go build -o pt.exe main.go
+Fedora/RHEL::
 
-4. The resulting ``pt`` (Linux/macOS) or ``pt.exe`` (Windows) executable can be run directly or placed in your system's PATH.
+   sudo dnf install git-delta
 
-Using a Pre-built Binary
-------------------------
+Windows (with Chocolatey)::
 
-If a pre-built binary is available, download it for your operating system and place it in your PATH.
+   choco install delta
+
+Windows (with Scoop)::
+
+   scoop install delta
+
+Install PT from Source
+----------------------
+
+Using ``go install``::
+
+   go install github.com/cumulus13/pt-go/pt@latest
+
+Clone and build manually::
+
+   git clone https://github.com/cumulus13/pt-go.git
+   cd pt-go
+   go build -o pt pt/main.go
+   sudo mv pt /usr/local/bin/  # Linux/macOS
+
+Quick Install (Linux/macOS)
+---------------------------
+
+One-liner installation::
+
+   curl -sSL https://raw.githubusercontent.com/cumulus13/pt-go/pt/main/install.sh | bash
+
+Verify Installation
+-------------------
+
+Check version::
+
+   pt --version
+
+Output::
+
+   PT version 1.0.32
+   Production-hardened clipboard to file tool
+   Features: Git-like .pt structure, recursive search, backup management, delta diff
+
+Troubleshooting
+---------------
+
+**Clipboard Empty Error**
+
+Solution: Copy some text to clipboard before running PT::
+
+   echo "Hello World" | pbcopy  # macOS
+   echo "Hello World" | xclip -selection clipboard  # Linux
+
+**Delta Not Found**
+
+Error::
+
+   ❌ Error: delta is not installed. Install it from: https://github.com/dandavison/delta
+
+Solution: Install delta using one of the commands above.
+
+**No Write Permission**
+
+Error::
+
+   ❌ Error: no write permission in directory
+
+Solution: Check directory permissions or use a different location.

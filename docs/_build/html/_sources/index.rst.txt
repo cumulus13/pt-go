@@ -1,58 +1,76 @@
-.. PT - Clipboard to File Tool with Smart Version Management documentation master file, created by
-   sphinx-quickstart on Wed Nov 19 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+PT Documentation
+================
 
-Welcome to PT - Clipboard to File Tool with Smart Version Management's documentation!
-======================================================================================
-
-
-.. image:: _static/pt.svg  
-   :alt: Pt icon
+.. image:: _static/pt.svg
+   :alt: PT Logo
+   :width: 100
    :align: center
-   :width: 320
 
-.. _introduction:
+**PT** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, backup comments, recursive file search, delta diff comparison, directory tree visualization, and safe file deletion. It's not just a clipboard manager – it's a complete version control system for your files!
 
-Introduction
-============
-
-|project_name| is a production-hardened command-line tool designed to seamlessly transfer content from your clipboard into files. It functions similarly to Git, using a hidden ``.pt`` directory to store backups of file changes, enabling version control-like operations for clipboard content.
-
-Key Features
-------------
-
-* **Terminal-Style Workflow**: Uses a ``.pt`` directory structure for backups, mirroring Git's approach.
-* **Clipboard Integration**: Reads content directly from the system clipboard.
-* **Backup Management**: Automatically creates timestamped backups before overwriting files.
-* **Status Checking**: Compare current files against their last backed-up versions (like ``git status``).
-* **Commit Changes**: Back up all modified and new files in the current directory tree (like ``git commit``).
-* **Recursive Search**: Finds files by name in subdirectories, respecting ``.gitignore`` and ``.ptignore``.
-* **Diff Support**: Compare files with their backups using `delta <https://github.com/dandavison/delta>`_.
-* **Safe Operations**: Includes path traversal checks, system directory protection, and size limits.
-* **Cross-Platform**: Works on Linux, macOS, and Windows.
-
-License
--------
-
-This project is licensed under the MIT License - see the :ref:`license` page for details.
-
-
-Indices and tables
-==================
-
+.. -- toctree hidden is used to include all docs in sidebar
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 3
+   :caption: Contents
+   :hidden:
 
-   introduction
+   quickstart
    installation
    usage
-   commands
    configuration
-   api
+   features
+   workflow
+   examples
+   troubleshooting
    contributing
    license
+
+Overview
+--------
+
+Core Features
+~~~~~~~~~~~~~
+
+- 📝 **Quick Save** - Write clipboard content to file with one command
+- 📦 **Auto Backup** - Automatic timestamped backups stored in `.pt/` directory
+- 💬 **Backup Comments** - Add descriptive comments to track why changes were made
+- 🔄 **Restore** - Interactive or quick restore from backups with comments
+- 📊 **Beautiful Listings** - Formatted table view of all backups with sizes and comments
+- 🔍 **Recursive File Search** - Automatically finds files in subdirectories up to 10 levels deep
+- 📊 **Delta Diff Integration** - Beautiful side-by-side diff comparison with backups
+- 🌳 **Directory Tree View** - Visual file structure with sizes (like `tree` command)
+- 🗑️ **Safe Delete** - Backup before deletion, create empty placeholder
+- ⚙️ **Configurable** - Customize behavior via `pt.yml` config file
+
+Git-Like Workflow (NEW!)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+PT introduces a powerful git-like workflow for version management:
+
+- ``pt check`` - Show status of all files (like ``git status``)
+- ``pt commit -m "message"`` - Backup all changed files (like ``git commit``)
+- ``pt -l <file>`` - View commit history
+- ``pt -d <file> --last`` - See what changed (diff)
+- ``pt -r <file> --last`` - Rollback if needed
+
+Requirements
+------------
+
+- Go 1.16 or higher
+- Git (for installation)
+- **Delta** (optional, for diff functionality)
+
+Quick Start
+-----------
+
+Copy text to clipboard, then::
+
+   pt notes.txt -m "Initial version"
+
+For more details, see the :doc:`quickstart` guide.
+
+Indices and Tables
+==================
 
 * :ref:`genindex`
 * :ref:`modindex`

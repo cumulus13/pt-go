@@ -1,0 +1,622 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Features &mdash; PT Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b20cc3f5" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=a5c4661c" />
+      <link rel="stylesheet" type="text/css" href="_static/terminal-dark.css?v=8a49e07c" />
+
+  
+    <link rel="shortcut icon" href="_static/pt.svg"/>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=6d61d84b"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="_static/copybutton.js?v=1300405e"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Git-Like Workflow" href="workflow.html" />
+    <link rel="prev" title="Configuration" href="configuration.html" />
+    <link rel="stylesheet" href="_static/terminal-dark.css" type="text/css" />
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #0C0C0C" >
+    <a href="index.html">
+        <img src="_static/pt.svg" alt="PT Logo" style="width: 80px; height: auto; border-radius: 0;">
+    </a>
+    <h3 style="color: #00FF00; font-family: 'JetBrains Mono', monospace;">PT Documentation</h3>
+    <div class="version" style="color: #608B4E; font-family: 'JetBrains Mono', monospace;">
+        1.0.32
+    </div>
+    
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+        </div>
+    <div style="padding-left: 12px;">
+        <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#install-delta">Install Delta</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#install-pt-from-source">Install PT from Source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#quick-install-linux-macos">Quick Install (Linux/macOS)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#verify-installation">Verify Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#basic-commands">Basic Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#git-like-workflow-commands">Git-Like Workflow Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#advanced-commands">Advanced Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#command-reference-table">Command Reference Table</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-file-locations">Configuration File Locations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#creating-configuration-file">Creating Configuration File</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-options">Configuration Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#viewing-configuration">Viewing Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#configuration-validation">Configuration Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#backup-directory-structure-pt">Backup Directory Structure (.pt/)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#backup-naming-format">Backup Naming Format</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Features</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#core-features">Core Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#quick-save">📝 Quick Save</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#auto-backup">📦 Auto Backup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#backup-comments">💬 Backup Comments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#append-mode">➕ Append Mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#restore">🔄 Restore</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#beautiful-listings">📊 Beautiful Listings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#production-hardened">🔒 Production Hardened</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#colorful-output">🎨 Colorful Output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#audit-logging">📈 Audit Logging</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#check-mode">✅ Check Mode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#advanced-features">Advanced Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#recursive-file-search">🔍 Recursive File Search</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#delta-diff-integration">📊 Delta Diff Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#directory-tree-view">🌳 Directory Tree View</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gitignore-support">📁 GitIgnore Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#safe-delete">🗑️ Safe Delete</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#exception-filtering">⚙️ Exception Filtering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#multi-file-selection">🎯 Multi-File Selection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#smart-path-resolution">🚀 Smart Path Resolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configurable">⚙️ Configurable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#version-management-capabilities">Version Management Capabilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#complete-version-history">📜 Complete Version History</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#comment-system">💬 Comment System</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#contextual-notes">📝 Contextual Notes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#easy-rollback">🔙 Easy Rollback</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#version-comparison">📊 Version Comparison</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#space-efficient">💾 Space Efficient</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#timestamped-versions">🏷️ Timestamped Versions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#zero-data-loss">Zero Data Loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#performance">Performance</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="workflow.html">Git-Like Workflow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-overview">Workflow Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#step-by-step-workflow">Step-by-Step Workflow</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#check-file-status">1. Check File Status</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#commit-all-changes">2. Commit All Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#view-commit-history">3. View Commit History</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#compare-changes">4. Compare Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#rollback-if-needed">5. Rollback if Needed</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-use-cases">Workflow Use Cases</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#daily-development">Daily Development</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#configuration-management">Configuration Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="workflow.html#emergency-rollback">Emergency Rollback</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#workflow-advantages">Workflow Advantages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow.html#comparison-with-git">Comparison with Git</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#quick-note-taking">1. Quick Note Taking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#version-control-for-code">2. Version Control for Code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#configuration-management">3. Configuration Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#check-mode-save-disk-space">4. Check Mode - Save Disk Space</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#safe-delete-with-context">5. Safe Delete with Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#append-mode-with-comments">6. Append Mode with Comments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#interactive-restore">7. Interactive Restore</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#configuration-file-setup">8. Configuration File Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#recursive-file-search">9. Recursive File Search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#visual-diff-comparison">10. Visual Diff Comparison</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#directory-tree-visualization">11. Directory Tree Visualization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#complete-workflow-example">12. Complete Workflow Example</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#clipboard-empty-error">Clipboard Empty Error</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#no-write-permission">No Write Permission</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#file-too-large">File Too Large</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#file-not-found">File Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#delta-not-found">Delta Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#config-file-issues">Config File Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#content-unchanged-check-mode">Content Unchanged (Check Mode)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#recursive-search-issues">Recursive Search Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#multiple-file-selection">Multiple File Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#linux-clipboard-issues">Linux Clipboard Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#pt-directory-not-found">.pt Directory Not Found</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#backup-directory-confusion">Backup Directory Confusion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#windows-specific-issues">Windows-Specific Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#getting-help">Getting Help</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#development-setup">Development Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#making-changes">Making Changes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#code-style">Code Style</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#testing">Testing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#manual-testing">Manual Testing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#feature-ideas">Feature Ideas</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#completed-features">Completed Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="contributing.html#open-ideas">Open Ideas</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#reporting-issues">Reporting Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#pull-request-process">Pull Request Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#license">License</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="license.html#author">Author</a></li>
+<li class="toctree-l2"><a class="reference internal" href="license.html#support">Support</a></li>
+</ul>
+</li>
+</ul>
+
+    </div>
+
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #0C0C0C" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PT</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Features</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/features.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="features">
+<h1>Features<a class="headerlink" href="#features" title="Link to this heading"></a></h1>
+<section id="core-features">
+<h2>Core Features<a class="headerlink" href="#core-features" title="Link to this heading"></a></h2>
+<section id="quick-save">
+<h3>📝 Quick Save<a class="headerlink" href="#quick-save" title="Link to this heading"></a></h3>
+<p>Write clipboard content to file with one command:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span>
+</pre></div>
+</div>
+<p>Automatic backup is created if file exists.</p>
+</section>
+<section id="auto-backup">
+<h3>📦 Auto Backup<a class="headerlink" href="#auto-backup" title="Link to this heading"></a></h3>
+<p>Automatic timestamped backups stored in <cite>.pt/</cite> directory (Git-like structure). Each backup includes:</p>
+<ul class="simple">
+<li><p>Microsecond-precision timestamp</p></li>
+<li><p>Process ID</p></li>
+<li><p>Random ID for zero-collision guarantee</p></li>
+<li><p>Optional comment</p></li>
+</ul>
+<p>Backup format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">filename_ext</span><span class="o">.</span><span class="n">YYYYMMDD_HHMMSS_MICROSECONDS</span><span class="o">.</span><span class="n">PID_RANDOMID</span>
+</pre></div>
+</div>
+</section>
+<section id="backup-comments">
+<h3>💬 Backup Comments<a class="headerlink" href="#backup-comments" title="Link to this heading"></a></h3>
+<p>Add descriptive comments to track why changes were made:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">main</span><span class="o">.</span><span class="n">go</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Fixed authentication bug&quot;</span>
+</pre></div>
+</div>
+<p>Comments are stored in <cite>.meta.json</cite> files alongside backups.</p>
+</section>
+<section id="append-mode">
+<h3>➕ Append Mode<a class="headerlink" href="#append-mode" title="Link to this heading"></a></h3>
+<p>Add content without creating backups:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">+</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span>
+</pre></div>
+</div>
+<p>Useful for logs or accumulating content.</p>
+</section>
+<section id="restore">
+<h3>🔄 Restore<a class="headerlink" href="#restore" title="Link to this heading"></a></h3>
+<p>Interactive or quick restore from backups:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">r</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span>          <span class="c1"># Interactive selection</span>
+<span class="n">pt</span> <span class="o">-</span><span class="n">r</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span> <span class="o">--</span><span class="n">last</span>   <span class="c1"># Restore most recent</span>
+</pre></div>
+</div>
+<p>Restore with comment:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">r</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span> <span class="o">--</span><span class="n">last</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Emergency rollback&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="beautiful-listings">
+<h3>📊 Beautiful Listings<a class="headerlink" href="#beautiful-listings" title="Link to this heading"></a></h3>
+<p>Formatted table view of all backups with sizes, timestamps, and comments:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">l</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌──────────────────────────┬─────────────────────┬──────────┬────────────────────────────────┐
+│ File Name                │ Modified            │     Size │ Comment                        │
+├──────────────────────────┼─────────────────────┼──────────┼────────────────────────────────┤
+│ 1. main_go.20251118...   │ 2025-11-18 14:12:41 │  50.5 KB │ Fixed auth bug                 │
+│ 2. main_go.20251118...   │ 2025-11-18 14:11:24 │  57.0 KB │ Working version before refactor│
+└──────────────────────────┴─────────────────────┴──────────┴────────────────────────────────┘
+</pre></div>
+</div>
+</section>
+<section id="production-hardened">
+<h3>🔒 Production Hardened<a class="headerlink" href="#production-hardened" title="Link to this heading"></a></h3>
+<p>Path validation:</p>
+<ul class="simple">
+<li><p>Prevents path traversal attacks (<code class="docutils literal notranslate"><span class="pre">../../../etc/passwd</span></code>)</p></li>
+<li><p>Blocks writes to system directories (<code class="docutils literal notranslate"><span class="pre">/etc</span></code>, <code class="docutils literal notranslate"><span class="pre">/sys</span></code>, <code class="docutils literal notranslate"><span class="pre">C:\Windows</span></code>)</p></li>
+<li><p>Validates filename length limits</p></li>
+<li><p>Sanitizes all file paths</p></li>
+</ul>
+<p>Size limits:</p>
+<ul class="simple">
+<li><p>Maximum 100MB clipboard content (configurable)</p></li>
+<li><p>Prevents disk exhaustion attacks</p></li>
+<li><p>Validates disk space before writing</p></li>
+</ul>
+<p>Safe operations:</p>
+<ul class="simple">
+<li><p>Atomic-like file operations</p></li>
+<li><p>Verification of write completion</p></li>
+<li><p>Automatic rollback on errors</p></li>
+<li><p>Backup before destructive operations</p></li>
+</ul>
+</section>
+<section id="colorful-output">
+<h3>🎨 Colorful Output<a class="headerlink" href="#colorful-output" title="Link to this heading"></a></h3>
+<p>ANSI colors for better readability:</p>
+<ul class="simple">
+<li><p><strong>Green</strong>  : Success, unchanged files</p></li>
+<li><p><strong>Yellow</strong>  : Warnings, modified files</p></li>
+<li><p><strong>Cyan</strong>  : Info, new files</p></li>
+<li><p><strong>Red</strong>  : Errors, deleted files</p></li>
+<li><p><strong>Blue</strong>  : Search operations</p></li>
+</ul>
+</section>
+<section id="audit-logging">
+<h3>📈 Audit Logging<a class="headerlink" href="#audit-logging" title="Link to this heading"></a></h3>
+<p>All operations logged to stderr for tracking:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Test&quot;</span>
+</pre></div>
+</div>
+<p>Log output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="mi">2025</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">18</span> <span class="mi">14</span><span class="p">:</span><span class="mi">12</span><span class="p">:</span><span class="mi">41</span> <span class="n">Successfully</span> <span class="n">written</span> <span class="n">to</span><span class="p">:</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span> <span class="p">(</span><span class="mi">1234</span> <span class="nb">bytes</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--debug</span></code> for verbose logging:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">--</span><span class="n">debug</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span>
+</pre></div>
+</div>
+</section>
+<section id="check-mode">
+<h3>✅ Check Mode<a class="headerlink" href="#check-mode" title="Link to this heading"></a></h3>
+<p>Skip writes if content unchanged (saves disk space):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">data</span><span class="o">.</span><span class="n">json</span> <span class="o">-</span><span class="n">c</span>
+</pre></div>
+</div>
+<p>Output if identical:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ℹ️  Content identical to current file, no changes needed
+📄 File: data.json
+</pre></div>
+</div>
+<p>Output if different:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>🔍 Content differs, proceeding with backup and write
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-features">
+<h2>Advanced Features<a class="headerlink" href="#advanced-features" title="Link to this heading"></a></h2>
+<section id="recursive-file-search">
+<h3>🔍 Recursive File Search<a class="headerlink" href="#recursive-file-search" title="Link to this heading"></a></h3>
+<p>Automatically finds files in subdirectories up to 10 levels deep:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">config</span><span class="o">.</span><span class="n">json</span>              <span class="c1"># Finds it anywhere in project</span>
+</pre></div>
+</div>
+<p>If multiple files found, interactive selection:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>🔍 Found 3 matching file(s)
+
+┌──────┬────────────────────────────┬─────────────────────┬──────────────┐
+│   #  │ Path                       │ Modified            │ Size         │
+├──────┼────────────────────────────┼─────────────────────┼──────────────┤
+│    1 │ ./README.md                │ 2025-11-15 10:30:00 │ 15.2 KB      │
+│    2 │ ./docs/README.md           │ 2025-11-14 15:20:00 │ 8.5 KB       │
+└──────┴────────────────────────────┴─────────────────────┴──────────────┘
+
+Enter file number to use (1-3) or 0 to cancel: 1
+</pre></div>
+</div>
+<p>Search respects:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">.gitignore</span></code> patterns</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.ptignore</span></code> patterns (PT-specific, higher priority)</p></li>
+<li><p>Excludes <code class="docutils literal notranslate"><span class="pre">.pt/</span></code> directory automatically</p></li>
+</ul>
+</section>
+<section id="delta-diff-integration">
+<h3>📊 Delta Diff Integration<a class="headerlink" href="#delta-diff-integration" title="Link to this heading"></a></h3>
+<p>Beautiful side-by-side diff comparison with backups:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">d</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span>            <span class="c1"># Interactive: choose backup</span>
+<span class="n">pt</span> <span class="o">-</span><span class="n">d</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span> <span class="o">--</span><span class="n">last</span>     <span class="c1"># Quick: compare with last</span>
+</pre></div>
+</div>
+<p>Requires <a class="reference external" href="https://github.com/dandavison/delta">Delta</a> to be installed.</p>
+<p>Diff clipboard with file (no backup):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">d</span> <span class="n">myfile</span><span class="o">.</span><span class="n">txt</span> <span class="o">-</span><span class="n">z</span>
+</pre></div>
+</div>
+</section>
+<section id="directory-tree-view">
+<h3>🌳 Directory Tree View<a class="headerlink" href="#directory-tree-view" title="Link to this heading"></a></h3>
+<p>Visual file structure with sizes (like <code class="docutils literal notranslate"><span class="pre">tree</span></code> command):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">t</span>                       <span class="c1"># Current directory</span>
+<span class="n">pt</span> <span class="o">-</span><span class="n">t</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="nb">dir</span>          <span class="c1"># Specific directory</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>myproject/
+├── src/
+│   ├── main.go (15.2 KB)
+│   └── utils.go (3.4 KB)
+├── .pt/
+│   └── ... (backup files)
+├── README.md (2.1 KB)
+└── go.mod (456 B)
+
+2 directories, 5 files, 29.2 KB total
+</pre></div>
+</div>
+<p>Tree with exceptions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">t</span> <span class="o">-</span><span class="n">e</span> <span class="n">node_modules</span><span class="p">,</span><span class="o">.</span><span class="n">git</span><span class="p">,</span><span class="n">dist</span>
+</pre></div>
+</div>
+</section>
+<section id="gitignore-support">
+<h3>📁 GitIgnore Support<a class="headerlink" href="#gitignore-support" title="Link to this heading"></a></h3>
+<p>Respects <code class="docutils literal notranslate"><span class="pre">.gitignore</span></code> patterns in tree view and recursive search.</p>
+</section>
+<section id="safe-delete">
+<h3>🗑️ Safe Delete<a class="headerlink" href="#safe-delete" title="Link to this heading"></a></h3>
+<p>Backup before deletion, create empty placeholder:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">rm</span> <span class="n">old_file</span><span class="o">.</span><span class="n">txt</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>📦 Backup created: old_file_txt.20251118_141241...
+🗑️  File deleted: old_file.txt
+📄 Created empty placeholder: old_file.txt
+</pre></div>
+</div>
+<p>Use with comment:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">rm</span> <span class="n">legacy_auth</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Replaced by new OAuth2 implementation&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="exception-filtering">
+<h3>⚙️ Exception Filtering<a class="headerlink" href="#exception-filtering" title="Link to this heading"></a></h3>
+<p>Exclude specific files/folders from tree view:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">t</span> <span class="o">/</span><span class="n">path</span> <span class="o">-</span><span class="n">e</span> <span class="n">build</span><span class="p">,</span><span class="n">dist</span><span class="p">,</span><span class="n">node_modules</span>
+</pre></div>
+</div>
+</section>
+<section id="multi-file-selection">
+<h3>🎯 Multi-File Selection<a class="headerlink" href="#multi-file-selection" title="Link to this heading"></a></h3>
+<p>Interactive prompt when multiple files found during recursive search.</p>
+</section>
+<section id="smart-path-resolution">
+<h3>🚀 Smart Path Resolution<a class="headerlink" href="#smart-path-resolution" title="Link to this heading"></a></h3>
+<p>Finds files anywhere in your project, automatically searching upward for <code class="docutils literal notranslate"><span class="pre">.pt</span></code> directory.</p>
+</section>
+<section id="configurable">
+<h3>⚙️ Configurable<a class="headerlink" href="#configurable" title="Link to this heading"></a></h3>
+<p>Customize behavior via <code class="docutils literal notranslate"><span class="pre">pt.yml</span></code> config file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">max_clipboard_size</span><span class="p">:</span> <span class="mi">104857600</span>
+<span class="n">max_backup_count</span><span class="p">:</span> <span class="mi">100</span>
+<span class="n">max_filename_length</span><span class="p">:</span> <span class="mi">200</span>
+<span class="n">backup_dir_name</span><span class="p">:</span> <span class="o">.</span><span class="n">pt</span>
+<span class="n">max_search_depth</span><span class="p">:</span> <span class="mi">10</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="version-management-capabilities">
+<h2>Version Management Capabilities<a class="headerlink" href="#version-management-capabilities" title="Link to this heading"></a></h2>
+<p>PT acts as a lightweight version control system with descriptive comments:</p>
+<section id="complete-version-history">
+<h3>📜 Complete Version History<a class="headerlink" href="#complete-version-history" title="Link to this heading"></a></h3>
+<p>Every file change is preserved with optional comments.</p>
+</section>
+<section id="comment-system">
+<h3>💬 Comment System<a class="headerlink" href="#comment-system" title="Link to this heading"></a></h3>
+<p>Track why changes were made, not just when:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">config</span><span class="o">.</span><span class="n">json</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Production config for v2.1.0 release&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="contextual-notes">
+<h3>📝 Contextual Notes<a class="headerlink" href="#contextual-notes" title="Link to this heading"></a></h3>
+<p>Add meaningful descriptions to each backup:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="n">main</span><span class="o">.</span><span class="n">go</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Fixed race condition in goroutine&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="easy-rollback">
+<h3>🔙 Easy Rollback<a class="headerlink" href="#easy-rollback" title="Link to this heading"></a></h3>
+<p>Restore any previous version instantly, see why it was saved:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">r</span> <span class="n">main</span><span class="o">.</span><span class="n">go</span> <span class="o">--</span><span class="n">last</span>
+</pre></div>
+</div>
+</section>
+<section id="version-comparison">
+<h3>📊 Version Comparison<a class="headerlink" href="#version-comparison" title="Link to this heading"></a></h3>
+<p>Diff any two versions visually with delta:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pt</span> <span class="o">-</span><span class="n">d</span> <span class="n">main</span><span class="o">.</span><span class="n">go</span> <span class="o">--</span><span class="n">last</span>
+</pre></div>
+</div>
+</section>
+<section id="space-efficient">
+<h3>💾 Space Efficient<a class="headerlink" href="#space-efficient" title="Link to this heading"></a></h3>
+<p>Only changed files are backed up (check mode).</p>
+</section>
+<section id="timestamped-versions">
+<h3>🏷️ Timestamped Versions<a class="headerlink" href="#timestamped-versions" title="Link to this heading"></a></h3>
+<p>Microsecond precision timestamps + human-readable comments.</p>
+</section>
+</section>
+<section id="zero-data-loss">
+<h2>Zero Data Loss<a class="headerlink" href="#zero-data-loss" title="Link to this heading"></a></h2>
+<p>Never lose work:</p>
+<ul class="simple">
+<li><p>Automatic backup before every write</p></li>
+<li><p>Backup before deletion</p></li>
+<li><p>Atomic-like operations</p></li>
+<li><p>Verification of write completion</p></li>
+</ul>
+</section>
+<section id="performance">
+<h2>Performance<a class="headerlink" href="#performance" title="Link to this heading"></a></h2>
+<table class="docutils align-default" id="id1">
+<caption><span class="caption-text">Performance Metrics</span><a class="headerlink" href="#id1" title="Link to this table"></a></caption>
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 20.0%" />
+<col style="width: 50.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Operation</p></th>
+<th class="head"><p>Performance</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Startup Time</strong></p></td>
+<td><p>&lt; 50ms</p></td>
+<td><p>Very fast startup</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Write Speed</strong></p></td>
+<td><p>Disk I/O limited</p></td>
+<td><p>Depends on storage</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Memory Usage</strong></p></td>
+<td><p>~5MB + content</p></td>
+<td><p>Minimal footprint</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Backup Creation</strong></p></td>
+<td><p>&lt; 100ms</p></td>
+<td><p>For typical files</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Search Speed</strong></p></td>
+<td><p>&lt; 200ms</p></td>
+<td><p>For 1000+ files</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Multi-file Search</strong></p></td>
+<td><p>&lt; 500ms</p></td>
+<td><p>Up to 10 levels deep</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Tree Generation</strong></p></td>
+<td><p>&lt; 500ms</p></td>
+<td><p>5000+ files/folders</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Diff Rendering</strong></p></td>
+<td><p>Depends on delta</p></td>
+<td><p>Powered by delta</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="configuration.html" class="btn btn-neutral float-left" title="Configuration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="workflow.html" class="btn btn-neutral float-right" title="Git-Like Workflow" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Hadi Cahyadi.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
