@@ -3,6 +3,9 @@ module github.com/cumulus13/pt-go
 go 1.25.3
 
 require (
+	github.com/alecthomas/chroma/v2 v2.20.0
 	github.com/atotto/clipboard v0.1.4
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+require github.com/dlclark/regexp2 v1.11.5 // indirect

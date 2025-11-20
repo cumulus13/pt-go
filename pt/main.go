@@ -8,6 +8,7 @@ package main
 
 import (
 	"bufio"
+	// "bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	"gopkg.in/yaml.v3"
+	"github.com/alecthomas/chroma/v2/quick" // Import chroma quick for syntax highlighting
 )
 
 // Configuration constants (defaults)
@@ -174,6 +176,77 @@ type FileStatusInfo struct {
 	ModTime  time.Time
 	IsDir    bool
 	Children []*FileStatusInfo
+}
+
+// handleTempCommand writes clipboard content to a temp file and displays it with less
+func handleTempCommand(args []string) error {
+	text, err := getClipboardText()
+	if err != nil {
+		return fmt.Errorf("failed to read clipboard: %w", err)
+	}
+
+	if text == "" {
+		return fmt.Errorf("clipboard is empty")
+	}
+
+	// Determine lexer for syntax highlighting
+	lexerName := ""
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--lexer" && i+1 < len(args) {
+			lexerName = args[i+1]
+			break
+		}
+	}
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "pt_temp_*.txt")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name()) // Clean up the temp file after the function exits
+	defer tmpFile.Close()
+
+	// Write clipboard content to the temp file
+	_, err = tmpFile.WriteString(text)
+	if err != nil {
+		return fmt.Errorf("failed to write to temporary file: %w", err)
+	}
+
+	// Flush the file to ensure content is written
+	tmpFile.Sync()
+
+	// Check if a lexer is specified
+	if lexerName != "" {
+		// Use chroma quick.Highlight to format the content and write directly to stdout
+		// This avoids issues with less stdin
+		logger.Printf("Highlighting with lexer: '%s'", lexerName)
+		// Use "terminal16m" or "terminal" style for ANSI colors
+		err = quick.Highlight(os.Stdout, text, lexerName, "terminal16m", "terminal16m")
+		if err != nil {
+			// If highlighting fails, log a warning and proceed with plain output
+			logger.Printf("Warning: failed to highlight with lexer '%s': %v", lexerName, err)
+			// Write plain text to stdout
+			_, err = os.Stdout.WriteString(text)
+			if err != nil {
+				return fmt.Errorf("failed to write plain text to stdout: %w", err)
+			}
+		}
+	} else {
+		// If no lexer, write plain text to stdout
+		logger.Printf("Displaying plain text")
+		_, err = os.Stdout.WriteString(text)
+		if err != nil {
+			return fmt.Errorf("failed to write plain text to stdout: %w", err)
+		}
+	}
+
+	// Optionally, add a footer to indicate end of output
+	fmt.Println("\n--- End of clipboard content ---")
+	fmt.Printf("Temp file location: %s (will be deleted)\n", tmpFile.Name())
+	fmt.Printf("Size: %d bytes\n", len(text))
+	fmt.Printf("Time: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+
+	return nil
 }
 
 // compareFileWithBackup compares a file with its last backup
@@ -2445,6 +2518,7 @@ func printHelp() {
 	fmt.Printf("  %spt -t [path]%s                Show directory tree\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -t [path] -e items,items%s       Tree with exceptions\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -rm <filename>%s           Safe delete (backup first)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -z [--lexer <type>]%s      Show clipboard content in less (with optional syntax highlighting)\n", ColorGreen, ColorReset)
 	
 	fmt.Printf("\n%s⚙️ CONFIGURATION:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt config init%s              Create sample config file\n", ColorGreen, ColorReset)
@@ -2644,6 +2718,13 @@ func main() {
     setupLogger()
 
 	switch os.Args[1] {
+		case "-z": 
+			err := handleTempCommand(os.Args[2:]) // Pass remaining args (like --lexer)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+		}
+
 		case "check", "-c", "--check":
 			// Handle both single file check and full status
 			err := handleCheckCommand(os.Args[2:])
