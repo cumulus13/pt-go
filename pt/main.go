@@ -249,6 +249,56 @@ func handleTempCommand(args []string) error {
 	return nil
 }
 
+// handleDiffClipboardToFile reads clipboard, saves to temp file, and diffs with the resolved target file
+func handleDiffClipboardToFile(fileName string) error {
+	// 1. Resolve the target file path (including recursive search)
+	filePath, err := resolveFilePath(fileName)
+	if err != nil {
+		return fmt.Errorf("failed to resolve file path: %w", err)
+	}
+
+	// 2. Read clipboard content
+	clipboardText, err := getClipboardText()
+	if err != nil {
+		return fmt.Errorf("failed to read clipboard: %w", err)
+	}
+
+	if clipboardText == "" {
+		return fmt.Errorf("clipboard is empty, nothing to diff")
+	}
+
+	// 3. Validate the resolved target file path
+	if err := validatePath(filePath); err != nil {
+		return fmt.Errorf("invalid resolved file path: %w", err)
+	}
+
+	// 4. Create a temporary file
+	tempFile, err := os.CreateTemp("", "pt_clipboard_diff_*.txt") // Use a descriptive prefix
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer os.Remove(tempFile.Name()) // Clean up the temp file after the function exits
+	defer tempFile.Close()
+
+	// 5. Write clipboard content to the temporary file
+	_, err = tempFile.WriteString(clipboardText)
+	if err != nil {
+		return fmt.Errorf("failed to write clipboard content to temporary file: %w", err)
+	}
+	tempFile.Sync() // Ensure data is written to disk
+
+	logger.Printf("Diffing clipboard content (temp: %s) with resolved file: %s", tempFile.Name(), filePath)
+
+	// 6. Run the core diff logic (runDelta) between the temp file and the resolved target file
+	err = runDelta(tempFile.Name(), filePath)
+	if err != nil {
+		// runDelta already handles delta not found error and specific exit codes
+		return fmt.Errorf("failed to run diff tool (delta): %w", err)
+	}
+
+	return nil
+}
+
 // compareFileWithBackup compares a file with its last backup
 func compareFileWithBackup(filePath string) (FileStatus, error) {
 	// Check if file exists
@@ -2538,6 +2588,7 @@ func printHelp() {
 	fmt.Printf("  %s$%s pt commit -m \"fix bugs\"     %s# Backup all changes%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -l notes.txt             %s# List backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt --last      %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -d notes.txt -z          %s# Diff with temp file from clipboard (no backup)%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  1. %spt check%s                  - See what files changed (like git status)\n", ColorYellow, ColorReset)
@@ -2836,16 +2887,40 @@ func main() {
 			}
 
 		case "-d", "--diff":
-			if len(os.Args) < 3 {
+			if len(os.Args) < 3 { // Minimal arg: pt -d <file_name>
 				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
 				os.Exit(1)
 			}
 
-			err := handleDiffCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
+			// Check for the specific combination: pt -d <file_name> -z
+			// We look for -z in os.Args[3] or later, after the file name at os.Args[2]
+			foundZ := false
+			for _, arg := range os.Args[3:] { // Start checking from the 4th argument (index 3)
+				if arg == "-z" {
+					foundZ = true
+					break
+				}
 			}
+
+			if foundZ {
+				// If -z is found, treat os.Args[2] as the file name and use new logic
+				fileName := os.Args[2] // Get the file name argument
+				// Call the new function
+				err := handleDiffClipboardToFile(fileName)
+				if err != nil {
+					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+					os.Exit(1)
+				}
+				return // Exit after handling the -d <file_name> -z case
+			} else {
+				// If -z is not found, proceed with the original handleDiffCommand logic
+				// Pass all arguments starting from the file name (os.Args[2:])
+				err := handleDiffCommand(os.Args[2:]) // This expects [filename, optional --last]
+				if err != nil {
+					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+					os.Exit(1)
+				}
+				}
 
 		case "-r", "--restore":
 			if len(os.Args) < 3 {
