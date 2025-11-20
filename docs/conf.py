@@ -1,14 +1,47 @@
+#!/usr/bin/env python3
+# File: docs/conf.py
+# Author: Hadi Cahyadi <cumulus13@gmail.com>
+# Date: 2025-11-20
+# License: MIT
+
 import os
 import sys
-from version_get import VersionGet  
-# -- Project information -----------------------------------------------------
+
+# -- Version Reader (no external dependencies) ---------------------------
+def get_version():
+    """Read version from VERSION file or git tags."""
+    # Try VERSION file in docs/ or parent directory
+    version_files = [
+        os.path.join(os.path.dirname(__file__), 'VERSION'),
+        os.path.join(os.path.dirname(__file__), '..', 'VERSION'),
+        os.path.join(os.path.abspath('..'), 'VERSION'),
+    ]
+    
+    for vf in version_files:
+        if os.path.exists(vf):
+            with open(vf, 'r') as f:
+                return f.read().strip()
+    
+    # Fallback to git describe
+    try:
+        import subprocess
+        result = subprocess.run(['git', 'describe', '--tags'], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except:
+        pass
+    
+    return '1.0.36'  # Hardcoded fallback
+
+# -- Project information -------------------------------------------------
 project = 'PT'
 copyright = '2025, Hadi Cahyadi'
 author = 'Hadi Cahyadi'
-release = VersionGet().get(True) if not VersionGet().get(True) == "1.0.0" else '1.0.36'
-version = VersionGet().get(True) if not VersionGet().get(True) == "1.0.0" else '1.0.36'
+version = get_version()
+release = version
 
-# -- General configuration ---------------------------------------------------
+# -- General configuration -----------------------------------------------
 sys.path.insert(0, os.path.abspath('..'))
 
 extensions = [
@@ -27,11 +60,11 @@ source_suffix = '.rst'
 master_doc = 'index'
 language = 'en'
 
-# -- Syntax highlighting -----------------------------------------------------
+# -- Syntax highlighting -------------------------------------------------
 pygments_style = 'monokai'
 pygments_dark_style = 'monokai'
 
-# -- HTML theme --------------------------------------------------------------
+# -- HTML theme ----------------------------------------------------------
 html_theme = 'sphinx_rtd_theme'
 
 html_theme_options = {
@@ -54,25 +87,24 @@ html_logo = '_static/pt.svg'
 html_title = 'PT Documentation'
 html_short_title = 'PT'
 
-# -- Extension configuration -------------------------------------------------
+# -- Extension configuration ---------------------------------------------
 copybutton_prompt_text = r'\$ |>>> |\.\.\. '
 copybutton_prompt_is_regexp = True
 copybutton_line_continuation_character = '\\'
 copybutton_here_doc_delimiter = 'EOF'
 
-# -- External links ----------------------------------------------------------
+# -- External links ------------------------------------------------------
 extlinks = {
     'repo': ('https://github.com/cumulus13/pt-go/%s', 'GitHub %s'),
     'issue': ('https://github.com/cumulus13/pt-go/issues/%s', 'Issue #%s'),
 }
 
-# -- Intersphinx mapping (disabled for Go due to 404) -----------------------
+# -- Intersphinx mapping -------------------------------------------------
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    # 'go': ('https://pkg.go.dev', None),  # Commented out - inventory not available
 }
 
-# -- Disable certain warnings ----------------------------------------------
+# -- Disable certain warnings --------------------------------------------
 suppress_warnings = [
     'epub.unknown_project_files',
 ]
