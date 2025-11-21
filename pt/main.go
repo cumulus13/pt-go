@@ -27,11 +27,12 @@ import (
 	"golang.org/x/sys/windows"
 	"github.com/atotto/clipboard"
 	"gopkg.in/yaml.v3"
-	"github.com/alecthomas/chroma/v2/quick" // Import chroma quick for syntax highlighting
+	// "github.com/alecthomas/chroma/v2/quick" // Import chroma quick for syntax highlighting
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
+	"golang.org/x/term"
 )
 
 // Configuration constants (defaults)
@@ -185,7 +186,316 @@ type FileStatusInfo struct {
 	Children []*FileStatusInfo
 }
 
+// FileSearchResult for recursive file search
+type FileSearchResult struct {
+	Path    string
+	Dir     string
+	Size    int64
+	ModTime time.Time
+	Depth   int
+}
+
+// TreeNode represents a node in the directory tree
+type TreeNode struct {
+	Name     string
+	Path     string
+	IsDir    bool
+	Size     int64
+	Children []*TreeNode
+}
+
+// GitIgnore holds gitignore patterns
+type GitIgnore struct {
+	patterns []string
+}
+
+// Logger for audit trail
+var logger *log.Logger
+
+// discardWriter implements io.Writer and discards all writes
+type discardWriter struct{}
+
+func (d *discardWriter) Write(p []byte) (n int, err error) {
+    return len(p), nil // Discard all data
+}
+
+func init() {
+    // Initialize logger to discard by default in init.
+    // It will be set correctly in main() after flag parsing.
+    logger = log.New(&discardWriter{}, "", log.LstdFlags)
+    Version = loadVersion()
+    appConfig = loadConfig()
+}
+
+// setupLogger initializes the global logger based on the debugMode flag.
+func setupLogger() {
+	if debugMode {
+		logger = log.New(os.Stderr, "", log.LstdFlags)
+	} else {
+		logger = log.New(&discardWriter{}, "", log.LstdFlags)
+	}
+}
+
+func getTerminalWidth() int {
+    width, _, err := term.GetSize(int(os.Stdout.Fd()))
+    if err != nil {
+        return 80 // fallback
+    }
+    return width
+}
+
+// ============================================================================
+// SHOW COMMAND - Display file content with syntax highlighting (like bat)
+// ============================================================================
+
+func handleShowCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("filename required for show command")
+	}
+
+	filename := args[0]
+	lexerName := ""
+	themeName := "fruity"
+	showLineNumbers := true
+	showGrid := true
+	usePager := true
+
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--lexer", "-l":
+			if i+1 < len(args) {
+				lexerName = args[i+1]
+				i++
+			}
+		case "--theme", "-t":
+			if i+1 < len(args) {
+				themeName = args[i+1]
+				i++
+			}
+		case "--no-line-numbers":
+			showLineNumbers = false
+		case "--no-grid":
+			showGrid = false
+		case "--no-pager", "-np":
+			usePager = false
+		}
+	}
+
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	if fileInfo.IsDir() {
+		return fmt.Errorf("cannot show directory, file required")
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	status, _ := compareFileWithBackup(filePath)
+
+	var output bytes.Buffer
+
+	// Print header
+	relPath, _ := filepath.Rel(".", filePath)
+	statusColor := status.Color()
+	statusSymbol := "●"
+
+	width := getTerminalWidth()
+
+	// if showGrid {
+	// 	output.WriteString(fmt.Sprintf("%s───────┬────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset))
+	// }
+
+	if showGrid {
+	    line := "───────┬" + strings.Repeat("─", width-10)
+	    output.WriteString(fmt.Sprintf("%s%s%s\n", ColorGray, line, ColorReset))
+	}
+
+	output.WriteString(fmt.Sprintf("%s       │%s %sFile:%s %s ", ColorGray, ColorReset, ColorBold, ColorReset, relPath))
+	if status != FileStatusUnchanged {
+		output.WriteString(fmt.Sprintf("%s%s %s%s", statusColor, statusSymbol, status.String(), ColorReset))
+	}
+	output.WriteString("\n")
+
+	modTime := fileInfo.ModTime().Format("2006-01-02 15:04:05")
+	output.WriteString(fmt.Sprintf("%s       │%s %sSize:%s %s  %sModified:%s %s\n",
+		ColorGray, ColorReset,
+		ColorCyan, ColorReset, formatSize(fileInfo.Size()),
+		ColorCyan, ColorReset, modTime))
+
+	if lexerName != "" {
+		output.WriteString(fmt.Sprintf("%s       │%s %sLexer:%s %s  %sTheme:%s %s\n",
+			ColorGray, ColorReset,
+			ColorCyan, ColorReset, lexerName,
+			ColorCyan, ColorReset, themeName))
+	}
+
+	// if showGrid {
+	// 	output.WriteString(fmt.Sprintf("%s───────┼────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset))
+	// }
+
+	if showGrid {
+	    line := "───────┼" + strings.Repeat("─", width-10)
+	    output.WriteString(fmt.Sprintf("%s%s%s\n", ColorGray, line, ColorReset))
+	}
+
+	// Apply syntax highlighting
+	var lexer chroma.Lexer
+	if lexerName != "" {
+		lexer = lexers.Get(lexerName)
+	} else {
+		lexer = lexers.Match(filePath)
+	}
+
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	lexer = chroma.Coalesce(lexer)
+
+	style := styles.Get(themeName)
+	if style == nil {
+		style = styles.Monokai
+	}
+
+	formatter := formatters.TTY16m
+
+	iterator, err := lexer.Tokenise(nil, string(content))
+	if err != nil {
+		return fmt.Errorf("failed to tokenize: %w", err)
+	}
+
+	var contentBuf bytes.Buffer
+	err = formatter.Format(&contentBuf, style, iterator)
+	if err != nil {
+		return fmt.Errorf("failed to format: %w", err)
+	}
+
+	// Add line numbers
+	if showLineNumbers {
+		lines := strings.Split(contentBuf.String(), "\n")
+		maxLineNum := len(lines)
+		lineNumWidth := len(fmt.Sprintf("%d", maxLineNum))
+
+		for i, line := range lines {
+			lineNum := i + 1
+			if showGrid {
+				output.WriteString(fmt.Sprintf("%s%*d │%s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line))
+			} else {
+				output.WriteString(fmt.Sprintf("%s%*d %s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line))
+			}
+		}
+	} else {
+		output.WriteString(contentBuf.String())
+	}
+
+	// Footer
+	// if showGrid {
+	// 	output.WriteString(fmt.Sprintf("%s───────┴────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset))
+	// }
+
+	if showGrid {
+	    line := strings.Repeat("─", width)
+	    output.WriteString(fmt.Sprintf("%s%s%s\n", ColorGray, line, ColorReset))
+	}
+	output.WriteString("\n")
+
+	if usePager {
+		return displayWithPager(output.String())
+	} else {
+		fmt.Print(output.String())
+	}
+
+	return nil
+}
+
+// ============================================================================
+// TEMP COMMAND (-z) - Display clipboard content with syntax highlighting
+// ============================================================================
+
 // handleTempCommand writes clipboard content to a temp file and displays it with less
+// func handleTempCommand(args []string) error {
+// 	text, err := getClipboardText()
+// 	if err != nil {
+// 		return fmt.Errorf("failed to read clipboard: %w", err)
+// 	}
+
+// 	if text == "" {
+// 		return fmt.Errorf("clipboard is empty")
+// 	}
+
+// 	// Determine lexer for syntax highlighting
+// 	lexerName := ""
+// 	for i := 0; i < len(args); i++ {
+// 		if args[i] == "--lexer" && i+1 < len(args) {
+// 			lexerName = args[i+1]
+// 			break
+// 		}
+// 	}
+
+// 	// Create a temporary file
+// 	tmpFile, err := os.CreateTemp("", "pt_temp_*.txt")
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create temporary file: %w", err)
+// 	}
+// 	defer os.Remove(tmpFile.Name()) // Clean up the temp file after the function exits
+// 	defer tmpFile.Close()
+
+// 	// Write clipboard content to the temp file
+// 	_, err = tmpFile.WriteString(text)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to write to temporary file: %w", err)
+// 	}
+
+// 	// Flush the file to ensure content is written
+// 	tmpFile.Sync()
+
+// 	// Check if a lexer is specified
+// 	if lexerName != "" {
+// 		// Use chroma quick.Highlight to format the content and write directly to stdout
+// 		// This avoids issues with less stdin
+// 		logger.Printf("Highlighting with lexer: '%s'", lexerName)
+// 		// Use "terminal16m" or "terminal" style for ANSI colors
+// 		err = quick.Highlight(os.Stdout, text, lexerName, "terminal16m", "terminal16m")
+// 		if err != nil {
+// 			// If highlighting fails, log a warning and proceed with plain output
+// 			logger.Printf("Warning: failed to highlight with lexer '%s': %v", lexerName, err)
+// 			// Write plain text to stdout
+// 			_, err = os.Stdout.WriteString(text)
+// 			if err != nil {
+// 				return fmt.Errorf("failed to write plain text to stdout: %w", err)
+// 			}
+// 		}
+// 	} else {
+// 		// If no lexer, write plain text to stdout
+// 		logger.Printf("Displaying plain text")
+// 		_, err = os.Stdout.WriteString(text)
+// 		if err != nil {
+// 			return fmt.Errorf("failed to write plain text to stdout: %w", err)
+// 		}
+// 	}
+
+// 	// Optionally, add a footer to indicate end of output
+// 	fmt.Println("\n--- End of clipboard content ---")
+// 	fmt.Printf("Temp file location: %s (will be deleted)\n", tmpFile.Name())
+// 	fmt.Printf("Size: %d bytes\n", len(text))
+// 	fmt.Printf("Time: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+
+// 	return nil
+// }
+
+// ============================================================================
+// TEMP COMMAND (-z) - Display clipboard content with syntax highlighting
+// ============================================================================
+
 func handleTempCommand(args []string) error {
 	text, err := getClipboardText()
 	if err != nil {
@@ -196,67 +506,233 @@ func handleTempCommand(args []string) error {
 		return fmt.Errorf("clipboard is empty")
 	}
 
-	// Determine lexer for syntax highlighting
 	lexerName := ""
+	themeName := "monokai"
+	usePager := false
+	showLineNumbers := true
+	showGrid := true
+
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--lexer" && i+1 < len(args) {
-			lexerName = args[i+1]
-			break
+		switch args[i] {
+		case "--lexer", "-l":
+			if i+1 < len(args) {
+				lexerName = args[i+1]
+				i++
+			}
+		case "--theme", "-t":
+			if i+1 < len(args) {
+				themeName = args[i+1]
+				i++
+			}
+		case "--pager", "-p":
+			usePager = true
+		case "--no-line-numbers":
+			showLineNumbers = false
+		case "--no-grid":
+			showGrid = false
 		}
 	}
 
-	// Create a temporary file
-	tmpFile, err := os.CreateTemp("", "pt_temp_*.txt")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary file: %w", err)
-	}
-	defer os.Remove(tmpFile.Name()) // Clean up the temp file after the function exits
-	defer tmpFile.Close()
+	var output bytes.Buffer
 
-	// Write clipboard content to the temp file
-	_, err = tmpFile.WriteString(text)
-	if err != nil {
-		return fmt.Errorf("failed to write to temporary file: %w", err)
-	}
+	// Header
+	output.WriteString(fmt.Sprintf("%s───────┬────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset))
+	output.WriteString(fmt.Sprintf("%s       │%s %sClipboard Content%s\n", ColorGray, ColorReset, ColorBold, ColorReset))
+	output.WriteString(fmt.Sprintf("%s       │%s %sSize:%s %s  %sTime:%s %s\n",
+		ColorGray, ColorReset,
+		ColorCyan, ColorReset, formatSize(int64(len(text))),
+		ColorCyan, ColorReset, time.Now().Format("2006-01-02 15:04:05")))
 
-	// Flush the file to ensure content is written
-	tmpFile.Sync()
-
-	// Check if a lexer is specified
 	if lexerName != "" {
-		// Use chroma quick.Highlight to format the content and write directly to stdout
-		// This avoids issues with less stdin
-		logger.Printf("Highlighting with lexer: '%s'", lexerName)
-		// Use "terminal16m" or "terminal" style for ANSI colors
-		err = quick.Highlight(os.Stdout, text, lexerName, "terminal16m", "terminal16m")
+		output.WriteString(fmt.Sprintf("%s       │%s %sLexer:%s %s  %sTheme:%s %s\n",
+			ColorGray, ColorReset,
+			ColorCyan, ColorReset, lexerName,
+			ColorCyan, ColorReset, themeName))
+	}
+
+	output.WriteString(fmt.Sprintf("%s───────┼────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset))
+
+	// Apply syntax highlighting
+	var contentBuf bytes.Buffer
+	if lexerName != "" {
+		lexer := lexers.Get(lexerName)
+		if lexer == nil {
+			lexer = lexers.Fallback
+		}
+		lexer = chroma.Coalesce(lexer)
+
+		style := styles.Get(themeName)
+		if style == nil {
+			style = styles.Monokai
+		}
+
+		formatter := formatters.TTY16m
+
+		iterator, err := lexer.Tokenise(nil, text)
 		if err != nil {
-			// If highlighting fails, log a warning and proceed with plain output
-			logger.Printf("Warning: failed to highlight with lexer '%s': %v", lexerName, err)
-			// Write plain text to stdout
-			_, err = os.Stdout.WriteString(text)
+			logger.Printf("Warning: failed to tokenize: %v", err)
+			contentBuf.WriteString(text)
+		} else {
+			err = formatter.Format(&contentBuf, style, iterator)
 			if err != nil {
-				return fmt.Errorf("failed to write plain text to stdout: %w", err)
+				logger.Printf("Warning: failed to format: %v", err)
+				contentBuf.WriteString(text)
 			}
 		}
 	} else {
-		// If no lexer, write plain text to stdout
-		logger.Printf("Displaying plain text")
-		_, err = os.Stdout.WriteString(text)
-		if err != nil {
-			return fmt.Errorf("failed to write plain text to stdout: %w", err)
-		}
+		contentBuf.WriteString(text)
 	}
 
-	// Optionally, add a footer to indicate end of output
-	fmt.Println("\n--- End of clipboard content ---")
-	fmt.Printf("Temp file location: %s (will be deleted)\n", tmpFile.Name())
-	fmt.Printf("Size: %d bytes\n", len(text))
-	fmt.Printf("Time: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+	// Add line numbers
+	if showLineNumbers {
+		lines := strings.Split(contentBuf.String(), "\n")
+		maxLineNum := len(lines)
+		lineNumWidth := len(fmt.Sprintf("%d", maxLineNum))
+
+		for i, line := range lines {
+			lineNum := i + 1
+			if showGrid {
+				output.WriteString(fmt.Sprintf("%s%*d │%s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line))
+			} else {
+				output.WriteString(fmt.Sprintf("%s%*d %s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line))
+			}
+		}
+	} else {
+		output.WriteString(contentBuf.String())
+	}
+
+	// Footer
+	output.WriteString(fmt.Sprintf("%s───────┴────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset))
+
+	if usePager {
+		return displayWithPager(output.String())
+	} else {
+		fmt.Print(output.String())
+	}
 
 	return nil
 }
 
+// displayWithPager displays content using less or more pager
+// func displayWithPager(content string) error {
+// 	pagers := []string{"less", "more", "cat"}
+// 	var pagerCmd string
+
+// 	for _, p := range pagers {
+// 		if _, err := exec.LookPath(p); err == nil {
+// 			pagerCmd = p
+// 			break
+// 		}
+// 	}
+
+// 	if pagerCmd == "" {
+// 		fmt.Print(content)
+// 		return nil
+// 	}
+
+// 	var cmd *exec.Cmd
+// 	if pagerCmd == "less" {
+// 		cmd = exec.Command("less", "-R", "-F", "-X")
+// 	} else {
+// 		cmd = exec.Command(pagerCmd)
+// 	}
+
+// 	pipe, err := cmd.StdinPipe()
+// 	if err != nil {
+// 		fmt.Print(content)
+// 		return nil
+// 	}
+
+// 	cmd.Stdout = os.Stdout
+// 	cmd.Stderr = os.Stderr
+
+// 	if err := cmd.Start(); err != nil {
+// 		fmt.Print(content)
+// 		return nil
+// 	}
+
+// 	_, err = pipe.Write([]byte(content))
+// 	if err != nil {
+// 		pipe.Close()
+// 		cmd.Wait()
+// 		fmt.Print(content)
+// 		return nil
+// 	}
+
+// 	pipe.Close()
+// 	return cmd.Wait()
+// }
+
+// displayWithPager displays content using less/more in streaming mode.
+func displayWithPager(content string) error {
+    pagers := []string{"less", "more"}
+    var pagerCmd string
+
+    for _, p := range pagers {
+        if _, err := exec.LookPath(p); err == nil {
+            pagerCmd = p
+            break
+        }
+    }
+
+    if pagerCmd == "" {
+        fmt.Print(content)
+        return nil
+    }
+
+    var cmd *exec.Cmd
+    if pagerCmd == "less" {
+        cmd = exec.Command("less", "-R", "-F", "-X")
+    } else {
+        cmd = exec.Command(pagerCmd)
+    }
+
+    stdin, err := cmd.StdinPipe()
+    if err != nil {
+        fmt.Print(content)
+        return nil
+    }
+
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+
+    if err := cmd.Start(); err != nil {
+        fmt.Print(content)
+        return nil
+    }
+
+    // STREAM content
+    go func() {
+        defer stdin.Close()
+
+        buf := []byte(content)
+        chunkSize := 4096
+
+        for len(buf) > 0 {
+            n := chunkSize
+            if len(buf) < chunkSize {
+                n = len(buf)
+            }
+
+            _, err := stdin.Write(buf[:n])
+            if err != nil {
+                // User likely pressed q → less closed stdin (EPIPE)
+                return
+            }
+            buf = buf[n:]
+        }
+    }()
+
+    return cmd.Wait()
+}
+
+
 // handleDiffClipboardToFile reads clipboard, saves to temp file, and diffs with the resolved target file
+
+// ============================================================================
+// DIFF COMMAND - Compare files or clipboard
+// ============================================================================
+
 func handleDiffClipboardToFile(fileName string) error {
 	// 1. Resolve the target file path (including recursive search)
 	filePath, err := resolveFilePath(fileName)
@@ -305,6 +781,104 @@ func handleDiffClipboardToFile(fileName string) error {
 
 	return nil
 }
+
+func handleDiffCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("filename required for diff command")
+	}
+
+	filename := args[0]
+	useLast := len(args) > 1 && args[1] == "--last"
+
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		return err
+	}
+
+	backups, err := listBackups(filePath)
+	if err != nil {
+		return err
+	}
+
+	if len(backups) == 0 {
+		return fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
+	}
+
+	var selectedBackup BackupInfo
+
+	if useLast {
+		selectedBackup = backups[0]
+		fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	} else {
+		printBackupTable(filePath, backups)
+
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Enter backup number to compare (1-%d) or 0 to cancel: ", len(backups))
+
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read input: %w", err)
+		}
+
+		input = strings.TrimSpace(input)
+		choice, err := strconv.Atoi(input)
+		if err != nil {
+			return fmt.Errorf("invalid input: please enter a number")
+		}
+
+		if choice < 0 || choice > len(backups) {
+			return fmt.Errorf("invalid selection: must be between 0 and %d", len(backups))
+		}
+
+		if choice == 0 {
+			return fmt.Errorf("diff cancelled")
+		}
+
+		selectedBackup = backups[choice-1]
+		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	}
+
+	err = runDelta(selectedBackup.Path, filePath)
+	if err != nil {
+		return fmt.Errorf("delta execution failed: %w", err)
+	}
+
+	return nil
+}
+
+func checkDeltaInstalled() bool {
+	_, err := exec.LookPath("delta")
+	return err == nil
+}
+
+func runDelta(file1, file2 string) error {
+	if !checkDeltaInstalled() {
+		return fmt.Errorf("delta is not installed. Install it from: https://github.com/dandavison/delta")
+	}
+
+	cmd := exec.Command("delta", file1, file2)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	
+	// Delta exit code 1 is NORMAL when files are different
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 1 {
+				return nil
+			}
+		}
+		return err
+	}
+
+	return nil
+}
+
+// ============================================================================
+// CHECK/STATUS COMMAND - Show file status (git-like)
+// ============================================================================
 
 // compareFileWithBackup compares a file with its last backup
 func compareFileWithBackup(filePath string) (FileStatus, error) {
@@ -361,7 +935,7 @@ func buildStatusTree(path string, gitignore *GitIgnore, exceptions map[string]bo
 	}
 
 	baseName := filepath.Base(path)
-	
+
 	if exceptions[baseName] {
 		return nil, nil
 	}
@@ -371,7 +945,7 @@ func buildStatusTree(path string, gitignore *GitIgnore, exceptions map[string]bo
 	}
 
 	relPath, _ := filepath.Rel(".", path)
-	
+
 	node := &FileStatusInfo{
 		Path:    path,
 		RelPath: relPath,
@@ -438,14 +1012,14 @@ func printStatusTree(node *FileStatusInfo, prefix string, isLast bool) {
 	} else {
 		// Color based on status
 		statusColor := node.Status.Color()
-		
+
 		if node.Status != FileStatusUnchanged {
 			displayName = statusColor + displayName + ColorReset
 			statusStr = fmt.Sprintf(" %s[%s]%s", statusColor, node.Status.String(), ColorReset)
 		} else {
 			displayName = ColorGreen + displayName + ColorReset
 		}
-		
+
 		sizeStr = ColorGray + " (" + formatSize(node.Size) + ")" + ColorReset
 	}
 
@@ -468,7 +1042,7 @@ func printStatusTree(node *FileStatusInfo, prefix string, isLast bool) {
 // countStatusFiles counts files by status
 func countStatusFiles(node *FileStatusInfo) map[FileStatus]int {
 	counts := make(map[FileStatus]int)
-	
+
 	var count func(*FileStatusInfo)
 	count = func(n *FileStatusInfo) {
 		if !n.IsDir {
@@ -478,7 +1052,7 @@ func countStatusFiles(node *FileStatusInfo) map[FileStatus]int {
 			count(child)
 		}
 	}
-	
+
 	count(node)
 	return counts
 }
@@ -552,9 +1126,9 @@ func handleCheckCommand(args []string) error {
 
 	// Count and display summary
 	counts := countStatusFiles(tree)
-	
+
 	hasChanges := counts[FileStatusModified] > 0 || counts[FileStatusNew] > 0 || counts[FileStatusDeleted] > 0
-	
+
 	if hasChanges {
 		fmt.Printf("%sSummary:%s\n", ColorBold, ColorReset)
 		if counts[FileStatusModified] > 0 {
@@ -577,6 +1151,10 @@ func handleCheckCommand(args []string) error {
 
 	return nil
 }
+
+// ============================================================================
+// COMMIT COMMAND - Backup all changed files
+// ============================================================================
 
 // collectChangedFiles collects all files that need to be backed up
 func collectChangedFiles(node *FileStatusInfo, changedFiles *[]string) {
@@ -651,8 +1229,8 @@ func handleCommitCommand(args []string) error {
 		relPath, _ := filepath.Rel(cwd, file)
 		status, _ := compareFileWithBackup(file)
 		statusColor := status.Color()
-		fmt.Printf("  %d. %s%s%s %s[%s]%s\n", 
-			i+1, ColorGreen, relPath, ColorReset, 
+		fmt.Printf("  %d. %s%s%s %s[%s]%s\n",
+			i+1, ColorGreen, relPath, ColorReset,
 			statusColor, status.String(), ColorReset)
 	}
 	fmt.Println()
@@ -662,7 +1240,7 @@ func handleCommitCommand(args []string) error {
 	fmt.Printf("Commit %d file(s) with message \"%s\"? (y/N): ", len(changedFiles), strings.TrimPrefix(commitMessage, "commit: "))
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(strings.ToLower(input))
-	
+
 	if input != "y" && input != "yes" {
 		fmt.Println("❌ Commit cancelled")
 		return nil
@@ -697,220 +1275,605 @@ func handleCommitCommand(args []string) error {
 	return nil
 }
 
-type FileSearchResult struct {
-	Path     string
-	Dir      string
-	Size     int64
-	ModTime  time.Time
-	Depth    int
-}
+// ============================================================================
+// TREE COMMAND - Display directory tree
+// ============================================================================
 
-// TreeNode represents a node in the directory tree
-type TreeNode struct {
-	Name     string
-	Path     string
-	IsDir    bool
-	Size     int64
-	Children []*TreeNode
-}
-
-// GitIgnore holds gitignore patterns
-type GitIgnore struct {
-	patterns []string
-}
-
-// Logger for audit trail
-var logger *log.Logger
-
-// discardWriter implements io.Writer and discards all writes.
-type discardWriter struct{}
-
-func (d *discardWriter) Write(p []byte) (n int, err error) {
-    return len(p), nil // Discard all data
-}
-
-// setupLogger initializes the global logger based on the debugMode flag.
-func setupLogger() {
-    if debugMode {
-        logger = log.New(os.Stderr, "", log.LstdFlags)
-    } else {
-        logger = log.New(&discardWriter{}, "", log.LstdFlags)
-    }
-}
-
-func init() {
-    // Initialize logger to discard by default in init.
-    // It will be set correctly in main() after flag parsing.
-    logger = log.New(&discardWriter{}, "", log.LstdFlags)
-    Version = loadVersion()
-    appConfig = loadConfig()
-}
-
-// handleShowCommand displays file content with syntax highlighting like bat
-func handleShowCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("filename required for show command")
+func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*TreeNode, error) {
+	if depth > maxDepth {
+		return nil, nil
 	}
 
-	filename := args[0]
-	lexerName := ""
-	themeName := "fruity" // Default theme
-	showLineNumbers := true
-	showGrid := true
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
 
-	// Parse optional arguments
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--lexer", "-l":
-			if i+1 < len(args) {
-				lexerName = args[i+1]
-				i++
+	baseName := filepath.Base(path)
+
+	if exceptions[baseName] {
+		return nil, nil
+	}
+
+	if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
+		return nil, nil
+	}
+
+	node := &TreeNode{
+		Name:  baseName,
+		Path:  path,
+		IsDir: info.IsDir(),
+		Size:  info.Size(),
+	}
+
+	if info.IsDir() {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return node, nil
+		}
+
+		for _, entry := range entries {
+			childPath := filepath.Join(path, entry.Name())
+			childNode, err := buildTree(childPath, gitignore, exceptions, depth+1, maxDepth)
+			if err != nil || childNode == nil {
+				continue
 			}
-		case "--theme", "-t":
-			if i+1 < len(args) {
-				themeName = args[i+1]
-				i++
+			node.Children = append(node.Children, childNode)
+		}
+
+		sort.Slice(node.Children, func(i, j int) bool {
+			if node.Children[i].IsDir != node.Children[j].IsDir {
+				return node.Children[i].IsDir
 			}
-		case "--no-line-numbers":
-			showLineNumbers = false
-		case "--no-grid":
-			showGrid = false
+			return node.Children[i].Name < node.Children[j].Name
+		})
+	}
+
+	return node, nil
+}
+
+func printTree(node *TreeNode, prefix string, isLast bool, showSize bool) {
+	if node == nil {
+		return
+	}
+
+	connector := "├── "
+	if isLast {
+		connector = "└── "
+	}
+
+	displayName := node.Name
+	if node.IsDir {
+		displayName = ColorCyan + displayName + "/" + ColorReset
+	} else {
+		displayName = ColorGreen + displayName + ColorReset
+	}
+
+	sizeStr := ""
+	if showSize && !node.IsDir {
+		sizeStr = ColorGray + " (" + formatSize(node.Size) + ")" + ColorReset
+	}
+
+	fmt.Printf("%s%s%s%s\n", prefix, connector, displayName, sizeStr)
+
+	if node.IsDir && len(node.Children) > 0 {
+		childPrefix := prefix
+		if isLast {
+			childPrefix += "    "
+		} else {
+			childPrefix += "│   "
+		}
+
+		for i, child := range node.Children {
+			printTree(child, childPrefix, i == len(node.Children)-1, showSize)
+		}
+	}
+}
+
+func handleTreeCommand(args []string) error {
+	exceptions := make(map[string]bool)
+	startPath := "."
+
+	i := 0
+	for i < len(args) {
+		if args[i] == "-e" || args[i] == "--exception" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("-e/--exception requires a value")
+			}
+			i++
+			for _, exc := range strings.Split(args[i], ",") {
+				exceptions[strings.TrimSpace(exc)] = true
+			}
+			i++
+		} else {
+			startPath = args[i]
+			i++
 		}
 	}
 
-	// Resolve file path
+	absPath, err := filepath.Abs(startPath)
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("path does not exist: %w", err)
+	}
+
+	var gitignore *GitIgnore
+	if info.IsDir() {
+		gitignore, err = loadGitIgnoreAndPtIgnore(absPath)
+		if err != nil {
+			logger.Printf("Warning: failed to load .gitignore: %v", err)
+		}
+	}
+
+	tree, err := buildTree(absPath, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
+	if err != nil {
+		return fmt.Errorf("failed to build tree: %w", err)
+	}
+
+	if tree == nil {
+		return fmt.Errorf("no files to display")
+	}
+
+	fmt.Printf("\n%s%s%s\n", ColorBold, tree.Name, ColorReset)
+	if tree.IsDir && len(tree.Children) > 0 {
+		for i, child := range tree.Children {
+			printTree(child, "", i == len(tree.Children)-1, true)
+		}
+	}
+	fmt.Println()
+
+	fileCount := 0
+	dirCount := 0
+	var totalSize int64
+
+	var countNodes func(*TreeNode)
+	countNodes = func(n *TreeNode) {
+		if n.IsDir {
+			dirCount++
+			for _, child := range n.Children {
+				countNodes(child)
+			}
+		} else {
+			fileCount++
+			totalSize += n.Size
+		}
+	}
+	countNodes(tree)
+
+	fmt.Printf("%s%d directories, %d files, %s total%s\n",
+		ColorGray, dirCount, fileCount, formatSize(totalSize), ColorReset)
+
+	if len(exceptions) > 0 {
+		excList := make([]string, 0, len(exceptions))
+		for exc := range exceptions {
+			excList = append(excList, exc)
+		}
+		fmt.Printf("%sExceptions: %s%s\n", ColorGray, strings.Join(excList, ", "), ColorReset)
+	}
+
+	if gitignore != nil && len(gitignore.patterns) > 0 {
+		fmt.Printf("%sUsing .gitignore (%d patterns) + %s is always excluded%s\n",
+			ColorGray, len(gitignore.patterns), appConfig.BackupDirName, ColorReset)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// REMOVE COMMAND - Safe file deletion with backup
+// ============================================================================
+
+// parsing comment for handleRemoveCommand
+func handleRemoveCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("filename required for remove command")
+	}
+
+	filename := args[0]
+	comment := ""
+
+	for i := 1; i < len(args); i++ {
+		if args[i] == "-m" || args[i] == "--message" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("-m/--message requires a value")
+			}
+			i++
+			comment = args[i]
+			break
+		}
+	}
+
 	filePath, err := resolveFilePath(filename)
 	if err != nil {
-		return fmt.Errorf("file not found: %w", err)
+		return err
 	}
 
-	// Check if file exists
-	fileInfo, err := os.Stat(filePath)
+	info, err := os.Stat(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to stat file: %w", err)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("file not found: %s", filePath)
+		}
+		return fmt.Errorf("failed to check file: %w", err)
 	}
 
-	if fileInfo.IsDir() {
-		return fmt.Errorf("cannot show directory, file required")
+	if info.IsDir() {
+		return fmt.Errorf("cannot remove directories, only files")
 	}
 
-	// Read file content
+	if info.Size() > 0 {
+		if comment == "" {
+			comment = "Deleted file backup"
+		}
+		_, err = autoRenameIfExists(filePath, comment)
+		if err != nil {
+			return fmt.Errorf("failed to create backup: %w", err)
+		}
+	}
+
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Check file status (git-like tracker)
-	status, _ := compareFileWithBackup(filePath)
-
-	// Print header like bat
-	printShowHeader(filePath, fileInfo, status, showGrid)
-
-	// Get lexer
-	var lexer chroma.Lexer
-	if lexerName != "" {
-		lexer = lexers.Get(lexerName)
-	} else {
-		lexer = lexers.Match(filePath)
-	}
-
-	if lexer == nil {
-		lexer = lexers.Fallback
-	}
-	lexer = chroma.Coalesce(lexer)
-
-	// Get style
-	style := styles.Get(themeName)
-	if style == nil {
-		style = styles.Monokai
-	}
-
-	// Create formatter with options
-	formatter := formatters.TTY16m
-	if showLineNumbers {
-		formatter = formatters.Get("terminal16m")
-		if formatter == nil {
-			formatter = formatters.TTY16m
-		}
-	}
-
-	// Tokenize
-	iterator, err := lexer.Tokenise(nil, string(content))
+	err = os.Remove(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to tokenize: %w", err)
+		return fmt.Errorf("failed to delete file: %w", err)
 	}
 
-	// Format output
-	var buf bytes.Buffer
-	err = formatter.Format(&buf, style, iterator)
+	logger.Printf("File deleted: %s (%d bytes)", filePath, len(content))
+	fmt.Printf("🗑️  File deleted: %s\n", filePath)
+
+	emptyFile, err := os.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to format: %w", err)
+		return fmt.Errorf("failed to create empty placeholder: %w", err)
 	}
+	emptyFile.Close()
 
-	// Print content with line numbers if enabled
-	if showLineNumbers {
-		printWithLineNumbers(buf.String(), showGrid)
-	} else {
-		fmt.Print(buf.String())
-	}
-
-	// Print footer like bat
-	printShowFooter(filePath, fileInfo, len(content), showGrid)
+	logger.Printf("Created empty placeholder: %s", filePath)
+	fmt.Printf("📄 Created empty placeholder: %s\n", filePath)
+	fmt.Printf("ℹ️  Original content (%d bytes) backed up to %s/\n", len(content), appConfig.BackupDirName)
 
 	return nil
 }
 
-// printShowHeader prints bat-like header
-func printShowHeader(filePath string, info os.FileInfo, status FileStatus, showGrid bool) {
-	relPath, _ := filepath.Rel(".", filePath)
-	statusColor := status.Color()
-	statusSymbol := "●"
+// ============================================================================
+// BACKUP & RESTORE OPERATIONS
+// ============================================================================
 
-	if showGrid {
-		fmt.Printf("%s───────┬────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+func listBackups(filePath string) ([]BackupInfo, error) {
+	if err := validatePath(filePath); err != nil {
+		return nil, err
 	}
 
-	// File line with status indicator
-	fmt.Printf("%s       │%s %sFile:%s %s ", ColorGray, ColorReset, ColorBold, ColorReset, relPath)
-	if status != FileStatusUnchanged {
-		fmt.Printf("%s%s %s%s", statusColor, statusSymbol, status.String(), ColorReset)
+	// Get absolute path of the file
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, err
 	}
-	fmt.Println()
 
-	// Size and modified time
-	modTime := info.ModTime().Format("2006-01-02 15:04:05")
-	fmt.Printf("%s       │%s %sSize:%s %s  %sModified:%s %s\n",
-		ColorGray, ColorReset,
-		ColorCyan, ColorReset, formatSize(info.Size()),
-		ColorCyan, ColorReset, modTime)
-
-	if showGrid {
-		fmt.Printf("%s───────┼────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	logger.Printf("Listing backups for: %s", absFilePath)
+	
+	// Get the directory of the file (or use current if file doesn't exist yet)
+	dir := filepath.Dir(absFilePath)
+	
+	// Find .pt root (searches parent directories like git)
+	ptRoot, err := findPTRoot(dir)
+	if err != nil {
+		return nil, err
 	}
-}
 
-// printShowFooter prints bat-like footer
-func printShowFooter(filePath string, info os.FileInfo, contentLen int, showGrid bool) {
-	if showGrid {
-		fmt.Printf("%s───────┴────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	if ptRoot == "" {
+		// No .pt directory exists yet in the entire tree
+		logger.Printf("No .pt directory found in tree")
+		return []BackupInfo{}, nil
 	}
-	fmt.Println()
-}
 
-// printWithLineNumbers prints content with line numbers
-func printWithLineNumbers(content string, showGrid bool) {
-	lines := strings.Split(content, "\n")
-	maxLineNum := len(lines)
-	lineNumWidth := len(fmt.Sprintf("%d", maxLineNum))
+	logger.Printf("Found .pt root: %s", ptRoot)
 
-	for i, line := range lines {
-		lineNum := i + 1
-		if showGrid {
-			fmt.Printf("%s%*d │%s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line)
+	// Get file basename and extension once
+	fileBaseName := filepath.Base(absFilePath)
+	fileExt := filepath.Ext(fileBaseName)
+	fileNameWithoutExt := strings.TrimSuffix(fileBaseName, fileExt)
+	fileExtWithoutDot := strings.TrimPrefix(fileExt, ".")
+	
+	// Get backup directory for this file within .pt
+	backupDir, err := getBackupDir(ptRoot, absFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Printf("Expected backup directory: %s", backupDir)
+
+	// Check if expected backup directory exists
+	backupDirExists := false
+	if stat, err := os.Stat(backupDir); err == nil && stat.IsDir() {
+		backupDirExists = true
+		logger.Printf("Backup directory exists: %s", backupDir)
+	} else {
+		logger.Printf("Backup directory does not exist: %s (error: %v)", backupDir, err)
+	}
+
+	// If expected directory doesn't exist, try fallback to base filename only
+	if !backupDirExists {
+		alternateBackupDir := filepath.Join(ptRoot, fileBaseName)
+
+		logger.Printf("Trying alternate backup directory (base filename only): %s", alternateBackupDir)
+
+		if stat, err := os.Stat(alternateBackupDir); err == nil && stat.IsDir() {
+			logger.Printf("Found backups using base filename: %s", alternateBackupDir)
+			fmt.Printf("%sℹ️  Note: Using backups from '%s/' (file may have been moved)%s\n",
+				ColorYellow, fileBaseName, ColorReset)
+			backupDir = alternateBackupDir
+			backupDirExists = true
 		} else {
-			fmt.Printf("%s%*d %s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line)
+			logger.Printf("Alternate backup directory also not found: %s (error: %v)", alternateBackupDir, err)
 		}
 	}
+
+	// If still no backup directory found, return empty
+	if !backupDirExists {
+		logger.Printf("No backup directory found for file")
+		return []BackupInfo{}, nil
+	}
+
+	// Pattern for backup files: filename_ext.timestamp...
+	pattern := fmt.Sprintf("%s_%s.", fileNameWithoutExt, fileExtWithoutDot)
+
+	logger.Printf("Looking for backup files with pattern: %s", pattern)
+
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		logger.Printf("Failed to read backup directory: %v", err)
+		return nil, fmt.Errorf("failed to read backup directory: %w", err)
+	}
+
+	logger.Printf("Found %d entries in backup directory", len(entries))
+
+	backups := make([]BackupInfo, 0)
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			logger.Printf("Skipping directory: %s", entry.Name())
+			continue
+		}
+
+		name := entry.Name()
+
+		if strings.HasSuffix(name, ".meta.json") {
+			logger.Printf("Skipping metadata file: %s", name)
+			continue
+		}
+
+		logger.Printf("Checking file: %s against pattern: %s", name, pattern)
+
+		if !strings.HasPrefix(name, pattern) {
+			logger.Printf("Skipping (doesn't match pattern '%s'): %s", pattern, name)
+			continue
+		}
+
+		timestamp := strings.TrimPrefix(name, pattern)
+
+		logger.Printf("Extracted timestamp: %s (length: %d)", timestamp, len(timestamp))
+
+		if len(timestamp) < 20 {
+			logger.Printf("Skipping (timestamp too short): %s", name)
+			continue
+		}
+
+		timestampPart := timestamp
+		if len(timestampPart) > 30 {
+			timestampPart = timestampPart[:30]
+		}
+
+		digitCount := 0
+		for _, c := range timestampPart {
+			if c >= '0' && c <= '9' {
+				digitCount++
+			}
+		}
+
+		if digitCount < 14 {
+			logger.Printf("Skipping %s: not enough digits in timestamp (%d)", name, digitCount)
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			logger.Printf("Warning: failed to get info for %s: %v", name, err)
+			continue
+		}
+
+		backupPath := filepath.Join(backupDir, name)
+		comment, err := loadBackupMetadata(backupPath)
+		if err != nil && !os.IsNotExist(err) {
+			logger.Printf("Warning: failed to load metadata for %s: %v", name, err)
+		}
+
+		logger.Printf("Found valid backup: %s (comment: %s)", name, comment)
+		backups = append(backups, BackupInfo{
+			Path:    backupPath,
+			Name:    name,
+			ModTime: info.ModTime(),
+			Size:    info.Size(),
+			Comment: comment,
+		})
+	}
+
+	if len(backups) == 0 {
+		logger.Printf("No valid backups found matching pattern: %s", pattern)
+		return backups, nil
+	}
+
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].ModTime.After(backups[j].ModTime)
+	})
+
+	if len(backups) > appConfig.MaxBackupCount {
+		backups = backups[:appConfig.MaxBackupCount]
+	}
+
+	logger.Printf("Returning %d backup(s)", len(backups))
+	return backups, nil
+}
+
+func printBackupTable(filePath string, backups []BackupInfo) {
+	const (
+		col1Width = 40  // More width for filename
+		col2Width = 19
+		col3Width = 12
+		col4Width = 30  // Smaller for comments
+	)
+
+	// Find .pt root to show in message
+	dir := filepath.Dir(filePath)
+	ptRoot, _ := findPTRoot(dir)
+	ptLocation := appConfig.BackupDirName
+	if ptRoot != "" {
+		relPT, _ := filepath.Rel(".", ptRoot)
+		if relPT != "" {
+			ptLocation = relPT
+		}
+	}
+
+	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
+		ColorCyan, ColorBold, filePath, ColorReset, ColorCyan, ColorReset)
+	fmt.Printf("%sTotal: %d backup(s) (stored in %s/)%s\n\n",
+		ColorGray, len(backups), ptLocation, ColorReset)
+
+	fmt.Printf("%s┌%s┬%s┬%s┬%s┐%s\n",
+		ColorGray,
+		strings.Repeat("─", col1Width+2),
+		strings.Repeat("─", col2Width+2),
+		strings.Repeat("─", col3Width+2),
+		strings.Repeat("─", col4Width+2),
+		ColorReset)
+
+	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s %s%s%-*s%s %s│%s\n",
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col1Width, "File Name", ColorReset,
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col2Width, "Modified", ColorReset,
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col3Width, "Size", ColorReset,
+		ColorGray, ColorReset,
+		ColorBold, ColorYellow, col4Width, "Comment", ColorReset,
+		ColorGray, ColorReset)
+
+	fmt.Printf("%s├%s┼%s┼%s┼%s┤%s\n",
+		ColorGray,
+		strings.Repeat("─", col1Width+2),
+		strings.Repeat("─", col2Width+2),
+		strings.Repeat("─", col3Width+2),
+		strings.Repeat("─", col4Width+2),
+		ColorReset)
+
+	for i, backup := range backups {
+		name := backup.Name
+		numWidth := len(fmt.Sprintf("%3d. ", i+1))
+		maxNameLen := col1Width - numWidth
+		if len(name) > maxNameLen {
+			name = name[:maxNameLen-3] + "..."
+		}
+
+		modTime := backup.ModTime.Format("2006-01-02 15:04:05")
+		sizeStr := formatSize(backup.Size)
+
+		comment := backup.Comment
+		if comment == "" {
+			comment = "-"
+		} else {
+			if len(comment) > col4Width {
+				comment = comment[:col4Width-3] + "..."
+			}
+		}
+
+		fmt.Printf("%s│%s %3d. %-*s %s│%s %-*s %s│%s %*s %s│%s %-*s %s│%s\n",
+			ColorGray, ColorReset,
+			i+1, maxNameLen, name,
+			ColorGray, ColorReset,
+			col2Width, modTime,
+			ColorGray, ColorReset,
+			col3Width, sizeStr,
+			ColorGray, ColorReset,
+			col4Width, comment,
+			ColorGray, ColorReset)
+	}
+
+	fmt.Printf("%s└%s┴%s┴%s┴%s┘%s\n\n",
+		ColorGray,
+		strings.Repeat("─", col1Width+2),
+		strings.Repeat("─", col2Width+2),
+		strings.Repeat("─", col3Width+2),
+		strings.Repeat("─", col4Width+2),
+		ColorReset)
+}
+
+// Add the missing comment parameter
+func restoreBackup(backupPath, originalPath, comment string) error {
+	if err := validatePath(originalPath); err != nil {
+		return err
+	}
+
+	info, err := os.Stat(backupPath)
+	if err != nil {
+		return fmt.Errorf("backup file not found: %w", err)
+	}
+
+	if info.Size() > int64(appConfig.MaxClipboardSize) {
+		return fmt.Errorf("backup file too large to restore (max %dMB)", appConfig.MaxClipboardSize/(1024*1024))
+	}
+
+	content, err := os.ReadFile(backupPath)
+	if err != nil {
+		return fmt.Errorf("failed to read backup file: %w", err)
+	}
+
+	if _, err := os.Stat(originalPath); err == nil {
+		if comment == "" {
+			comment = "Backup before restore"
+		}
+		_, err = autoRenameIfExists(originalPath, comment)
+		if err != nil {
+			return fmt.Errorf("failed to backup current file: %w", err)
+		}
+	}
+
+	err = os.WriteFile(originalPath, content, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to restore file: %w", err)
+	}
+
+	logger.Printf("Restored: %s from %s", originalPath, backupPath)
+	fmt.Printf("✅ Successfully restored: %s\n", originalPath)
+	fmt.Printf("📦 From backup: %s\n", filepath.Base(backupPath))
+	fmt.Printf("📄 Content size: %d characters\n", len(content))
+
+	if comment != "" {
+		fmt.Printf("💬 Restore comment: \"%s\"\n", comment)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+func formatSize(size int64) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
 }
 
 // loadVersion loads version from VERSION file
@@ -921,36 +1884,36 @@ func loadVersion() string {
 		"/usr/local/share/pt/VERSION",
 		filepath.Join(os.Getenv("HOME"), ".local", "share", "pt", "VERSION"),
 	}
-	
+
 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
-		versionPaths = append(versionPaths, 
+		versionPaths = append(versionPaths,
 			filepath.Join(userProfile, ".pt", "VERSION"),
 			filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
 		)
 	}
-	
+
 	for _, versionPath := range versionPaths {
 		data, err := os.ReadFile(versionPath)
 		if err == nil {
 			content := strings.TrimSpace(string(data))
-			
+
 			if strings.HasPrefix(content, "version") {
 				parts := strings.SplitN(content, "=", 2)
 				if len(parts) == 2 {
 					content = strings.TrimSpace(parts[1])
 				}
 			}
-			
+
 			content = strings.Trim(content, `"'`)
 			content = strings.TrimPrefix(content, "v")
-			
+
 			if content != "" {
 				logger.Printf("Version loaded from: %s (%s)", versionPath, content)
 				return content
 			}
 		}
 	}
-	
+
 	logger.Println("VERSION file not found, using 'dev'")
 	return "dev"
 }
@@ -967,17 +1930,17 @@ func getDefaultConfig() *Config {
 
 func findConfigFile() string {
 	configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
-	
+
 	searchPaths := []string{
 		".",
 		filepath.Join(os.Getenv("HOME"), ".config", "pt"),
 		os.Getenv("HOME"),
 	}
-	
+
 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
 		searchPaths = append(searchPaths, userProfile, filepath.Join(userProfile, ".pt"))
 	}
-	
+
 	for _, basePath := range searchPaths {
 		for _, configName := range configNames {
 			configPath := filepath.Join(basePath, configName)
@@ -986,62 +1949,324 @@ func findConfigFile() string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
 func loadConfig() *Config {
 	config := getDefaultConfig()
-	
+
 	configPath := findConfigFile()
 	if configPath == "" {
 		logger.Println("No config file found, using defaults")
 		return config
 	}
-	
+
 	logger.Printf("Loading config from: %s", configPath)
-	
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		logger.Printf("Warning: failed to read config file: %v, using defaults", err)
 		return config
 	}
-	
+
 	err = yaml.Unmarshal(data, config)
 	if err != nil {
 		logger.Printf("Warning: failed to parse config file: %v, using defaults", err)
 		return config
 	}
-	
+
 	if config.MaxClipboardSize <= 0 || config.MaxClipboardSize > 1024*1024*1024 {
 		logger.Printf("Warning: invalid max_clipboard_size, using default")
 		config.MaxClipboardSize = DefaultMaxClipboardSize
 	}
-	
+
 	if config.MaxBackupCount <= 0 || config.MaxBackupCount > 10000 {
 		logger.Printf("Warning: invalid max_backup_count, using default")
 		config.MaxBackupCount = DefaultMaxBackupCount
 	}
-	
+
 	if config.MaxFilenameLen <= 0 || config.MaxFilenameLen > 1000 {
 		logger.Printf("Warning: invalid max_filename_length, using default")
 		config.MaxFilenameLen = DefaultMaxFilenameLen
 	}
-	
+
 	if config.BackupDirName == "" {
 		logger.Printf("Warning: empty backup_dir_name, using default")
 		config.BackupDirName = DefaultBackupDirName
 	}
-	
+
 	if config.MaxSearchDepth <= 0 || config.MaxSearchDepth > 100 {
 		logger.Printf("Warning: invalid max_search_depth, using default")
 		config.MaxSearchDepth = DefaultMaxSearchDepth
 	}
-	
-	logger.Printf("Config loaded successfully: clipboard=%dMB, backups=%d, depth=%d", 
+
+	logger.Printf("Config loaded successfully: clipboard=%dMB, backups=%d, depth=%d",
 		config.MaxClipboardSize/(1024*1024), config.MaxBackupCount, config.MaxSearchDepth)
-	
+
 	return config
+}
+
+func generateSampleConfig(path string) error {
+	config := getDefaultConfig()
+
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	header := `# PT Configuration File
+# This file configures the behavior of the PT tool
+# All values are optional - if not specified, defaults will be used
+
+# Maximum clipboard content size in bytes (default: 104857600 = 100MB)
+# Range: 1 - 1073741824 (1GB)
+`
+
+	fullContent := header + string(data)
+
+	err = os.WriteFile(path, []byte(fullContent), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+func handleConfigCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("config subcommand required: 'init', 'show', or 'path'")
+	}
+
+	subcommand := args[0]
+
+	switch subcommand {
+	case "init":
+		var configPath string
+		if len(args) > 1 {
+			configPath = args[1]
+		} else {
+			configPath = "pt.yml"
+		}
+
+		if _, err := os.Stat(configPath); err == nil {
+			fmt.Printf("%s⚠️  Warning: Config file already exists: %s%s\n", ColorYellow, configPath, ColorReset)
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("Overwrite? (y/N): ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input != "y" && input != "yes" {
+				fmt.Println("❌ Cancelled")
+				return nil
+			}
+		}
+
+		err := generateSampleConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to generate config: %w", err)
+		}
+
+		fmt.Printf("✅ Sample config file created: %s%s%s\n", ColorGreen, configPath, ColorReset)
+		fmt.Println("📝 Edit this file to customize PT behavior")
+
+	case "show":
+		fmt.Printf("\n%sCurrent PT Configuration:%s\n\n", ColorBold, ColorReset)
+		fmt.Printf("%sMax Clipboard Size:%s %d bytes (%.1f MB)\n",
+			ColorCyan, ColorReset, appConfig.MaxClipboardSize, float64(appConfig.MaxClipboardSize)/(1024*1024))
+		fmt.Printf("%sMax Backup Count:%s %d\n", ColorCyan, ColorReset, appConfig.MaxBackupCount)
+		fmt.Printf("%sMax Filename Length:%s %d characters\n", ColorCyan, ColorReset, appConfig.MaxFilenameLen)
+		fmt.Printf("%sBackup Directory:%s %s/ (Git-like structure)\n", ColorCyan, ColorReset, appConfig.BackupDirName)
+		fmt.Printf("%sMax Search Depth:%s %d levels\n\n", ColorCyan, ColorReset, appConfig.MaxSearchDepth)
+
+		configPath := findConfigFile()
+		if configPath != "" {
+			fmt.Printf("%sConfig loaded from:%s %s\n", ColorGray, ColorReset, configPath)
+		} else {
+			fmt.Printf("%sUsing default configuration (no config file found)%s\n", ColorGray, ColorReset)
+		}
+
+	case "path":
+		configPath := findConfigFile()
+		if configPath != "" {
+			fmt.Printf("📄 Config file: %s%s%s\n", ColorGreen, configPath, ColorReset)
+		} else {
+			fmt.Printf("%sℹ️  No config file found%s\n", ColorGray, ColorReset)
+			fmt.Println("\nSearched in:")
+			fmt.Println("  • ./pt.yml or ./pt.yaml")
+			fmt.Println("  • ~/.config/pt/pt.yml or ~/.config/pt/pt.yaml")
+			fmt.Println("  • ~/pt.yml or ~/pt.yaml")
+			fmt.Printf("\n%sCreate one with:%s pt config init\n", ColorCyan, ColorReset)
+		}
+
+	default:
+		return fmt.Errorf("unknown config subcommand: %s (use 'init', 'show', or 'path')", subcommand)
+	}
+
+	return nil
+}
+
+func saveBackupMetadata(backupPath, comment, originalFile string, size int64) error {
+	metadataPath := backupPath + ".meta.json"
+
+	metadata := BackupMetadata{
+		Comment:   comment,
+		Timestamp: time.Now(),
+		Size:      size,
+		Original:  originalFile,
+	}
+
+	data, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	err = os.WriteFile(metadataPath, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+
+	return nil
+}
+
+func loadBackupMetadata(backupPath string) (string, error) {
+	metadataPath := backupPath + ".meta.json"
+
+	data, err := os.ReadFile(metadataPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	var metadata BackupMetadata
+	err = json.Unmarshal(data, &metadata)
+	if err != nil {
+		return "", err
+	}
+
+	return metadata.Comment, nil
+}
+
+// func loadGitIgnore(rootPath string) (*GitIgnore, error) {
+// 	gitignorePath := filepath.Join(rootPath, ".gitignore")
+// 	gi := &GitIgnore{patterns: make([]string, 0)}
+	
+// 	file, err := os.Open(gitignorePath)
+// 	if err != nil {
+// 		if os.IsNotExist(err) {
+// 			return gi, nil
+// 		}
+// 		return nil, err
+// 	}
+// 	defer file.Close()
+
+// 	scanner := bufio.NewScanner(file)
+// 	for scanner.Scan() {
+// 		line := strings.TrimSpace(scanner.Text())
+// 		if line == "" || strings.HasPrefix(line, "#") {
+// 			continue
+// 		}
+// 		gi.patterns = append(gi.patterns, line)
+// 	}
+
+// 	return gi, scanner.Err()
+// }
+
+// loadGitIgnoreAndPtIgnore loads patterns from .gitignore and .ptignore in the root path
+func loadGitIgnoreAndPtIgnore(rootPath string) (*GitIgnore, error) {
+	gitignorePath := filepath.Join(rootPath, ".gitignore")
+	ptignorePath := filepath.Join(rootPath, ".ptignore")
+
+	gi := &GitIgnore{patterns: make([]string, 0)}
+
+    // Load .gitignore
+    file, err := os.Open(gitignorePath)
+    if err != nil {
+        if !os.IsNotExist(err) {
+            logger.Printf("Warning: failed to read .gitignore: %v", err)
+        }
+        // Continue to load .ptignore even if .gitignore fails
+    } else {
+        defer file.Close()
+        scanner := bufio.NewScanner(file)
+        for scanner.Scan() {
+            line := strings.TrimSpace(scanner.Text())
+            if line == "" || strings.HasPrefix(line, "#") {
+                continue
+            }
+            gi.patterns = append(gi.patterns, line)
+        }
+        if err := scanner.Err(); err != nil {
+            logger.Printf("Warning: error reading .gitignore: %v", err)
+        }
+    }
+
+    // Load .ptignore
+    ptFile, err := os.Open(ptignorePath)
+    if err != nil {
+        if !os.IsNotExist(err) {
+            logger.Printf("Warning: failed to read .ptignore: %v", err)
+        }
+        // Continue even if .ptignore fails
+    } else {
+        defer ptFile.Close()
+        scanner := bufio.NewScanner(ptFile)
+        for scanner.Scan() {
+            line := strings.TrimSpace(scanner.Text())
+            if line == "" || strings.HasPrefix(line, "#") {
+                continue
+            }
+            gi.patterns = append(gi.patterns, line)
+        }
+        if err := scanner.Err(); err != nil {
+            logger.Printf("Warning: error reading .ptignore: %v", err)
+        }
+    }
+
+	return gi, nil
+}
+
+func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
+	baseName := filepath.Base(path)
+	
+	// Always ignore .pt directory
+	if baseName == appConfig.BackupDirName {
+		return true
+	}
+
+	// Always ignore .git directory
+    if baseName == ".git" {
+        return true
+    }
+	
+	for _, pattern := range gi.patterns {
+		if strings.HasSuffix(pattern, "/") {
+			dirPattern := strings.TrimSuffix(pattern, "/")
+			if isDir && (baseName == dirPattern || strings.HasPrefix(baseName, dirPattern)) {
+				return true
+			}
+			continue
+		}
+
+		if strings.Contains(pattern, "*") {
+			matched, _ := filepath.Match(pattern, baseName)
+			if matched {
+				return true
+			}
+			continue
+		}
+
+		if baseName == pattern {
+			return true
+		}
+
+		if strings.Contains(path, "/"+pattern+"/") || strings.Contains(path, "\\"+pattern+"\\") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // findPTRoot searches for .pt or .git directory in current and parent directories (like .git)
@@ -1283,7 +2508,7 @@ func createPTGitignore(dir string) {
 
 	f.WriteString("# PT backup directory\n")
 	f.WriteString(ptPattern + "\n")
-	
+
 	logger.Printf("Added %s to .gitignore", ptPattern)
 }
 
@@ -1296,7 +2521,7 @@ func getRelativePath(ptRoot, filePath string) (string, error) {
 
 	// Get the directory containing .pt
 	ptParent := filepath.Dir(ptRoot)
-	
+
 	relPath, err := filepath.Rel(ptParent, absFilePath)
 	if err != nil {
 		return "", err
@@ -1325,7 +2550,7 @@ func getBackupDir(ptRoot, filePath string) (string, error) {
 	
 	// Get the directory part (if any)
 	dirPart := filepath.Dir(relPath)
-	
+
 	var backupSubdir string
 	
 	// If file is directly in .pt parent (no subdirectory)
@@ -1343,609 +2568,12 @@ func getBackupDir(ptRoot, filePath string) (string, error) {
 		fullPath = strings.ReplaceAll(fullPath, "\\", "_") // Windows
 		backupSubdir = fullPath
 	}
-	
+
 	backupDir := filepath.Join(ptRoot, backupSubdir)
-	
+
 	logger.Printf("Backup dir for %s: %s (relative: %s)", filePath, backupDir, relPath)
-	
+
 	return backupDir, nil
-}
-
-// loadIgnorePatterns loads patterns from .ptignore and .gitignore
-func loadIgnorePatterns(startPath string) []string {
-	patterns := make([]string, 0)
-	
-	// Try to find .pt root first
-	ptRoot, _ := findPTRoot(startPath)
-	var searchDir string
-	if ptRoot != "" {
-		searchDir = filepath.Dir(ptRoot)
-	} else {
-		searchDir = startPath
-	}
-
-	// Load .ptignore (higher priority)
-	ptignorePath := filepath.Join(searchDir, ".ptignore")
-	if content, err := os.ReadFile(ptignorePath); err == nil {
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "#") {
-				patterns = append(patterns, line)
-			}
-		}
-		logger.Printf("Loaded %d patterns from .ptignore", len(patterns))
-	}
-
-	// Load .gitignore
-	gitignorePath := filepath.Join(searchDir, ".gitignore")
-	if content, err := os.ReadFile(gitignorePath); err == nil {
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "#") {
-				patterns = append(patterns, line)
-			}
-		}
-		logger.Printf("Loaded patterns from .gitignore")
-	}
-
-	// Always ignore .pt directory
-	patterns = append(patterns, appConfig.BackupDirName, appConfig.BackupDirName+"/")
-
-	return patterns
-}
-
-// shouldIgnore checks if a path matches ignore patterns
-func shouldIgnore(path string, patterns []string) bool {
-	baseName := filepath.Base(path)
-	
-	for _, pattern := range patterns {
-		// Simple pattern matching
-		if pattern == baseName {
-			return true
-		}
-		if strings.HasSuffix(pattern, "/") && baseName == strings.TrimSuffix(pattern, "/") {
-			return true
-		}
-		if strings.Contains(path, pattern) {
-			return true
-		}
-	}
-	
-	return false
-}
-
-func generateSampleConfig(path string) error {
-	config := getDefaultConfig()
-	
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-	
-	header := `# PT Configuration File
-# This file configures the behavior of the PT tool
-# All values are optional - if not specified, defaults will be used
-
-# Maximum clipboard content size in bytes (default: 104857600 = 100MB)
-# Range: 1 - 1073741824 (1GB)
-`
-	
-	fullContent := header + string(data)
-	
-	err = os.WriteFile(path, []byte(fullContent), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-	
-	return nil
-}
-
-func handleConfigCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("config subcommand required: 'init', 'show', or 'path'")
-	}
-	
-	subcommand := args[0]
-	
-	switch subcommand {
-	case "init":
-		var configPath string
-		if len(args) > 1 {
-			configPath = args[1]
-		} else {
-			configPath = "pt.yml"
-		}
-		
-		if _, err := os.Stat(configPath); err == nil {
-			fmt.Printf("%s⚠️  Warning: Config file already exists: %s%s\n", ColorYellow, configPath, ColorReset)
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("Overwrite? (y/N): ")
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input != "y" && input != "yes" {
-				fmt.Println("❌ Cancelled")
-				return nil
-			}
-		}
-		
-		err := generateSampleConfig(configPath)
-		if err != nil {
-			return fmt.Errorf("failed to generate config: %w", err)
-		}
-		
-		fmt.Printf("✅ Sample config file created: %s%s%s\n", ColorGreen, configPath, ColorReset)
-		fmt.Println("📝 Edit this file to customize PT behavior")
-		
-	case "show":
-		fmt.Printf("\n%sCurrent PT Configuration:%s\n\n", ColorBold, ColorReset)
-		fmt.Printf("%sMax Clipboard Size:%s %d bytes (%.1f MB)\n", 
-			ColorCyan, ColorReset, appConfig.MaxClipboardSize, float64(appConfig.MaxClipboardSize)/(1024*1024))
-		fmt.Printf("%sMax Backup Count:%s %d\n", ColorCyan, ColorReset, appConfig.MaxBackupCount)
-		fmt.Printf("%sMax Filename Length:%s %d characters\n", ColorCyan, ColorReset, appConfig.MaxFilenameLen)
-		fmt.Printf("%sBackup Directory:%s %s/ (Git-like structure)\n", ColorCyan, ColorReset, appConfig.BackupDirName)
-		fmt.Printf("%sMax Search Depth:%s %d levels\n\n", ColorCyan, ColorReset, appConfig.MaxSearchDepth)
-		
-		configPath := findConfigFile()
-		if configPath != "" {
-			fmt.Printf("%sConfig loaded from:%s %s\n", ColorGray, ColorReset, configPath)
-		} else {
-			fmt.Printf("%sUsing default configuration (no config file found)%s\n", ColorGray, ColorReset)
-		}
-		
-	case "path":
-		configPath := findConfigFile()
-		if configPath != "" {
-			fmt.Printf("📄 Config file: %s%s%s\n", ColorGreen, configPath, ColorReset)
-		} else {
-			fmt.Printf("%sℹ️  No config file found%s\n", ColorGray, ColorReset)
-			fmt.Println("\nSearched in:")
-			fmt.Println("  • ./pt.yml or ./pt.yaml")
-			fmt.Println("  • ~/.config/pt/pt.yml or ~/.config/pt/pt.yaml")
-			fmt.Println("  • ~/pt.yml or ~/pt.yaml")
-			fmt.Printf("\n%sCreate one with:%s pt config init\n", ColorCyan, ColorReset)
-		}
-		
-	default:
-		return fmt.Errorf("unknown config subcommand: %s (use 'init', 'show', or 'path')", subcommand)
-	}
-	
-	return nil
-}
-
-func formatSize(size int64) string {
-	const unit = 1024
-	if size < unit {
-		return fmt.Sprintf("%d B", size)
-	}
-	div, exp := int64(unit), 0
-	for n := size / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
-}
-
-func saveBackupMetadata(backupPath, comment, originalFile string, size int64) error {
-	metadataPath := backupPath + ".meta.json"
-	
-	metadata := BackupMetadata{
-		Comment:   comment,
-		Timestamp: time.Now(),
-		Size:      size,
-		Original:  originalFile,
-	}
-	
-	data, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-	
-	err = os.WriteFile(metadataPath, data, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write metadata: %w", err)
-	}
-	
-	return nil
-}
-
-func loadBackupMetadata(backupPath string) (string, error) {
-	metadataPath := backupPath + ".meta.json"
-	
-	data, err := os.ReadFile(metadataPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", err
-	}
-	
-	var metadata BackupMetadata
-	err = json.Unmarshal(data, &metadata)
-	if err != nil {
-		return "", err
-	}
-	
-	return metadata.Comment, nil
-}
-
-// func loadGitIgnore(rootPath string) (*GitIgnore, error) {
-// 	gitignorePath := filepath.Join(rootPath, ".gitignore")
-// 	gi := &GitIgnore{patterns: make([]string, 0)}
-	
-// 	file, err := os.Open(gitignorePath)
-// 	if err != nil {
-// 		if os.IsNotExist(err) {
-// 			return gi, nil
-// 		}
-// 		return nil, err
-// 	}
-// 	defer file.Close()
-
-// 	scanner := bufio.NewScanner(file)
-// 	for scanner.Scan() {
-// 		line := strings.TrimSpace(scanner.Text())
-// 		if line == "" || strings.HasPrefix(line, "#") {
-// 			continue
-// 		}
-// 		gi.patterns = append(gi.patterns, line)
-// 	}
-
-// 	return gi, scanner.Err()
-// }
-
-// loadGitIgnoreAndPtIgnore loads patterns from .gitignore and .ptignore in the root path
-func loadGitIgnoreAndPtIgnore(rootPath string) (*GitIgnore, error) {
-    gitignorePath := filepath.Join(rootPath, ".gitignore")
-    ptignorePath := filepath.Join(rootPath, ".ptignore")
-
-    gi := &GitIgnore{patterns: make([]string, 0)}
-
-    // Load .gitignore
-    file, err := os.Open(gitignorePath)
-    if err != nil {
-        if !os.IsNotExist(err) {
-            logger.Printf("Warning: failed to read .gitignore: %v", err)
-        }
-        // Continue to load .ptignore even if .gitignore fails
-    } else {
-        defer file.Close()
-        scanner := bufio.NewScanner(file)
-        for scanner.Scan() {
-            line := strings.TrimSpace(scanner.Text())
-            if line == "" || strings.HasPrefix(line, "#") {
-                continue
-            }
-            gi.patterns = append(gi.patterns, line)
-        }
-        if err := scanner.Err(); err != nil {
-            logger.Printf("Warning: error reading .gitignore: %v", err)
-        }
-    }
-
-    // Load .ptignore
-    ptFile, err := os.Open(ptignorePath)
-    if err != nil {
-        if !os.IsNotExist(err) {
-            logger.Printf("Warning: failed to read .ptignore: %v", err)
-        }
-        // Continue even if .ptignore fails
-    } else {
-        defer ptFile.Close()
-        scanner := bufio.NewScanner(ptFile)
-        for scanner.Scan() {
-            line := strings.TrimSpace(scanner.Text())
-            if line == "" || strings.HasPrefix(line, "#") {
-                continue
-            }
-            gi.patterns = append(gi.patterns, line)
-        }
-        if err := scanner.Err(); err != nil {
-            logger.Printf("Warning: error reading .ptignore: %v", err)
-        }
-    }
-
-    return gi, nil
-}
-
-func (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool {
-	baseName := filepath.Base(path)
-	
-	// Always ignore .pt directory
-	if baseName == appConfig.BackupDirName {
-		return true
-	}
-
-	// Always ignore .git directory
-    if baseName == ".git" {
-        return true
-    }
-	
-	for _, pattern := range gi.patterns {
-		if strings.HasSuffix(pattern, "/") {
-			dirPattern := strings.TrimSuffix(pattern, "/")
-			if isDir && (baseName == dirPattern || strings.HasPrefix(baseName, dirPattern)) {
-				return true
-			}
-			continue
-		}
-		
-		if strings.Contains(pattern, "*") {
-			matched, _ := filepath.Match(pattern, baseName)
-			if matched {
-				return true
-			}
-			continue
-		}
-		
-		if baseName == pattern {
-			return true
-		}
-		
-		if strings.Contains(path, "/"+pattern+"/") || strings.Contains(path, "\\"+pattern+"\\") {
-			return true
-		}
-	}
-	
-	return false
-}
-
-func buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*TreeNode, error) {
-	if depth > maxDepth {
-		return nil, nil
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-
-	baseName := filepath.Base(path)
-	
-	if exceptions[baseName] {
-		return nil, nil
-	}
-
-	if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
-		return nil, nil
-	}
-
-	node := &TreeNode{
-		Name:  baseName,
-		Path:  path,
-		IsDir: info.IsDir(),
-		Size:  info.Size(),
-	}
-
-	if info.IsDir() {
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			return node, nil
-		}
-
-		for _, entry := range entries {
-			childPath := filepath.Join(path, entry.Name())
-			childNode, err := buildTree(childPath, gitignore, exceptions, depth+1, maxDepth)
-			if err != nil || childNode == nil {
-				continue
-			}
-			node.Children = append(node.Children, childNode)
-		}
-
-		sort.Slice(node.Children, func(i, j int) bool {
-			if node.Children[i].IsDir != node.Children[j].IsDir {
-				return node.Children[i].IsDir
-			}
-			return node.Children[i].Name < node.Children[j].Name
-		})
-	}
-
-	return node, nil
-}
-
-func printTree(node *TreeNode, prefix string, isLast bool, showSize bool) {
-	if node == nil {
-		return
-	}
-
-	connector := "├── "
-	if isLast {
-		connector = "└── "
-	}
-
-	displayName := node.Name
-	if node.IsDir {
-		displayName = ColorCyan + displayName + "/" + ColorReset
-	} else {
-		displayName = ColorGreen + displayName + ColorReset
-	}
-
-	sizeStr := ""
-	if showSize && !node.IsDir {
-		sizeStr = ColorGray + " (" + formatSize(node.Size) + ")" + ColorReset
-	}
-
-	fmt.Printf("%s%s%s%s\n", prefix, connector, displayName, sizeStr)
-
-	if node.IsDir && len(node.Children) > 0 {
-		childPrefix := prefix
-		if isLast {
-			childPrefix += "    "
-		} else {
-			childPrefix += "│   "
-		}
-
-		for i, child := range node.Children {
-			printTree(child, childPrefix, i == len(node.Children)-1, showSize)
-		}
-	}
-}
-
-func handleTreeCommand(args []string) error {
-	exceptions := make(map[string]bool)
-	startPath := "."
-	
-	i := 0
-	for i < len(args) {
-		if args[i] == "-e" || args[i] == "--exception" {
-			if i+1 >= len(args) {
-				return fmt.Errorf("-e/--exception requires a value")
-			}
-			i++
-			for _, exc := range strings.Split(args[i], ",") {
-				exceptions[strings.TrimSpace(exc)] = true
-			}
-			i++
-		} else {
-			startPath = args[i]
-			i++
-		}
-	}
-
-	absPath, err := filepath.Abs(startPath)
-	if err != nil {
-		return fmt.Errorf("invalid path: %w", err)
-	}
-
-	info, err := os.Stat(absPath)
-	if err != nil {
-		return fmt.Errorf("path does not exist: %w", err)
-	}
-
-	var gitignore *GitIgnore
-	if info.IsDir() {
-		gitignore, err = loadGitIgnoreAndPtIgnore(absPath)
-		if err != nil {
-			logger.Printf("Warning: failed to load .gitignore: %v", err)
-		}
-	}
-
-	tree, err := buildTree(absPath, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
-	if err != nil {
-		return fmt.Errorf("failed to build tree: %w", err)
-	}
-
-	if tree == nil {
-		return fmt.Errorf("no files to display")
-	}
-
-	fmt.Printf("\n%s%s%s\n", ColorBold, tree.Name, ColorReset)
-	if tree.IsDir && len(tree.Children) > 0 {
-		for i, child := range tree.Children {
-			printTree(child, "", i == len(tree.Children)-1, true)
-		}
-	}
-	fmt.Println()
-
-	fileCount := 0
-	dirCount := 0
-	var totalSize int64
-
-	var countNodes func(*TreeNode)
-	countNodes = func(n *TreeNode) {
-		if n.IsDir {
-			dirCount++
-			for _, child := range n.Children {
-				countNodes(child)
-			}
-		} else {
-			fileCount++
-			totalSize += n.Size
-		}
-	}
-	countNodes(tree)
-
-	fmt.Printf("%s%d directories, %d files, %s total%s\n", 
-		ColorGray, dirCount, fileCount, formatSize(totalSize), ColorReset)
-
-	if len(exceptions) > 0 {
-		excList := make([]string, 0, len(exceptions))
-		for exc := range exceptions {
-			excList = append(excList, exc)
-		}
-		fmt.Printf("%sExceptions: %s%s\n", ColorGray, strings.Join(excList, ", "), ColorReset)
-	}
-
-	if gitignore != nil && len(gitignore.patterns) > 0 {
-		fmt.Printf("%sUsing .gitignore (%d patterns) + %s is always excluded%s\n", 
-			ColorGray, len(gitignore.patterns), appConfig.BackupDirName, ColorReset)
-	}
-
-	return nil
-}
-
-// parsing comment for handleRemoveCommand
-func handleRemoveCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("filename required for remove command")
-	}
-
-	filename := args[0]
-	comment := ""
-	
-	for i := 1; i < len(args); i++ {
-		if args[i] == "-m" || args[i] == "--message" {
-			if i+1 >= len(args) {
-				return fmt.Errorf("-m/--message requires a value")
-			}
-			i++
-			comment = args[i]
-			break
-		}
-	}
-
-	filePath, err := resolveFilePath(filename)
-	if err != nil {
-		return err
-	}
-
-	info, err := os.Stat(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("file not found: %s", filePath)
-		}
-		return fmt.Errorf("failed to check file: %w", err)
-	}
-
-	if info.IsDir() {
-		return fmt.Errorf("cannot remove directories, only files")
-	}
-
-	if info.Size() > 0 {
-		if comment == "" {
-			comment = "Deleted file backup"
-		}
-		_, err = autoRenameIfExists(filePath, comment)
-		if err != nil {
-			return fmt.Errorf("failed to create backup: %w", err)
-		}
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
-
-	err = os.Remove(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to delete file: %w", err)
-	}
-
-	logger.Printf("File deleted: %s (%d bytes)", filePath, len(content))
-	fmt.Printf("🗑️  File deleted: %s\n", filePath)
-
-	emptyFile, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create empty placeholder: %w", err)
-	}
-	emptyFile.Close()
-
-	logger.Printf("Created empty placeholder: %s", filePath)
-	fmt.Printf("📄 Created empty placeholder: %s\n", filePath)
-	fmt.Printf("ℹ️  Original content (%d bytes) backed up to %s/\n", len(content), appConfig.BackupDirName)
-
-	return nil
 }
 
 func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, error) {
@@ -1955,8 +2583,10 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Load ignore patterns
-	ignorePatterns := loadIgnorePatterns(cwd)
+	gitignore, err := loadGitIgnoreAndPtIgnore(cwd)
+	if err != nil {
+		logger.Printf("Warning: failed to load ignore patterns: %v", err)
+	}
 
 	currentPath := filepath.Join(cwd, filename)
 	if info, err := os.Stat(currentPath); err == nil && !info.IsDir() {
@@ -1974,13 +2604,20 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 			return nil
 		}
 
-		// Check ignore patterns
-		if shouldIgnore(path, ignorePatterns) {
+        if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
+
+		// Check ignore patterns
+		// if shouldIgnore(path, ignorePatterns) {
+		// 	if info.IsDir() {
+		// 		return filepath.SkipDir
+		// 	}
+		// 	return nil
+		// }
 
 		relPath, err := filepath.Rel(cwd, path)
 		if err != nil {
@@ -2133,100 +2770,6 @@ func resolveFilePath(filename string) (string, error) {
 	}
 
 	return results[choice-1].Path, nil
-}
-
-func checkDeltaInstalled() bool {
-	_, err := exec.LookPath("delta")
-	return err == nil
-}
-
-func runDelta(file1, file2 string) error {
-	if !checkDeltaInstalled() {
-		return fmt.Errorf("delta is not installed. Install it from: https://github.com/dandavison/delta")
-	}
-
-	cmd := exec.Command("delta", file1, file2)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	err := cmd.Run()
-	
-	// Delta exit code 1 is NORMAL when files are different
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() == 1 {
-				return nil
-			}
-		}
-		return err
-	}
-
-	return nil
-}
-
-func handleDiffCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("filename required for diff command")
-	}
-
-	filename := args[0]
-	useLast := len(args) > 1 && args[1] == "--last"
-
-	filePath, err := resolveFilePath(filename)
-	if err != nil {
-		return err
-	}
-
-	backups, err := listBackups(filePath)
-	if err != nil {
-		return err
-	}
-
-	if len(backups) == 0 {
-		return fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
-	}
-
-	var selectedBackup BackupInfo
-
-	if useLast {
-		selectedBackup = backups[0]
-		fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
-	} else {
-		printBackupTable(filePath, backups)
-
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Enter backup number to compare (1-%d) or 0 to cancel: ", len(backups))
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-
-		input = strings.TrimSpace(input)
-		choice, err := strconv.Atoi(input)
-		if err != nil {
-			return fmt.Errorf("invalid input: please enter a number")
-		}
-
-		if choice < 0 || choice > len(backups) {
-			return fmt.Errorf("invalid selection: must be between 0 and %d", len(backups))
-		}
-
-		if choice == 0 {
-			return fmt.Errorf("diff cancelled")
-		}
-
-		selectedBackup = backups[choice-1]
-		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
-	}
-
-	err = runDelta(selectedBackup.Path, filePath)
-	if err != nil {
-		return fmt.Errorf("delta execution failed: %w", err)
-	}
-
-	return nil
 }
 
 func validatePath(filePath string) error {
@@ -2440,330 +2983,15 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 	return nil
 }
 
-func listBackups(filePath string) ([]BackupInfo, error) {
-	if err := validatePath(filePath); err != nil {
-		return nil, err
-	}
-
-	// Get absolute path of the file
-	absFilePath, err := filepath.Abs(filePath)
-	if err != nil {
-		return nil, err
-	}
-	
-	logger.Printf("Listing backups for: %s", absFilePath)
-	
-	// Get the directory of the file (or use current if file doesn't exist yet)
-	dir := filepath.Dir(absFilePath)
-	
-	// Find .pt root (searches parent directories like git)
-	ptRoot, err := findPTRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	if ptRoot == "" {
-		// No .pt directory exists yet in the entire tree
-		logger.Printf("No .pt directory found in tree")
-		return []BackupInfo{}, nil
-	}
-
-	logger.Printf("Found .pt root: %s", ptRoot)
-
-	// Get file basename and extension once
-	fileBaseName := filepath.Base(absFilePath)
-	fileExt := filepath.Ext(fileBaseName)
-	fileNameWithoutExt := strings.TrimSuffix(fileBaseName, fileExt)
-	fileExtWithoutDot := strings.TrimPrefix(fileExt, ".")
-	
-	// Get backup directory for this file within .pt
-	backupDir, err := getBackupDir(ptRoot, absFilePath)
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Printf("Expected backup directory: %s", backupDir)
-
-	// Check if expected backup directory exists
-	backupDirExists := false
-	if stat, err := os.Stat(backupDir); err == nil && stat.IsDir() {
-		backupDirExists = true
-		logger.Printf("Backup directory exists: %s", backupDir)
-	} else {
-		logger.Printf("Backup directory does not exist: %s (error: %v)", backupDir, err)
-	}
-
-	// If expected directory doesn't exist, try fallback to base filename only
-	if !backupDirExists {
-		alternateBackupDir := filepath.Join(ptRoot, fileBaseName)
-		
-		logger.Printf("Trying alternate backup directory (base filename only): %s", alternateBackupDir)
-		
-		if stat, err := os.Stat(alternateBackupDir); err == nil && stat.IsDir() {
-			logger.Printf("Found backups using base filename: %s", alternateBackupDir)
-			fmt.Printf("%sℹ️  Note: Using backups from '%s/' (file may have been moved)%s\n", 
-				ColorYellow, fileBaseName, ColorReset)
-			backupDir = alternateBackupDir
-			backupDirExists = true
-		} else {
-			logger.Printf("Alternate backup directory also not found: %s (error: %v)", alternateBackupDir, err)
-		}
-	}
-
-	// If still no backup directory found, return empty
-	if !backupDirExists {
-		logger.Printf("No backup directory found for file")
-		return []BackupInfo{}, nil
-	}
-
-	// Pattern for backup files: filename_ext.timestamp...
-	pattern := fmt.Sprintf("%s_%s.", fileNameWithoutExt, fileExtWithoutDot)
-	
-	logger.Printf("Looking for backup files with pattern: %s", pattern)
-
-	entries, err := os.ReadDir(backupDir)
-	if err != nil {
-		logger.Printf("Failed to read backup directory: %v", err)
-		return nil, fmt.Errorf("failed to read backup directory: %w", err)
-	}
-
-	logger.Printf("Found %d entries in backup directory", len(entries))
-
-	backups := make([]BackupInfo, 0)
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			logger.Printf("Skipping directory: %s", entry.Name())
-			continue
-		}
-
-		name := entry.Name()
-		
-		if strings.HasSuffix(name, ".meta.json") {
-			logger.Printf("Skipping metadata file: %s", name)
-			continue
-		}
-		
-		logger.Printf("Checking file: %s against pattern: %s", name, pattern)
-		
-		if !strings.HasPrefix(name, pattern) {
-			logger.Printf("Skipping (doesn't match pattern '%s'): %s", pattern, name)
-			continue
-		}
-
-		timestamp := strings.TrimPrefix(name, pattern)
-		
-		logger.Printf("Extracted timestamp: %s (length: %d)", timestamp, len(timestamp))
-		
-		if len(timestamp) < 20 {
-			logger.Printf("Skipping (timestamp too short): %s", name)
-			continue
-		}
-
-		timestampPart := timestamp
-		if len(timestampPart) > 30 {
-			timestampPart = timestampPart[:30]
-		}
-		
-		digitCount := 0
-		for _, c := range timestampPart {
-			if c >= '0' && c <= '9' {
-				digitCount++
-			}
-		}
-		
-		if digitCount < 14 {
-			logger.Printf("Skipping %s: not enough digits in timestamp (%d)", name, digitCount)
-			continue
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			logger.Printf("Warning: failed to get info for %s: %v", name, err)
-			continue
-		}
-
-		backupPath := filepath.Join(backupDir, name)
-		comment, err := loadBackupMetadata(backupPath)
-		if err != nil && !os.IsNotExist(err) {
-			logger.Printf("Warning: failed to load metadata for %s: %v", name, err)
-		}
-
-		logger.Printf("Found valid backup: %s (comment: %s)", name, comment)
-		backups = append(backups, BackupInfo{
-			Path:    backupPath,
-			Name:    name,
-			ModTime: info.ModTime(),
-			Size:    info.Size(),
-			Comment: comment,
-		})
-	}
-
-	if len(backups) == 0 {
-		logger.Printf("No valid backups found matching pattern: %s", pattern)
-		return backups, nil
-	}
-
-	sort.Slice(backups, func(i, j int) bool {
-		return backups[i].ModTime.After(backups[j].ModTime)
-	})
-
-	if len(backups) > appConfig.MaxBackupCount {
-		backups = backups[:appConfig.MaxBackupCount]
-	}
-
-	logger.Printf("Returning %d backup(s)", len(backups))
-	return backups, nil
-}
-
-func printBackupTable(filePath string, backups []BackupInfo) {
-	const (
-		col1Width = 40  // More width for filename
-		col2Width = 19
-		col3Width = 12
-		col4Width = 30  // Smaller for comments
-	)
-
-	// Find .pt root to show in message
-	dir := filepath.Dir(filePath)
-	ptRoot, _ := findPTRoot(dir)
-	ptLocation := appConfig.BackupDirName
-	if ptRoot != "" {
-		relPT, _ := filepath.Rel(".", ptRoot)
-		if relPT != "" {
-			ptLocation = relPT
-		}
-	}
-
-	fmt.Printf("\n%s📂 Backup files for '%s%s%s%s'%s\n",
-		ColorCyan, ColorBold, filePath, ColorReset, ColorCyan, ColorReset)
-	fmt.Printf("%sTotal: %d backup(s) (stored in %s/)%s\n\n", 
-		ColorGray, len(backups), ptLocation, ColorReset)
-
-	fmt.Printf("%s┌%s┬%s┬%s┬%s┐%s\n",
-		ColorGray,
-		strings.Repeat("─", col1Width+2),
-		strings.Repeat("─", col2Width+2),
-		strings.Repeat("─", col3Width+2),
-		strings.Repeat("─", col4Width+2),
-		ColorReset)
-
-	fmt.Printf("%s│%s %s%s%-*s%s %s│%s %s%s%-*s%s %s│%s %s%s%*s%s %s│%s %s%s%-*s%s %s│%s\n",
-		ColorGray, ColorReset,
-		ColorBold, ColorYellow, col1Width, "File Name", ColorReset,
-		ColorGray, ColorReset,
-		ColorBold, ColorYellow, col2Width, "Modified", ColorReset,
-		ColorGray, ColorReset,
-		ColorBold, ColorYellow, col3Width, "Size", ColorReset,
-		ColorGray, ColorReset,
-		ColorBold, ColorYellow, col4Width, "Comment", ColorReset,
-		ColorGray, ColorReset)
-
-	fmt.Printf("%s├%s┼%s┼%s┼%s┤%s\n",
-		ColorGray,
-		strings.Repeat("─", col1Width+2),
-		strings.Repeat("─", col2Width+2),
-		strings.Repeat("─", col3Width+2),
-		strings.Repeat("─", col4Width+2),
-		ColorReset)
-
-	for i, backup := range backups {
-		name := backup.Name
-		numWidth := len(fmt.Sprintf("%3d. ", i+1))
-		maxNameLen := col1Width - numWidth
-		if len(name) > maxNameLen {
-			name = name[:maxNameLen-3] + "..."
-		}
-
-		modTime := backup.ModTime.Format("2006-01-02 15:04:05")
-		sizeStr := formatSize(backup.Size)
-		
-		comment := backup.Comment
-		if comment == "" {
-			comment = "-"
-		} else {
-			if len(comment) > col4Width {
-				comment = comment[:col4Width-3] + "..."
-			}
-		}
-
-		fmt.Printf("%s│%s %3d. %-*s %s│%s %-*s %s│%s %*s %s│%s %-*s %s│%s\n",
-			ColorGray, ColorReset,
-			i+1, maxNameLen, name,
-			ColorGray, ColorReset,
-			col2Width, modTime,
-			ColorGray, ColorReset,
-			col3Width, sizeStr,
-			ColorGray, ColorReset,
-			col4Width, comment,
-			ColorGray, ColorReset)
-	}
-
-	fmt.Printf("%s└%s┴%s┴%s┴%s┘%s\n\n",
-		ColorGray,
-		strings.Repeat("─", col1Width+2),
-		strings.Repeat("─", col2Width+2),
-		strings.Repeat("─", col3Width+2),
-		strings.Repeat("─", col4Width+2),
-		ColorReset)
-}
-
-// Add the missing comment parameter
-func restoreBackup(backupPath, originalPath, comment string) error {
-	if err := validatePath(originalPath); err != nil {
-		return err
-	}
-
-	info, err := os.Stat(backupPath)
-	if err != nil {
-		return fmt.Errorf("backup file not found: %w", err)
-	}
-
-	if info.Size() > int64(appConfig.MaxClipboardSize) {
-		return fmt.Errorf("backup file too large to restore (max %dMB)", appConfig.MaxClipboardSize/(1024*1024))
-	}
-
-	content, err := os.ReadFile(backupPath)
-	if err != nil {
-		return fmt.Errorf("failed to read backup file: %w", err)
-	}
-
-	if _, err := os.Stat(originalPath); err == nil {
-		if comment == "" {
-			comment = "Backup before restore"
-		}
-		_, err = autoRenameIfExists(originalPath, comment)
-		if err != nil {
-			return fmt.Errorf("failed to backup current file: %w", err)
-		}
-	}
-
-	err = os.WriteFile(originalPath, content, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to restore file: %w", err)
-	}
-
-	logger.Printf("Restored: %s from %s", originalPath, backupPath)
-	fmt.Printf("✅ Successfully restored: %s\n", originalPath)
-	fmt.Printf("📦 From backup: %s\n", filepath.Base(backupPath))
-	fmt.Printf("📄 Content size: %d characters\n", len(content))
-	
-	if comment != "" {
-		fmt.Printf("💬 Restore comment: \"%s\"\n", comment)
-	}
-
-	return nil
-}
-
 func parseWriteArgs(args []string) (filename string, comment string, checkMode bool, err error) {
 	if len(args) == 0 {
 		return "", "", false, fmt.Errorf("filename required")
 	}
-	
+
 	filename = args[0]
 	comment = ""
 	checkMode = false
-	
+
 	i := 1
 	for i < len(args) {
 		switch args[i] {
@@ -2780,7 +3008,7 @@ func parseWriteArgs(args []string) (filename string, comment string, checkMode b
 		}
 		i++
 	}
-	
+
 	return filename, comment, checkMode, nil
 }
 
@@ -2807,56 +3035,179 @@ func readUserChoice(max int) (int, error) {
 	return choice, nil
 }
 
+// printShowHeader prints bat-like header
+func printShowHeader(filePath string, info os.FileInfo, status FileStatus, showGrid bool) {
+	relPath, _ := filepath.Rel(".", filePath)
+	statusColor := status.Color()
+	statusSymbol := "●"
+
+	if showGrid {
+		fmt.Printf("%s───────┬────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	}
+
+	// File line with status indicator
+	fmt.Printf("%s       │%s %sFile:%s %s ", ColorGray, ColorReset, ColorBold, ColorReset, relPath)
+	if status != FileStatusUnchanged {
+		fmt.Printf("%s%s %s%s", statusColor, statusSymbol, status.String(), ColorReset)
+	}
+	fmt.Println()
+
+	// Size and modified time
+	modTime := info.ModTime().Format("2006-01-02 15:04:05")
+	fmt.Printf("%s       │%s %sSize:%s %s  %sModified:%s %s\n",
+		ColorGray, ColorReset,
+		ColorCyan, ColorReset, formatSize(info.Size()),
+		ColorCyan, ColorReset, modTime)
+
+	if showGrid {
+		fmt.Printf("%s───────┼────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	}
+}
+
+// printShowFooter prints bat-like footer
+func printShowFooter(filePath string, info os.FileInfo, contentLen int, showGrid bool) {
+	if showGrid {
+		fmt.Printf("%s───────┴────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	}
+	fmt.Println()
+}
+
+// printWithLineNumbers prints content with line numbers
+func printWithLineNumbers(content string, showGrid bool) {
+	lines := strings.Split(content, "\n")
+	maxLineNum := len(lines)
+	lineNumWidth := len(fmt.Sprintf("%d", maxLineNum))
+
+	for i, line := range lines {
+		lineNum := i + 1
+		if showGrid {
+			fmt.Printf("%s%*d │%s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line)
+		} else {
+			fmt.Printf("%s%*d %s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line)
+		}
+	}
+}
+
+// loadIgnorePatterns loads patterns from .ptignore and .gitignore
+func loadIgnorePatterns(startPath string) []string {
+	patterns := make([]string, 0)
+	
+	// Try to find .pt root first
+	ptRoot, _ := findPTRoot(startPath)
+	var searchDir string
+	if ptRoot != "" {
+		searchDir = filepath.Dir(ptRoot)
+	} else {
+		searchDir = startPath
+	}
+
+	// Load .ptignore (higher priority)
+	ptignorePath := filepath.Join(searchDir, ".ptignore")
+	if content, err := os.ReadFile(ptignorePath); err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				patterns = append(patterns, line)
+			}
+		}
+		logger.Printf("Loaded %d patterns from .ptignore", len(patterns))
+	}
+
+	// Load .gitignore
+	gitignorePath := filepath.Join(searchDir, ".gitignore")
+	if content, err := os.ReadFile(gitignorePath); err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				patterns = append(patterns, line)
+			}
+		}
+		logger.Printf("Loaded patterns from .gitignore")
+	}
+
+	// Always ignore .pt directory
+	patterns = append(patterns, appConfig.BackupDirName, appConfig.BackupDirName+"/")
+
+	return patterns
+}
+
+// shouldIgnore checks if a path matches ignore patterns
+func shouldIgnore(path string, patterns []string) bool {
+	baseName := filepath.Base(path)
+	
+	for _, pattern := range patterns {
+		// Simple pattern matching
+		if pattern == baseName {
+			return true
+		}
+		if strings.HasSuffix(pattern, "/") && baseName == strings.TrimSuffix(pattern, "/") {
+			return true
+		}
+		if strings.Contains(path, pattern) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// ============================================================================
+// HELP & VERSION
+// ============================================================================
+
 func printHelp() {
 	fmt.Printf("\n%s╔══════════════════════════════════════════════════════════╗%s\n", ColorCyan, ColorReset)
-	fmt.Printf("%s║%s          %sPT - Clipboard to File Tool v%s%s             %s║%s\n", 
+	fmt.Printf("%s║%s          %sPT - Clipboard to File Tool v%s%s             %s║%s\n",
 		ColorCyan, ColorReset, ColorBold, Version, ColorReset, ColorCyan, ColorReset)
 	fmt.Printf("%s║                                                          ║%s\n", ColorCyan, ColorReset)
-    fmt.Printf("%s║                     by cumulus13                         ║%s\n", ColorCyan, ColorReset)
+	fmt.Printf("%s║                     by cumulus13                         ║%s\n", ColorCyan, ColorReset)
 	fmt.Printf("%s╚══════════════════════════════════════════════════════════╝%s\n\n", ColorCyan, ColorReset)
-	
+
 	fmt.Printf("%s📝 BASIC OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt <filename>%s               Write clipboard to file\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt <filename> -c%s            Write only if content differs\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt <filename> -m \"msg\"%s      Write with comment\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt + <filename>%s             Append clipboard to file\n", ColorGreen, ColorReset)
-	
+
 	fmt.Printf("\n%s👁️  VIEW & DISPLAY:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt show <filename>%s          Display file with syntax highlighting (like bat)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt show <file> -l <lexer>%s   Specify lexer (e.g., go, python, javascript)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt show <file> -t <theme>%s   Specify theme (default: monokai)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -z [--lexer <type>]%s      Show clipboard content with syntax highlighting\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -l <lexer>%s  Specify lexer (e.g., go, python, javascript)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -t <theme>%s  Specify theme (default: monokai)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> --pager%s      Use pager (less) for navigation\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -z [options]%s             Show clipboard content\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s-l, --lexer <type>%s        Syntax highlighting (e.g., go, python)\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s-t, --theme <theme>%s       Color theme (default: monokai)\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s-np, --no-pager%s               Use pager mode (less)\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s--no-line-numbers%s         Disable line numbers\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s--no-grid%s                 Disable grid separators\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt check%s                    Show status of all files (like git status)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt check <filename>%s         Check single file status\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt commit -m \"message\"%s      Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
 
-	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW (NEW!):%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt check%s                    Show status of all files (like git status)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt check <filename>%s         Check single file status\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt commit -m \"message\"%s      Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
-	
 	fmt.Printf("\n%s📦 BACKUP OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -l <filename>%s            List all backups (with comments)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -r <filename>%s            Restore backup (interactive)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -r <filename> --last%s     Restore most recent backup\n", ColorGreen, ColorReset)
-	
+
 	fmt.Printf("\n%s📊 DIFF OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -d <filename>%s            Compare with backup (interactive)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> --last%s     Compare with most recent backup\n", ColorGreen, ColorReset)
-	
+	fmt.Printf("  %spt -d <filename> -z%s         Diff clipboard with file\n", ColorGreen, ColorReset)
+
 	fmt.Printf("\n%s🌳 TREE & UTILITIES:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -t [path]%s                Show directory tree\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -t [path] -e items,items%s       Tree with exceptions\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -rm <filename>%s           Safe delete (backup first)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -z [--lexer <type>]%s      Show clipboard content in less (with optional syntax highlighting)\n", ColorGreen, ColorReset)
-	
+
 	fmt.Printf("\n%s⚙️ CONFIGURATION:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt config init%s              Create sample config file\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt config show%s              Show current configuration\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt config path%s              Show config file location\n", ColorGreen, ColorReset)
-	
+
 	fmt.Printf("\n%sℹ️ INFORMATION:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -h, --help%s               Show this help message\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -v, --version%s            Show version information\n", ColorGreen, ColorReset)
@@ -2871,6 +3222,10 @@ func printHelp() {
 	fmt.Printf("  %s$%s pt -l notes.txt             %s# List backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt --last      %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt -z          %s# Diff with temp file from clipboard (no backup)%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt show main.go              %s# View with syntax highlighting%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt show main.go -t dracula  %s# Use dracula theme%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt show main.go --pager      %s# Use less pager%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -z -l python -p           %s# Show clipboard with pager%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  1. %spt check%s                  - See what files changed (like git status)\n", ColorYellow, ColorReset)
@@ -2878,6 +3233,18 @@ func printHelp() {
 	fmt.Printf("  3. %spt -l <file>%s              - View commit history\n", ColorYellow, ColorReset)
 	fmt.Printf("  4. %spt -d <file> --last%s       - See what changed\n", ColorYellow, ColorReset)
 	fmt.Printf("  5. %spt -r <file> --last%s       - Rollback if needed\n", ColorYellow, ColorReset)
+
+	fmt.Printf("\n%s🎨 THEMES & LEXERS:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("  %sPopular Themes:%s monokai (default), dracula, solarized-dark, solarized-light,\n", ColorBold, ColorReset)
+	fmt.Printf("                 github, vim, xcode, nord, gruvbox, one-dark\n")
+	fmt.Printf("  %sPopular Lexers:%s go, python, javascript, typescript, rust, java, c, cpp,\n", ColorBold, ColorReset)
+	fmt.Printf("                 bash, shell, json, yaml, xml, html, css, sql, markdown\n")
+	fmt.Printf("  %sPager Controls:%s\n", ColorBold, ColorReset)
+	fmt.Printf("    • Space      - Next page\n")
+	fmt.Printf("    • b          - Previous page\n")
+	fmt.Printf("    • /pattern   - Search forward\n")
+	fmt.Printf("    • q          - Quit\n")
+	fmt.Printf("    • h          - Help (in less)\n")
 	
 	fmt.Printf("\n%s📊 CHECK/STATUS OUTPUT:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  • %sGreen%s   = Unchanged (matches last backup)\n", ColorGreen, ColorReset)
@@ -3001,12 +3368,12 @@ func printVersion() {
 	fmt.Printf("Production-hardened clipboard to file tool\n")
 	fmt.Printf("Features: Git-like %s structure, recursive search, backup management, delta diff\n", appConfig.BackupDirName)
 	fmt.Println()
-	
+
 	versionPaths := []string{
 		"VERSION",
 		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
 	}
-	
+
 	for _, versionPath := range versionPaths {
 		if _, err := os.Stat(versionPath); err == nil {
 			absPath, _ := filepath.Abs(versionPath)
@@ -3014,7 +3381,7 @@ func printVersion() {
 			break
 		}
 	}
-	
+
 	configPath := findConfigFile()
 	if configPath != "" {
 		fmt.Printf("Config file: %s\n", configPath)
@@ -3022,6 +3389,10 @@ func printVersion() {
 		fmt.Println("Config: Using defaults (no config file)")
 	}
 }
+
+// ============================================================================
+// MAIN
+// ============================================================================
 
 func main() {
 	if len(os.Args) == 2 {
@@ -3057,10 +3428,11 @@ func main() {
 				fmt.Println("\nUsage:")
 				fmt.Println("  pt show <filename>")
 				fmt.Println("  pt show <filename> --lexer <type> --theme <theme>")
+				fmt.Println("  pt show <filename> --pager")
 				fmt.Println("\nExamples:")
 				fmt.Println("  pt show main.go")
 				fmt.Println("  pt show main.go --lexer go --theme dracula")
-				fmt.Println("  pt show script.py --theme monokai")
+				fmt.Println("  pt show script.py --theme monokai --pager")
 				os.Exit(1)
 			}
 
@@ -3069,12 +3441,13 @@ func main() {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
 			}
+		
 		case "-z": 
 			err := handleTempCommand(os.Args[2:]) // Pass remaining args (like --lexer)
 			if err != nil {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
-		}
+			}
 
 		case "check", "-c", "--check":
 			// Handle both single file check and full status
@@ -3102,42 +3475,6 @@ func main() {
 			}
 			
 			err := handleConfigCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
-
-		
-		default:
-			// Use parseWriteArgs for the default write mode
-			text, err := getClipboardText()
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
-
-			if text == "" {
-				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
-				os.Exit(1)
-			}
-
-			// Parse arguments using parseWriteArgs
-			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
-
-			filePath, err := resolveFilePath(filename)
-			if err != nil {
-				filePath = filename
-			}
-
-			if checkMode {
-				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
-			}
-
-			err = writeFile(filePath, text, false, checkMode, comment)
 			if err != nil {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
@@ -3220,7 +3557,7 @@ func main() {
 					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 					os.Exit(1)
 				}
-				}
+			}
 
 		case "-r", "--restore":
 			if len(os.Args) < 3 {
@@ -3339,5 +3676,41 @@ func main() {
 				os.Exit(1)
 			}
 
+		default:
+			// Use parseWriteArgs for the default write mode
+			text, err := getClipboardText()
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+			if text == "" {
+				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+				os.Exit(1)
+			}
+
+			// Parse arguments using parseWriteArgs
+			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+			filePath, err := resolveFilePath(filename)
+			if err != nil {
+				filePath = filename
+			}
+
+			if checkMode {
+				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+			}
+
+			err = writeFile(filePath, text, false, checkMode, comment)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+
 	}
-}	
+}
