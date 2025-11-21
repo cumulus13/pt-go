@@ -8,7 +8,7 @@ package main
 
 import (
 	"bufio"
-	// "bytes"
+	"bytes"
 	"runtime"
 	"syscall"
 	"crypto/rand"
@@ -28,6 +28,10 @@ import (
 	"github.com/atotto/clipboard"
 	"gopkg.in/yaml.v3"
 	"github.com/alecthomas/chroma/v2/quick" // Import chroma quick for syntax highlighting
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 )
 
 // Configuration constants (defaults)
@@ -740,6 +744,173 @@ func init() {
     logger = log.New(&discardWriter{}, "", log.LstdFlags)
     Version = loadVersion()
     appConfig = loadConfig()
+}
+
+// handleShowCommand displays file content with syntax highlighting like bat
+func handleShowCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("filename required for show command")
+	}
+
+	filename := args[0]
+	lexerName := ""
+	themeName := "fruity" // Default theme
+	showLineNumbers := true
+	showGrid := true
+
+	// Parse optional arguments
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--lexer", "-l":
+			if i+1 < len(args) {
+				lexerName = args[i+1]
+				i++
+			}
+		case "--theme", "-t":
+			if i+1 < len(args) {
+				themeName = args[i+1]
+				i++
+			}
+		case "--no-line-numbers":
+			showLineNumbers = false
+		case "--no-grid":
+			showGrid = false
+		}
+	}
+
+	// Resolve file path
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	// Check if file exists
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	if fileInfo.IsDir() {
+		return fmt.Errorf("cannot show directory, file required")
+	}
+
+	// Read file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Check file status (git-like tracker)
+	status, _ := compareFileWithBackup(filePath)
+
+	// Print header like bat
+	printShowHeader(filePath, fileInfo, status, showGrid)
+
+	// Get lexer
+	var lexer chroma.Lexer
+	if lexerName != "" {
+		lexer = lexers.Get(lexerName)
+	} else {
+		lexer = lexers.Match(filePath)
+	}
+
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	lexer = chroma.Coalesce(lexer)
+
+	// Get style
+	style := styles.Get(themeName)
+	if style == nil {
+		style = styles.Monokai
+	}
+
+	// Create formatter with options
+	formatter := formatters.TTY16m
+	if showLineNumbers {
+		formatter = formatters.Get("terminal16m")
+		if formatter == nil {
+			formatter = formatters.TTY16m
+		}
+	}
+
+	// Tokenize
+	iterator, err := lexer.Tokenise(nil, string(content))
+	if err != nil {
+		return fmt.Errorf("failed to tokenize: %w", err)
+	}
+
+	// Format output
+	var buf bytes.Buffer
+	err = formatter.Format(&buf, style, iterator)
+	if err != nil {
+		return fmt.Errorf("failed to format: %w", err)
+	}
+
+	// Print content with line numbers if enabled
+	if showLineNumbers {
+		printWithLineNumbers(buf.String(), showGrid)
+	} else {
+		fmt.Print(buf.String())
+	}
+
+	// Print footer like bat
+	printShowFooter(filePath, fileInfo, len(content), showGrid)
+
+	return nil
+}
+
+// printShowHeader prints bat-like header
+func printShowHeader(filePath string, info os.FileInfo, status FileStatus, showGrid bool) {
+	relPath, _ := filepath.Rel(".", filePath)
+	statusColor := status.Color()
+	statusSymbol := "●"
+
+	if showGrid {
+		fmt.Printf("%s───────┬────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	}
+
+	// File line with status indicator
+	fmt.Printf("%s       │%s %sFile:%s %s ", ColorGray, ColorReset, ColorBold, ColorReset, relPath)
+	if status != FileStatusUnchanged {
+		fmt.Printf("%s%s %s%s", statusColor, statusSymbol, status.String(), ColorReset)
+	}
+	fmt.Println()
+
+	// Size and modified time
+	modTime := info.ModTime().Format("2006-01-02 15:04:05")
+	fmt.Printf("%s       │%s %sSize:%s %s  %sModified:%s %s\n",
+		ColorGray, ColorReset,
+		ColorCyan, ColorReset, formatSize(info.Size()),
+		ColorCyan, ColorReset, modTime)
+
+	if showGrid {
+		fmt.Printf("%s───────┼────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	}
+}
+
+// printShowFooter prints bat-like footer
+func printShowFooter(filePath string, info os.FileInfo, contentLen int, showGrid bool) {
+	if showGrid {
+		fmt.Printf("%s───────┴────────────────────────────────────────────────────────────────%s\n", ColorGray, ColorReset)
+	}
+	fmt.Println()
+}
+
+// printWithLineNumbers prints content with line numbers
+func printWithLineNumbers(content string, showGrid bool) {
+	lines := strings.Split(content, "\n")
+	maxLineNum := len(lines)
+	lineNumWidth := len(fmt.Sprintf("%d", maxLineNum))
+
+	for i, line := range lines {
+		lineNum := i + 1
+		if showGrid {
+			fmt.Printf("%s%*d │%s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line)
+		} else {
+			fmt.Printf("%s%*d %s %s\n", ColorGray, lineNumWidth, lineNum, ColorReset, line)
+		}
+	}
 }
 
 // loadVersion loads version from VERSION file
@@ -2650,6 +2821,17 @@ func printHelp() {
 	fmt.Printf("  %spt <filename> -m \"msg\"%s      Write with comment\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt + <filename>%s             Append clipboard to file\n", ColorGreen, ColorReset)
 	
+	fmt.Printf("\n%s👁️  VIEW & DISPLAY:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt show <filename>%s          Display file with syntax highlighting (like bat)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -l <lexer>%s   Specify lexer (e.g., go, python, javascript)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -t <theme>%s   Specify theme (default: monokai)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -z [--lexer <type>]%s      Show clipboard content with syntax highlighting\n", ColorGreen, ColorReset)
+
+	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt check%s                    Show status of all files (like git status)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt check <filename>%s         Check single file status\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt commit -m \"message\"%s      Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
+
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW (NEW!):%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt check%s                    Show status of all files (like git status)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt check <filename>%s         Check single file status\n", ColorGreen, ColorReset)
@@ -2869,6 +3051,24 @@ func main() {
     setupLogger()
 
 	switch os.Args[1] {
+		case "show":
+			if len(os.Args) < 3 {
+				fmt.Printf("%s❌ Error: Filename required for show command%s\n", ColorRed, ColorReset)
+				fmt.Println("\nUsage:")
+				fmt.Println("  pt show <filename>")
+				fmt.Println("  pt show <filename> --lexer <type> --theme <theme>")
+				fmt.Println("\nExamples:")
+				fmt.Println("  pt show main.go")
+				fmt.Println("  pt show main.go --lexer go --theme dracula")
+				fmt.Println("  pt show script.py --theme monokai")
+				os.Exit(1)
+			}
+
+			err := handleShowCommand(os.Args[2:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
 		case "-z": 
 			err := handleTempCommand(os.Args[2:]) // Pass remaining args (like --lexer)
 			if err != nil {
