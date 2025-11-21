@@ -33,6 +33,10 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 	"golang.org/x/term"
+
+	// "github.com/gdamore/tcell/v2"
+	// "github.com/acarl005/stripansi"
+	// "github.com/rivo/tview"
 )
 
 // Configuration constants (defaults)
@@ -725,6 +729,158 @@ func displayWithPager(content string) error {
 
     return cmd.Wait()
 }
+
+// displayWithPager is a drop-in replacement pager WITHOUT 'less' binary and WITH ANSI support.
+// func displayWithPager(content string) error {
+// 	// Strip ANSI escape sequences
+// 	clean := stripansi.Strip(content)
+
+// 	app := tview.NewApplication()
+
+// 	tv := tview.NewTextView().
+// 		SetDynamicColors(true).
+// 		SetRegions(true).
+// 		SetWrap(true).
+// 		SetScrollable(true)
+
+// 	tv.SetText(clean)
+// 	tv.ScrollToBeginning()
+
+// 	lines := strings.Split(clean, "\n")
+// 	var searchText string
+
+// 	// -------- Scroll Helpers --------
+// 	scrollUp := func() {
+// 		row, col := tv.GetScrollOffset()
+// 		if row > 0 {
+// 			tv.ScrollTo(row-1, col)
+// 		}
+// 	}
+
+// 	scrollDown := func() {
+// 		row, col := tv.GetScrollOffset()
+// 		tv.ScrollTo(row+1, col)
+// 	}
+
+// 	pageUp := func() {
+// 		row, col := tv.GetScrollOffset()
+// 		newRow := row - 20
+// 		if newRow < 0 {
+// 			newRow = 0
+// 		}
+// 		tv.ScrollTo(newRow, col)
+// 	}
+
+// 	pageDown := func() {
+// 		row, col := tv.GetScrollOffset()
+// 		tv.ScrollTo(row+20, col)
+// 	}
+
+// 	// -------- Search Functions --------
+// 	highlightMatches := func(q string) {
+// 		if q == "" {
+// 			tv.SetText(clean)
+// 			return
+// 		}
+
+// 		var out strings.Builder
+// 		lq := strings.ToLower(q)
+
+// 		for _, line := range lines {
+// 			ll := strings.ToLower(line)
+// 			pos := strings.Index(ll, lq)
+
+// 			if pos >= 0 {
+// 				out.WriteString(line[:pos])
+// 				out.WriteString("[yellow]")
+// 				out.WriteString(line[pos : pos+len(q)])
+// 				out.WriteString("[-]")
+// 				out.WriteString(line[pos+len(q):])
+// 			} else {
+// 				out.WriteString(line)
+// 			}
+// 			out.WriteString("\n")
+// 		}
+
+// 		tv.SetText(out.String())
+// 	}
+
+// 	jumpToFirst := func() {
+// 		if searchText == "" {
+// 			return
+// 		}
+// 		lq := strings.ToLower(searchText)
+// 		for i, line := range lines {
+// 			if strings.Contains(strings.ToLower(line), lq) {
+// 				tv.ScrollTo(i, 0)
+// 				return
+// 			}
+// 		}
+// 	}
+
+// 	// -------- Key Handler --------
+// 	tv.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+
+// 		switch ev.Rune() {
+// 		case 'q':
+// 			app.Stop()
+// 			return nil
+
+// 		case 'j':
+// 			scrollDown()
+// 			return nil
+
+// 		case 'k':
+// 			scrollUp()
+// 			return nil
+
+// 		case 'g':
+// 			tv.ScrollToBeginning()
+// 			return nil
+
+// 		case 'G':
+// 			tv.ScrollToEnd()
+// 			return nil
+
+// 		case '/':
+// 			input := tview.NewInputField().
+// 				SetLabel("Search: ")
+
+// 			input.SetDoneFunc(func(key tcell.Key) {
+// 				searchText = input.GetText()
+// 				highlightMatches(searchText)
+// 				jumpToFirst()
+// 				app.SetRoot(tv, true)
+// 			})
+
+// 			app.SetRoot(input, true)
+// 			return nil
+// 		}
+
+// 		switch ev.Key() {
+// 		case tcell.KeyPgUp:
+// 			pageUp()
+// 			return nil
+
+// 		case tcell.KeyPgDn:
+// 			pageDown()
+// 			return nil
+
+// 		case tcell.KeyUp:
+// 			scrollUp()
+// 			return nil
+
+// 		case tcell.KeyDown:
+// 			scrollDown()
+// 			return nil
+// 		}
+
+// 		return ev
+// 	})
+
+// 	return app.SetRoot(tv, true).Run()
+// }
+
 
 
 // handleDiffClipboardToFile reads clipboard, saves to temp file, and diffs with the resolved target file
