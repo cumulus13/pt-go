@@ -1245,15 +1245,41 @@ func handleCheckCommand(args []string) error {
 	}
 
 	// No filename = check all files (like git status)
-	fmt.Printf("\n%s📊 PT Status (like git status)%s\n\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("\n%s📊 PT Status%s\n\n", ColorBold+ColorCyan, ColorReset)
 
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
+	// Try to find project root (where .git or .pt is)
+	projectRoot := cwd
+	ptRoot, err := findPTRoot(cwd)
+	if err == nil && ptRoot != "" {
+		// If .pt found, use its parent as project root
+		if filepath.Base(ptRoot) == appConfig.BackupDirName {
+			projectRoot = filepath.Dir(ptRoot)
+		} else {
+			projectRoot = ptRoot
+		}
+		logger.Printf("Using project root: %s", projectRoot)
+	} else {
+		// Try to find .git
+		gitRoot := findGitRoot(cwd)
+		if gitRoot != "" {
+			projectRoot = gitRoot
+			logger.Printf("Using git root: %s", projectRoot)
+		}
+	}
+
+	// Show which directory we're scanning
+	relRoot, _ := filepath.Rel(cwd, projectRoot)
+	if relRoot != "" && relRoot != "." {
+		fmt.Printf("%sScanning from project root:%s %s\n\n", ColorGray, ColorReset, projectRoot)
+	}
+
 	// Load gitignore
-	gitignore, err := loadGitIgnoreAndPtIgnore(cwd)
+	gitignore, err := loadGitIgnoreAndPtIgnore(projectRoot)
 	if err != nil {
 		logger.Printf("Warning: failed to load .gitignore: %v", err)
 	}
@@ -1262,7 +1288,7 @@ func handleCheckCommand(args []string) error {
 	exceptions[appConfig.BackupDirName] = true
 
 	// Build status tree
-	tree, err := buildStatusTree(cwd, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
+	tree, err := buildStatusTree(projectRoot, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
 	if err != nil {
 		return fmt.Errorf("failed to build status tree: %w", err)
 	}
@@ -1272,7 +1298,7 @@ func handleCheckCommand(args []string) error {
 	}
 
 	// Print tree with status
-	fmt.Printf("%s%s%s\n", ColorBold, filepath.Base(cwd), ColorReset)
+	fmt.Printf("%s%s%s\n", ColorBold, filepath.Base(projectRoot), ColorReset)
 	if tree.IsDir && len(tree.Children) > 0 {
 		for i, child := range tree.Children {
 			printStatusTree(child, "", i == len(tree.Children)-1)
@@ -1352,8 +1378,34 @@ func handleCommitCommand(args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
+	// Try to find project root (where .git or .pt is)
+	projectRoot := cwd
+	ptRoot, err := findPTRoot(cwd)
+	if err == nil && ptRoot != "" {
+		// If .pt found, use its parent as project root
+		if filepath.Base(ptRoot) == appConfig.BackupDirName {
+			projectRoot = filepath.Dir(ptRoot)
+		} else {
+			projectRoot = ptRoot
+		}
+		logger.Printf("Using project root: %s", projectRoot)
+	} else {
+		// Try to find .git
+		gitRoot := findGitRoot(cwd)
+		if gitRoot != "" {
+			projectRoot = gitRoot
+			logger.Printf("Using git root: %s", projectRoot)
+		}
+	}
+
+	// Show which directory we're scanning
+	relRoot, _ := filepath.Rel(cwd, projectRoot)
+	if relRoot != "" && relRoot != "." {
+		fmt.Printf("%sCommitting from project root:%s %s\n\n", ColorGray, ColorReset, projectRoot)
+	}
+
 	// Load gitignore
-	gitignore, err := loadGitIgnoreAndPtIgnore(cwd)
+	gitignore, err := loadGitIgnoreAndPtIgnore(projectRoot)
 	if err != nil {
 		logger.Printf("Warning: failed to load .gitignore: %v", err)
 	}
@@ -1362,7 +1414,7 @@ func handleCommitCommand(args []string) error {
 	exceptions[appConfig.BackupDirName] = true
 
 	// Build status tree to find changed files
-	tree, err := buildStatusTree(cwd, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
+	tree, err := buildStatusTree(projectRoot, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
 	if err != nil {
 		return fmt.Errorf("failed to build status tree: %w", err)
 	}
@@ -1382,7 +1434,7 @@ func handleCommitCommand(args []string) error {
 
 	fmt.Printf("Files to backup:\n")
 	for i, file := range changedFiles {
-		relPath, _ := filepath.Rel(cwd, file)
+		relPath, _ := filepath.Rel(projectRoot, file)
 		status, _ := compareFileWithBackup(file)
 		statusColor := status.Color()
 		fmt.Printf("  %d. %s%s%s %s[%s]%s\n",
@@ -1407,8 +1459,8 @@ func handleCommitCommand(args []string) error {
 	failCount := 0
 
 	for _, file := range changedFiles {
-		relPath, _ := filepath.Rel(cwd, file)
-		
+		relPath, _ := filepath.Rel(projectRoot, file)
+
 		// Create backup
 		_, err := autoRenameIfExists(file, commitMessage)
 		if err != nil {
@@ -2470,6 +2522,31 @@ func findPTRoot(startPath string) (string, error) {
 	// logger.Printf("No %s or .git directory found in tree from: %s", appConfig.BackupDirName, absPath)
 	logger.Printf("No %s directory found in tree from: %s", appConfig.BackupDirName, absPath)
 	return "", nil
+}
+
+func findGitRoot(startPath string) string {
+	current := startPath
+	absPath, err := filepath.Abs(current)
+	if err != nil {
+		return ""
+	}
+	current = absPath
+
+	for {
+		gitDir := filepath.Join(current, ".git")
+		if info, err := os.Stat(gitDir); err == nil && (info.IsDir() || info.Mode().IsRegular()) {
+			logger.Printf("Found .git at: %s", gitDir)
+			return current
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+
+	return ""
 }
 
 // ensurePTDir creates .pt directory if it doesn't exist
