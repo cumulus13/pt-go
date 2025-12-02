@@ -216,7 +216,139 @@ Output::
 
    [Beautiful colored diff output from delta]
 
-11. Directory Tree Visualization
+11. Move recursive/tree
+--------------------------
+
+.. code-block:: bash
+
+   C:\TEMP\test-pt>tree2
+   📂 C:\TEMP\test-pt/
+   ├── 📄 .gitignore (27.00 B)
+   ├── 📁 dest/
+   ├── 📁 dest_new/
+   ├── 📄 test1.go (130.30 KB)
+   ├── 📄 test2.go (130.30 KB)
+   └── 📄 test3.go (130.30 KB)
+
+   C:\TEMP\test-pt>pt move *.go dest
+   🎯 Matched 3 file(s) from patterns
+
+   🚚 Moving 3 file(s) with backup adjustment...
+     Destination: C:\TEMP\test-pt\dest
+     Type: Directory
+
+   [1/3] Processing: test1.go
+     📦 Found 2 backup(s)
+   📁 Using existing .pt from: .pt/  ✅ Moved backups (2 metadata updated)
+     ✅ Moved to: C:\TEMP\test-pt\dest\test1.go
+   [2/3] Processing: test2.go
+     📦 Found 1 backup(s)
+   📁 Using existing .pt from: .pt/  ✅ Moved backups (1 metadata updated)
+     ✅ Moved to: C:\TEMP\test-pt\dest\test2.go
+   [3/3] Processing: test3.go
+     📦 Found 1 backup(s)
+   📁 Using existing .pt from: .pt/  ✅ Moved backups (1 metadata updated)
+     ✅ Moved to: C:\TEMP\test-pt\dest\test3.go
+
+   📊 Move Summary:
+     ✅ 3 file(s) moved successfully
+     📦 4 backup(s) adjusted
+
+   C:\TEMP\test-pt>ls
+   .gitignore  .pt\  dest\  dest_new\
+
+   C:\TEMP\test-pt>pt -l test1.go
+   🔍 Searching for 'test1.go' in subdirectories...
+   ✓ Found: C:\TEMP\test-pt\dest\test1.go
+
+   📂 Backup files for 'C:\TEMP\test-pt\dest\test1.go'
+   Total: 2 backup(s) (stored in .pt/)
+
+   ┌──────────────────────────────────────────┬─────────────────────┬──────────────┬────────────────────────────────┐
+   │ File Name                                │ Modified            │         Size │ Comment                        │
+   ├──────────────────────────────────────────┼─────────────────────┼──────────────┼────────────────────────────────┤
+   │   1. test1_go.20251202_150950668211.3... │ 2025-12-02 15:09:50 │     130.3 KB │ Restored from last backup      │
+   │   2. test1_go.20251202_150836676759.3... │ 2025-12-02 15:08:36 │     130.3 KB │ -                              │
+   └──────────────────────────────────────────┴─────────────────────┴──────────────┴────────────────────────────────┘
+
+
+   C:\TEMP\test-pt>move dest dest_new
+           1 dir(s) moved.
+
+   C:\TEMP\test-pt>pt -l test1.go
+   🔍 Searching for 'test1.go' in subdirectories...
+   ✓ Found: C:\TEMP\test-pt\dest_new\dest\test1.go
+   ℹ️  No backups found for: C:\TEMP\test-pt\dest_new\dest\test1.go (check .pt/ directory)
+
+12. Fix structure/tree 
+
+.. code-block:: bash
+
+   C:\TEMP\test-pt>pt fix
+
+   🔍 Scanning for orphaned backups...
+
+   📂 Using .pt directory: C:\TEMP\test-pt\.pt
+
+   ⚠️  Found 4 orphaned backup(s):
+
+   [1] Orphaned backup: dest_main.go
+       Expected: C:\TEMP\test-pt\dest\main.go (NOT FOUND)
+       No matches found (file may be deleted)
+
+   [2] Orphaned backup: dest_test1.go
+       Expected: C:\TEMP\test-pt\dest\test1.go (NOT FOUND)
+       Possible matches found:
+         1) dest_new\dest\test1.go
+
+   [3] Orphaned backup: dest_test2.go
+       Expected: C:\TEMP\test-pt\dest\test2.go (NOT FOUND)
+       Possible matches found:
+         1) dest_new\dest\test2.go
+
+   [4] Orphaned backup: dest_test3.go
+       Expected: C:\TEMP\test-pt\dest\test3.go (NOT FOUND)
+       Possible matches found:
+         1) dest_new\dest\test3.go
+
+   Options:
+     1. Auto-fix: Update backup references for files with single match
+     2. Manual: Select correct file for each orphaned backup
+     3. Clean: Remove orphaned backups (files deleted)
+     0. Cancel
+
+   Choice: 1
+   ✅ Fixed: test1.go -> test1.go
+   ✅ Fixed: test2.go -> test2.go
+   ✅ Fixed: test3.go -> test3.go
+
+   📊 Result: 3 fixed, 1 skipped
+
+   C:\TEMP\test-pt>pt -l test1.go
+   🔍 Searching for 'test1.go' in subdirectories...
+   ✓ Found: C:\TEMP\test-pt\dest_new\dest\test1.go
+
+   📂 Backup files for 'C:\TEMP\test-pt\dest_new\dest\test1.go'
+   Total: 2 backup(s) (stored in .pt/)
+
+   ┌──────────────────────────────────────────┬─────────────────────┬──────────────┬────────────────────────────────┐
+   │ File Name                                │ Modified            │         Size │ Comment                        │
+   ├──────────────────────────────────────────┼─────────────────────┼──────────────┼────────────────────────────────┤
+   │   1. test1_go.20251202_150950668211.3... │ 2025-12-02 15:09:50 │     130.3 KB │ Restored from last backup      │
+   │   2. test1_go.20251202_150836676759.3... │ 2025-12-02 15:08:36 │     130.3 KB │ -                              │
+   └──────────────────────────────────────────┴─────────────────────┴──────────────┴────────────────────────────────┘
+
+
+   C:\TEMP\test-pt>tree2
+   📂 C:\TEMP\test-pt/
+   ├── 📄 .gitignore (27.00 B)
+   └── 📁 dest_new/
+       └── 📁 dest/
+           ├── 📄 test1.go (130.30 KB)
+           ├── 📄 test2.go (130.30 KB)
+           └── 📄 test3.go (130.30 KB)
+
+13. Directory Tree Visualization
 --------------------------------
 
 .. code-block:: bash
@@ -244,7 +376,7 @@ Exclude specific folders::
 
    pt -t -e node_modules,.git,dist,build
 
-12. Complete Workflow Example
+14. Complete Workflow Example
 -----------------------------
 
 Daily development session:

@@ -11,13 +11,13 @@
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
       <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=a5c4661c" />
-      <link rel="stylesheet" type="text/css" href="_static/terminal-dark.css?v=8a49e07c" />
+      <link rel="stylesheet" type="text/css" href="_static/terminal-dark.css?v=eb18bfcd" />
 
   
     <link rel="shortcut icon" href="_static/pt.svg"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=6d61d84b"></script>
+      <script src="_static/documentation_options.js?v=62197e38"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -41,7 +41,7 @@
     </a>
     <h3 style="color: #00FF00; font-family: 'JetBrains Mono', monospace;">PT Documentation</h3>
     <div class="version" style="color: #608B4E; font-family: 'JetBrains Mono', monospace;">
-        1.0.32
+        version = "1.0.45"
     </div>
     
 <div role="search">
@@ -160,8 +160,9 @@
 <li class="toctree-l2"><a class="reference internal" href="examples.html#configuration-file-setup">8. Configuration File Setup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples.html#recursive-file-search">9. Recursive File Search</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples.html#visual-diff-comparison">10. Visual Diff Comparison</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#directory-tree-visualization">11. Directory Tree Visualization</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#complete-workflow-example">12. Complete Workflow Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#move-recursive-tree">11. Move recursive/tree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#directory-tree-visualization">13. Directory Tree Visualization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#complete-workflow-example">14. Complete Workflow Example</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a><ul>
@@ -236,42 +237,67 @@
 <p>Thank you for your interest in contributing to PT! This project welcomes contributions from the community.</p>
 <section id="development-setup">
 <h2>Development Setup<a class="headerlink" href="#development-setup" title="Link to this heading"></a></h2>
-<ol class="arabic">
-<li><p>Fork the repository:</p>
-<p>git clone <a class="reference external" href="https://github.com/cumulus13/pt-go.git">https://github.com/cumulus13/pt-go.git</a>
-cd pt-go</p>
-</li>
-<li><p>Install dependencies:</p>
-<p>go mod download</p>
-</li>
-<li><p>Run in development:</p>
-<p>go run pt/main.go –help</p>
-</li>
-<li><p>Build:</p>
-<p>go build -o pt pt/main.go</p>
-</li>
-<li><p>Format code:</p>
-<p>go fmt ./…</p>
-</li>
-<li><p>Run linters (optional):</p>
-<p>golangci-lint run</p>
-</li>
+<ol class="arabic simple">
+<li><p>Fork the repository</p></li>
 </ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/cumulus13/pt-go.git
+<span class="nb">cd</span><span class="w"> </span>pt-go
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Install dependencies</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>go<span class="w"> </span>mod<span class="w"> </span>download
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p>Run in development</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>go<span class="w"> </span>run<span class="w"> </span>pt/main.go<span class="w"> </span>--help
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li><p>Build</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>pt<span class="w"> </span>pt/main.go
+</pre></div>
+</div>
+<ol class="arabic simple" start="5">
+<li><p>Format code</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>go<span class="w"> </span>fmt<span class="w"> </span>./...
+</pre></div>
+</div>
+<ol class="arabic simple" start="6">
+<li><p>Run linters (optional)</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>golangci-lint<span class="w"> </span>run
+</pre></div>
+</div>
 </section>
 <section id="making-changes">
 <h2>Making Changes<a class="headerlink" href="#making-changes" title="Link to this heading"></a></h2>
-<ol class="arabic">
-<li><p>Create a feature branch:</p>
-<p>git checkout -b feature/amazing-feature</p>
-</li>
+<ol class="arabic simple">
+<li><p>Create a feature branch</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feature/amazing-feature
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
 <li><p>Make your changes</p></li>
 <li><p>Test thoroughly (see Testing section)</p></li>
-<li><p>Commit your changes:</p>
-<p>git commit -m ‘Add amazing feature’</p>
-</li>
-<li><p>Push to your fork:</p>
-<p>git push origin feature/amazing-feature</p>
-</li>
+<li><p>Commit your changes</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s1">&#39;Add amazing feature&#39;</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="5">
+<li><p>Push to your fork</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>feature/amazing-feature
+</pre></div>
+</div>
+<ol class="arabic simple" start="6">
 <li><p>Open a Pull Request on GitHub</p></li>
 </ol>
 </section>
@@ -289,46 +315,46 @@ cd pt-go</p>
 <h2>Testing<a class="headerlink" href="#testing" title="Link to this heading"></a></h2>
 <section id="manual-testing">
 <h3>Manual Testing<a class="headerlink" href="#manual-testing" title="Link to this heading"></a></h3>
-<p>Test basic functionality:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Test basic write</span>
-<span class="n">echo</span> <span class="s2">&quot;Hello World&quot;</span> <span class="o">|</span> <span class="n">pbcopy</span>  <span class="c1"># macOS</span>
-<span class="n">pt</span> <span class="n">test</span><span class="o">.</span><span class="n">txt</span>
+<p>Test basic functionality</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Test basic write</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Hello World&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>pbcopy<span class="w">  </span><span class="c1"># macOS</span>
+pt<span class="w"> </span>test.txt
 
 <span class="c1"># Test append</span>
-<span class="n">echo</span> <span class="s2">&quot;Line 2&quot;</span> <span class="o">|</span> <span class="n">pbcopy</span>
-<span class="n">pt</span> <span class="o">+</span> <span class="n">test</span><span class="o">.</span><span class="n">txt</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Line 2&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>pbcopy
+pt<span class="w"> </span>+<span class="w"> </span>test.txt
 
 <span class="c1"># Test backup listing</span>
-<span class="n">pt</span> <span class="o">-</span><span class="n">l</span> <span class="n">test</span><span class="o">.</span><span class="n">txt</span>
+pt<span class="w"> </span>-l<span class="w"> </span>test.txt
 
 <span class="c1"># Test restore</span>
-<span class="n">pt</span> <span class="o">-</span><span class="n">r</span> <span class="n">test</span><span class="o">.</span><span class="n">txt</span> <span class="o">--</span><span class="n">last</span>
+pt<span class="w"> </span>-r<span class="w"> </span>test.txt<span class="w"> </span>--last
 
 <span class="c1"># Test diff</span>
-<span class="n">pt</span> <span class="o">-</span><span class="n">d</span> <span class="n">test</span><span class="o">.</span><span class="n">txt</span> <span class="o">--</span><span class="n">last</span>
+pt<span class="w"> </span>-d<span class="w"> </span>test.txt<span class="w"> </span>--last
 
 <span class="c1"># Test recursive search</span>
-<span class="n">mkdir</span> <span class="o">-</span><span class="n">p</span> <span class="n">deep</span><span class="o">/</span><span class="n">nested</span><span class="o">/</span><span class="n">path</span>
-<span class="n">echo</span> <span class="s2">&quot;test&quot;</span> <span class="o">|</span> <span class="n">pbcopy</span>
-<span class="n">pt</span> <span class="n">deep</span><span class="o">/</span><span class="n">nested</span><span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">file</span><span class="o">.</span><span class="n">txt</span>
-<span class="n">cd</span> <span class="o">../../..</span>
-<span class="n">pt</span> <span class="o">-</span><span class="n">l</span> <span class="n">file</span><span class="o">.</span><span class="n">txt</span>  <span class="c1"># Should find it automatically</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span>deep/nested/path
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>pbcopy
+pt<span class="w"> </span>deep/nested/path/file.txt
+<span class="nb">cd</span><span class="w"> </span>../../..
+pt<span class="w"> </span>-l<span class="w"> </span>file.txt<span class="w">  </span><span class="c1"># Should find it automatically</span>
 
 <span class="c1"># Test tree</span>
-<span class="n">pt</span> <span class="o">-</span><span class="n">t</span>
+pt<span class="w"> </span>-t
 
 <span class="c1"># Test safe delete</span>
-<span class="n">pt</span> <span class="o">-</span><span class="n">rm</span> <span class="n">test</span><span class="o">.</span><span class="n">txt</span>
+pt<span class="w"> </span>-rm<span class="w"> </span>test.txt
 
 <span class="c1"># Test check command</span>
-<span class="n">pt</span> <span class="n">check</span>
+pt<span class="w"> </span>check
 
 <span class="c1"># Test commit</span>
-<span class="n">pt</span> <span class="n">commit</span> <span class="o">-</span><span class="n">m</span> <span class="s2">&quot;Test commit&quot;</span>
+pt<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Test commit&quot;</span>
 </pre></div>
 </div>
-<p>Run Tests (if implemented):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">go</span> <span class="n">test</span> <span class="o">./...</span>
+<p>Run Tests (if implemented)</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
 </pre></div>
 </div>
 </section>

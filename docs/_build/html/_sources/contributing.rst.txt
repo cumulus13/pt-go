@@ -6,45 +6,63 @@ Thank you for your interest in contributing to PT! This project welcomes contrib
 Development Setup
 -----------------
 
-1. Fork the repository::
+1. Fork the repository
+
+.. code-block:: bash
 
    git clone https://github.com/cumulus13/pt-go.git
    cd pt-go
 
-2. Install dependencies::
+2. Install dependencies
+
+.. code-block:: bash
 
    go mod download
 
-3. Run in development::
+3. Run in development
+
+.. code-block:: bash
 
    go run pt/main.go --help
 
-4. Build::
+4. Build
+
+.. code-block:: bash
 
    go build -o pt pt/main.go
 
-5. Format code::
+5. Format code
+
+.. code-block:: bash
 
    go fmt ./...
 
-6. Run linters (optional)::
+6. Run linters (optional)
+
+.. code-block:: bash
 
    golangci-lint run
 
 Making Changes
 --------------
 
-1. Create a feature branch::
+1. Create a feature branch
+
+.. code-block:: bash
 
    git checkout -b feature/amazing-feature
 
 2. Make your changes
 3. Test thoroughly (see Testing section)
-4. Commit your changes::
+4. Commit your changes
+
+.. code-block:: bash
 
    git commit -m 'Add amazing feature'
 
-5. Push to your fork::
+5. Push to your fork
+
+.. code-block:: bash
 
    git push origin feature/amazing-feature
 
@@ -65,7 +83,9 @@ Testing
 Manual Testing
 ~~~~~~~~~~~~~~
 
-Test basic functionality::
+Test basic functionality
+
+.. code-block:: bash
 
    # Test basic write
    echo "Hello World" | pbcopy  # macOS
@@ -103,8 +123,10 @@ Test basic functionality::
    # Test commit
    pt commit -m "Test commit"
 
-Run Tests (if implemented)::
-   
+Run Tests (if implemented)
+
+.. code-block:: bash
+
    go test ./...
 
 Feature Ideas
