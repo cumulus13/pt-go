@@ -281,6 +281,7 @@ Output::
    ℹ️  No backups found for: C:\TEMP\test-pt\dest_new\dest\test1.go (check .pt/ directory)
 
 12. Fix structure/tree 
+------------------------
 
 .. code-block:: bash
 
