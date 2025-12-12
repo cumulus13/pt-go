@@ -6,6 +6,17 @@
 
 > **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
 
+
+## 🎦 Demo
+
+<div align="center">
+  <a href="https://youtu.be/1BrUiQWi47Y">
+    <img src="https://i9.ytimg.com/vi_webp/1BrUiQWi47Y/mqdefault.webp?sqp=CLyA8MkG&rs=AOn4CLDK-YxnbjSj94eEnGR5YpQSSVmK1g" alt="How to use mks - tree2 -pt" style="width:100%;">
+  </a>
+  <br>
+  <a href="https://youtu.be/1BrUiQWi47Y">Demo</a>
+</div>
+
 ## ✨ Features
 
 ### Core Features
