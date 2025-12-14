@@ -65,6 +65,8 @@ type Config struct {
 // Global config instance
 var appConfig *Config
 var debugMode bool = false
+var difftool string = "delta"
+var foundZ bool = false
 
 // ANSI color codes for pretty output
 const (
@@ -938,7 +940,9 @@ func handleDiffClipboardToFile(fileName string) error {
 	logger.Printf("Diffing clipboard content (temp: %s) with resolved file: %s", tempFile.Name(), filePath)
 
 	// 6. Run the core diff logic (runDelta) between the temp file and the resolved target file
-	err = runDelta(tempFile.Name(), filePath)
+	// func runDiff(toolName, file1, file2 string) error {
+	// err = runDelta(tempFile.Name(), filePath)
+	err = runDiff(difftool, tempFile.Name(), filePath)
 	if err != nil {
 		// runDelta already handles delta not found error and specific exit codes
 		return fmt.Errorf("failed to run diff tool (delta): %w", err)
@@ -1050,7 +1054,7 @@ type DiffToolConfig struct {
 var diffTools = map[string]DiffToolConfig{
     "delta": {
         Name:           "Delta (git diff)",
-        Platform:       []string{"linux", "darwin"},
+        Platform:       []string{"windows", "linux", "darwin"},
         Type:           "CLI",
         License:        "Open Source",
         HomeURL:        "https://dandavison.github.io/delta/",
@@ -1308,9 +1312,16 @@ func handleDiffCommand(args []string) error {
     // Use tools from config or default to delta
     toolName := appConfig.DiffTool
     if toolName == "" {
-        toolName = "delta"
+    	if difftool != "" {
+    		toolName = difftool
+    	} else {
+    		toolName = "delta"	
+    	}
+        
     }
     
+    fmt.Printf("%sDiffing use%s %s%s`%s`%s\n", ColorMagenta, ColorReset, ColorWhite, ColorBlue, toolName, ColorReset)
+
     // Validate the tool before execution
     if _, exists := diffTools[toolName]; !exists {
         fmt.Printf("%sWarning: diff tool '%s' not found, using default 'delta'%s\n", 
@@ -5244,6 +5255,21 @@ func main() {
             break
         }
     }
+
+    for i := 1; i < len(os.Args); i++ {
+	    if os.Args[i] == "--tool" && i+1 < len(os.Args) {
+	        difftool = os.Args[i+1]
+	        break
+	    }
+	}
+
+	for i := 1; i < len(os.Args); i++ {
+	    if os.Args[i] == "-z" && i+1 < len(os.Args) {
+	        foundZ = true
+	        break
+	    }
+	}
+
     // Setup logger based on the parsed debug flag
     setupLogger()
 
@@ -5385,13 +5411,13 @@ func main() {
 
 			// Check for the specific combination: pt -d <file_name> -z
 			// We look for -z in os.Args[3] or later, after the file name at os.Args[2]
-			foundZ := false
-			for _, arg := range os.Args[3:] { // Start checking from the 4th argument (index 3)
-				if arg == "-z" {
-					foundZ = true
-					break
-				}
-			}
+			// for _, arg := range os.Args[3:] { // Start checking from the 4th argument (index 3)
+			// 	if arg == "-z" {
+			// 		foundZ = true
+			// 		break
+			// 	}
+			// }
+
 
 			if foundZ {
 				// If -z is found, treat os.Args[2] as the file name and use new logic
