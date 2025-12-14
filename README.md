@@ -4,14 +4,14 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.41-blue.svg)](https://github.com/cumulus13/pt-go)
 
-> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison (default), support: delta, meld, winmerge, araxis merge/amerge**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
+> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison (default), support many diff tool**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
 
 
 ## 🎦 Demo
 
 <div align="center">
   <a href="https://youtu.be/1BrUiQWi47Y">
-    <img src="https://i9.ytimg.com/vi_webp/1BrUiQWi47Y/mqdefault.webp?sqp=CLyA8MkG&rs=AOn4CLDK-YxnbjSj94eEnGR5YpQSSVmK1g" alt="How to use mks - tree2 -pt" style="width:100%;">
+    <img src="https://i.ytimg.com/an_webp/1BrUiQWi47Y/mqdefault_6s.webp?du=3000&sqp=CLzY-skG&rs=AOn4CLAfcZjbkZ_1Zw1Yn-fAFJuaUKa88w" alt="How to use mks - tree2 -pt" style="width:100%;">
   </a>
   <br>
   <a href="https://youtu.be/1BrUiQWi47Y">Demo</a>
@@ -31,6 +31,31 @@
 - 📈 **Audit Logging** - All operations logged for tracking
 - ✅ **Check Mode** - Skip writes if content unchanged (saves disk space) ✨ NEW!
 
+---
+
+### Optional diff tool
+
+set `diff_tool` in config file pt.yml/pt.yaml
+
+| Tool | **Alias (Config Value)** | Platform | Type | License | Home Page / Download |
+|------|--------------------------|----------|------|---------|----------------------|
+| **Delta (git diff)** | `delta` | Linux, macOS | CLI | Open Source | [https://dandavison.github.io/delta/](https://dandavison.github.io/delta/) |
+| **GNU diff** | `diff` | Linux, macOS | CLI | Open Source | [https://www.gnu.org/software/diffutils/](https://www.gnu.org/software/diffutils/) |
+| **GNU sdiff** | `sdiff` | Linux, macOS | CLI | Open Source | [https://www.gnu.org/software/diffutils/](https://www.gnu.org/software/diffutils/) |
+| **vimdiff** | `vimdiff` | Linux, macOS | CLI (TUI) | Open Source | [https://www.vim.org/](https://www.vim.org/) |
+| **Meld** ⭐ | `meld` | Linux, macOS, Windows | GUI | Open Source | [https://meldmerge.org](https://meldmerge.org) |
+| **KDiff3** | `kdiff3` | Linux, macOS, Windows | GUI | Open Source | [https://invent.kde.org/sdk/kdiff3](https://invent.kde.org/sdk/kdiff3) |
+| **DiffMerge** | `diffmerge` | Linux, macOS, Windows | GUI | Freeware | [https://sourcegear.com/diffmerge/](https://sourcegear.com/diffmerge/) |
+| **Kompare** | `kompare` | Linux | GUI | Open Source | [https://apps.kde.org/kompare/](https://apps.kde.org/kompare/) |
+| **TkDiff** | `tkdiff` | Linux, macOS, Windows | GUI | Open Source | [https://sourceforge.net/projects/tkdiff/](https://sourceforge.net/projects/tkdiff/) |
+| **Beyond Compare** ⭐ | `bcompare` | Linux, macOS, Windows | GUI + CLI | Commercial | [https://www.scootersoftware.com/](https://www.scootersoftware.com/) |
+| **FileMerge (Xcode)** | `filemerge` | macOS | GUI | Free (Xcode) | [https://developer.apple.com/xcode/](https://developer.apple.com/xcode/) |
+| **Kaleidoscope** | `kaleidoscope` | macOS | GUI | Commercial | [https://kaleidoscope.app/](https://kaleidoscope.app/) |
+| **WinMerge** | `winmerge` | Windows | GUI | Open Source | [https://winmerge.org](https://winmerge.org) |
+| **Araxis Merge** | `amerge` | Windows, macOS | GUI | Commercial | [https://www.araxis.com/merge](https://www.araxis.com/merge) |
+
+---
+
 ### Advanced Features
 - 🔍 **Recursive File Search** - Automatically finds files in subdirectories up to 10 levels deep
 - 📊 **Delta Diff Integration** - Beautiful side-by-side diff comparison with backups
@@ -48,7 +73,7 @@
 - 💬 **Comment System** - Track why changes were made, not just when
 - 📝 **Contextual Notes** - Add meaningful descriptions to each backup
 - 🔙 **Easy Rollback** - Restore any previous version instantly, see why it was saved
-- 📊 **Version Comparison** - Diff any two versions visually with delta (default) and support: delta, meld, winmerge, araxis merge/amerge
+- 📊 **Version Comparison** - Diff any two versions visually with delta (default) and support many diff tool
 - 🎯 **Zero Data Loss** - Never lose work, automatic backup before every write
 - 💾 **Space Efficient** - Only changed files are backed up
 - 🏷️ **Timestamped Versions** - Microsecond precision timestamps + human-readable comments
@@ -109,15 +134,6 @@ scoop install delta
 
 # Or download from: https://github.com/dandavison/delta/releases
 ```
-
-### Optional diif tool
-set `diff_tool` in config file pt.yml/pt/yaml
-
-- [meld](https://meldmerge.org) [https://meldmerge.org](https://meldmerge.org)
-- [winmerge](https://winmerge.org) [https://winmerge.org](https://winmerge.org)
-- [amerge](https://www.araxis.com/merge) [https://www.araxis.com/merge](https://www.araxis.com/merge)
-- 
-
 
 ### Verify Installation
 
