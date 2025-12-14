@@ -23,7 +23,6 @@ jobs:
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
         exclude:
-          # Windows ARM64 not commonly supported
           - goos: windows
             goarch: arm64
     
@@ -54,7 +53,6 @@ jobs:
           echo "CGO_ENABLED=$CGO_ENABLED"
           echo "=================================="
           
-          # Set output name based on OS
           if [ "$GOOS" = "windows" ]; then
             OUTPUT="pt-$GOOS-$GOARCH.exe"
           else
@@ -63,19 +61,15 @@ jobs:
           
           echo "Output: $OUTPUT"
           
-          # Build
           go build -v -ldflags="-s -w" -o "$OUTPUT" ./pt
           
-          # Verify binary exists
           ls -lh "$OUTPUT"
           
           echo "=================================="
           echo "✅ Build successful for $GOOS/$GOARCH"
           echo "=================================="
       
-      - name: Run Tests (Linux only)
+      - name: Run Tests
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: |
-          if [ -f "go.mod" ]; then
-            go test -v ./... || echo "No tests found"
-          fi
+          go test -v ./... || echo "No tests found"
