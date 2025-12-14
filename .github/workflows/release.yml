@@ -1,12 +1,11 @@
 name: Build and Release Multi-Platform Binaries
 
-# Trigger: ONLY runs when a new release is CREATED
 on:
   release:
     types: [created]
 
 permissions:
-  contents: write # Required to upload release assets
+  contents: write
 
 jobs:
   build-and-release:
@@ -17,7 +16,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Target 1 & 2: Linux Musl (Statis/Alpine)
           - goos: linux
             goarch: amd64
             suffix: linux-amd64
@@ -26,8 +24,6 @@ jobs:
             goarch: arm64
             suffix: linux-arm64
             env: 'CGO_ENABLED=0'
-            
-          # Target 3 & 4: Linux Glibc (Standar)
           - goos: linux
             goarch: amd64
             suffix: linux-glibc-amd64
@@ -36,14 +32,10 @@ jobs:
             goarch: arm64
             suffix: linux-glibc-arm64
             env: ''
-            
-          # Target 5: Windows
           - goos: windows
             goarch: amd64
             suffix: windows-amd64.exe
             env: ''
-            
-          # Target 6 & 7: macOS (Darwin)
           - goos: darwin
             goarch: amd64
             suffix: darwin-amd64
@@ -56,31 +48,26 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
+        
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache-dependency-path: 'go.sum'
-
+          
       - name: Build Binary
         env:
           BUILD_ENV: ${{ matrix.env }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          # Evaluate CGO_ENABLED=0 or other
           eval $BUILD_ENV
           echo "Building for $GOOS/$GOARCH with flags: $BUILD_ENV"
           
-          # File name using release tag (for example, pt-v1.0.0-linux-amd64)
           OUTPUT_NAME="pt-${{ github.event.release.tag_name }}-${{ matrix.suffix }}"
-          
           go build -v -o "$OUTPUT_NAME" ./pt/main.go
-          
-          # Save asset path for upload step
           echo "ASSET_PATH=$(pwd)/$OUTPUT_NAME" >> $GITHUB_ENV
-
+          
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:

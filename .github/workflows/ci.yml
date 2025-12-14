@@ -1,49 +1,42 @@
 name: Continuous Integration (Build Check)
 
-# Trigger: Run every time there is a push to the 'main' branch
 on:
   push:
     branches:
-      - main
-  # Can also be triggered manually
+      - master
   workflow_dispatch:
 
 permissions:
-  contents: read # Just need to read the code
+  contents: read
 
 jobs:
   build-check:
     name: Check build for ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     
-  # A simpler matrix, just to verify the buildld
     strategy:
       matrix:
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
         exclude:
           - goos: windows
-            goarch: arm64 # Windows does not support arm64 by default in Go
+            goarch: arm64
           - goos: darwin
             goarch: arm64
-            # Optional: Can be excluded if you want it to be faster.
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
+        
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-
+          
       - name: Build Check
-        # Set environment variables for cross-compilation
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           echo "Checking build for $GOOS/$GOARCH..."
-          # Use the -o /dev/null argument to discard binary output,
-          # because our goal is only to verify whether the build was successful.
           go build -v -o /dev/null ./pt/main.go
