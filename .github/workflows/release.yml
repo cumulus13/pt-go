@@ -1,31 +1,33 @@
 name: Build and Release Multi-Platform Binaries
 
+# Trigger: ONLY runs when a new release is CREATED
 on:
   release:
     types: [created]
 
 permissions:
-  contents: write
+  contents: write # Required to upload release assets
 
 jobs:
   build-and-release:
     name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
+    
     strategy:
       fail-fast: false
       matrix:
         include:
-          # --- Target untuk Alpine Linux (musl) ---
+          # Target 1 & 2: Linux Musl (Statis/Alpine)
           - goos: linux
             goarch: amd64
             suffix: linux-amd64
-            # Untuk Alpine, binary harus statis (tidak bergantung libc)
             env: 'CGO_ENABLED=0'
           - goos: linux
             goarch: arm64
             suffix: linux-arm64
             env: 'CGO_ENABLED=0'
-          # --- Target untuk Linux Standar (glibc) ---
+            
+          # Target 3 & 4: Linux Glibc (Standar)
           - goos: linux
             goarch: amd64
             suffix: linux-glibc-amd64
@@ -34,12 +36,14 @@ jobs:
             goarch: arm64
             suffix: linux-glibc-arm64
             env: ''
-          # --- Target untuk Windows ---
+            
+          # Target 5: Windows
           - goos: windows
             goarch: amd64
             suffix: windows-amd64.exe
             env: ''
-          # --- Target untuk macOS (Intel & Apple Silicon) ---
+            
+          # Target 6 & 7: macOS (Darwin)
           - goos: darwin
             goarch: amd64
             suffix: darwin-amd64
@@ -48,6 +52,7 @@ jobs:
             goarch: arm64
             suffix: darwin-arm64
             env: ''
+            
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -59,23 +64,21 @@ jobs:
           cache-dependency-path: 'go.sum'
 
       - name: Build Binary
-        # Variabel lingkungan dikirim ke runner
         env:
           BUILD_ENV: ${{ matrix.env }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          # Evaluasi variabel lingkungan untuk build (misal: CGO_ENABLED=0)
+          # Evaluate CGO_ENABLED=0 or other
           eval $BUILD_ENV
           echo "Building for $GOOS/$GOARCH with flags: $BUILD_ENV"
           
-          # Tentukan nama output
+          # File name using release tag (for example, pt-v1.0.0-linux-amd64)
           OUTPUT_NAME="pt-${{ github.event.release.tag_name }}-${{ matrix.suffix }}"
           
-          # Lokasi file utama Anda (sesuaikan jika perlu)
           go build -v -o "$OUTPUT_NAME" ./pt/main.go
           
-          # Beri tahu lokasi file yang dibuat untuk step berikutnya
+          # Save asset path for upload step
           echo "ASSET_PATH=$(pwd)/$OUTPUT_NAME" >> $GITHUB_ENV
 
       - name: Upload Release Asset
