@@ -10,7 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"runtime"
-	"syscall"
+	// "syscall"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/windows"
+	// "golang.org/x/sys/windows"
 	"github.com/atotto/clipboard"
 	"gopkg.in/yaml.v3"
 	// "github.com/alecthomas/chroma/v2/quick" // Import chroma quick for syntax highlighting
@@ -4262,31 +4262,31 @@ func findFilesWithRegex(pattern string) ([]string, error) {
 
 // setWindowsHiddenAttribute sets the hidden attribute on a file or directory on Windows.
 // It uses Windows-specific system calls.
-func setWindowsHiddenAttribute(path string) error {
-	if runtime.GOOS != "windows" {
-		// This function should only be called on Windows.
-		return nil
-	}
+// func setWindowsHiddenAttribute(path string) error {
+// 	if runtime.GOOS != "windows" {
+// 		// This function should only be called on Windows.
+// 		return nil
+// 	}
 
-	// Convert the Go string path to a Windows UTF-16 string pointer (LPCWSTR)
-	// This is required by the Windows API function.
-	ptr, err := syscall.UTF16PtrFromString(path)
-	if err != nil {
-		return err
-	}
+// 	// Convert the Go string path to a Windows UTF-16 string pointer (LPCWSTR)
+// 	// This is required by the Windows API function.
+// 	ptr, err := syscall.UTF16PtrFromString(path)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// Get current attributes
-	attributes, err := windows.GetFileAttributes(ptr)
-	if err != nil {
-		return err
-	}
+// 	// Get current attributes
+// 	attributes, err := windows.GetFileAttributes(ptr)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// Add the hidden attribute flag
-	newAttributes := attributes | windows.FILE_ATTRIBUTE_HIDDEN
+// 	// Add the hidden attribute flag
+// 	newAttributes := attributes | windows.FILE_ATTRIBUTE_HIDDEN
 
-	// Set the new attributes
-	return windows.SetFileAttributes(ptr, newAttributes)
-}
+// 	// Set the new attributes
+// 	return windows.SetFileAttributes(ptr, newAttributes)
+// }
 
 // createPTGitignore creates/updates .gitignore to exclude .pt directory
 func createPTGitignore(dir string) {
