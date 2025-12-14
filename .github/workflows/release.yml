@@ -2,13 +2,8 @@ name: Build and Release Multi-Platform Binaries
 
 on:
   release:
-    types: [created]
+    types: [published, created]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (e.g., v1.0.0)'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -67,15 +62,6 @@ jobs:
           cache: true
           cache-dependency-path: 'go.sum'
           
-      - name: Get Release Tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          fi
-          
       - name: Download Dependencies
         run: go mod download
         
@@ -89,12 +75,12 @@ jobs:
           echo "Building PT for $GOOS/$GOARCH"
           echo "=========================================="
           echo "CGO_ENABLED: $CGO_ENABLED"
-          echo "Release Tag: ${{ steps.tag.outputs.tag }}"
+          echo "Release Tag: ${{ github.event.release.tag_name }}"
           echo "Description: ${{ matrix.description }}"
           echo ""
           
           # Create output filename
-          OUTPUT_NAME="pt-${{ steps.tag.outputs.tag }}-${{ matrix.suffix }}"
+          OUTPUT_NAME="pt-${{ github.event.release.tag_name }}-${{ matrix.suffix }}"
           
           echo "Building: $OUTPUT_NAME"
           echo ""
@@ -103,7 +89,7 @@ jobs:
           go build \
             -v \
             -trimpath \
-            -ldflags="-s -w -X main.Version=${{ steps.tag.outputs.tag }}" \
+            -ldflags="-s -w -X main.Version=${{ github.event.release.tag_name }}" \
             -o "$OUTPUT_NAME" \
             ./pt
           
@@ -127,7 +113,6 @@ jobs:
           fi
           
           # Save path for upload
-          echo "ASSET_PATH=$(pwd)/$OUTPUT_NAME" >> $GITHUB_ENV
           echo "ASSET_NAME=$OUTPUT_NAME" >> $GITHUB_ENV
           
       - name: Generate Checksums
@@ -140,10 +125,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ env.ASSET_PATH }}
-            ${{ env.ASSET_PATH }}.sha256
-          tag_name: ${{ steps.tag.outputs.tag }}
-          fail_on_unmatched_files: true
+            ${{ env.ASSET_NAME }}
+            ${{ env.ASSET_NAME }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
@@ -151,7 +134,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pt-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.ASSET_PATH }}
+          path: ${{ env.ASSET_NAME }}
           retention-days: 7
   
   # ============================================
@@ -189,7 +172,7 @@ jobs:
           ## 📥 Installation
           
           ### Linux / macOS
-```bash
+          \`\`\`bash
           # Download (replace VERSION with actual version)
           wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64
           
@@ -201,10 +184,10 @@ jobs:
           
           # Verify
           pt --version
-```
+          \`\`\`
           
           ### Alpine Linux
-```bash
+          \`\`\`bash
           # Binary works out of box, but install clipboard support
           apk add xclip
           
@@ -212,22 +195,23 @@ jobs:
           wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64
           chmod +x pt-VERSION-linux-amd64
           mv pt-VERSION-linux-amd64 /usr/local/bin/pt
-```
+          \`\`\`
           
           ### Windows
-```powershell
+          \`\`\`powershell
           # Download from releases page
           # Add to PATH or use directly
           pt.exe --version
-```
+          \`\`\`
           
           ## 🔐 Verify Checksums
-```bash
+          
+          \`\`\`bash
           # Download binary and checksum
           wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64
           wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64.sha256
           
           # Verify
           sha256sum -c pt-VERSION-linux-amd64.sha256
-```
+          \`\`\`
           EOF
