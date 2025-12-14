@@ -23,3 +23,6 @@ backup_dir_name: backup
 # Range: 1 - 100
 # When a file is not found in current directory, PT searches subdirectories up to this depth
 max_search_depth: 10
+
+# valid: meld, winmerge, amerge. default: delta
+diff_tool: meld

@@ -59,6 +59,7 @@ type Config struct {
 	MaxFilenameLen   int    `yaml:"max_filename_length"`
 	BackupDirName    string `yaml:"backup_dir_name"`
 	MaxSearchDepth   int    `yaml:"max_search_depth"`
+	DiffTool         string `yaml:"diff_tool"`
 }
 
 // Global config instance
@@ -1002,9 +1003,32 @@ func handleDiffCommand(args []string) error {
 		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
 	}
 
-	err = runDelta(selectedBackup.Path, filePath)
-	if err != nil {
-		return fmt.Errorf("delta execution failed: %w", err)
+	switch appConfig.DiffTool {
+		case "meld", "winmerge", "amerge":
+			fmt.Printf("appConfig.DiffTool: %s", appConfig.DiffTool)	
+	}
+	
+
+	if appConfig.DiffTool == "winmerge" {
+		err = runWinMerge(selectedBackup.Path, filePath)
+		if err != nil {
+			return fmt.Errorf("winmerge execution failed: %w", err)
+		}		
+	} else if appConfig.DiffTool == "meld" {
+		err = runMeld(selectedBackup.Path, filePath)
+		if err != nil {
+			return fmt.Errorf("meld execution failed: %w", err)
+		}
+	} else if appConfig.DiffTool == "amerge" {
+		err = runAMerge(selectedBackup.Path, filePath)
+		if err != nil {
+			return fmt.Errorf("Araxis merge execution failed: %w", err)
+		}
+	} else {
+		err = runDelta(selectedBackup.Path, filePath)
+		if err != nil {
+			return fmt.Errorf("delta execution failed: %w", err)
+		}
 	}
 
 	return nil
@@ -1012,6 +1036,29 @@ func handleDiffCommand(args []string) error {
 
 func checkDeltaInstalled() bool {
 	_, err := exec.LookPath("delta")
+	return err == nil
+}
+
+func checkMeldInstalled() bool {
+	_, err := exec.LookPath("meld")
+	return err == nil
+}
+
+func checkWinMergeInstalled() string {
+	if _, err := exec.LookPath("winmerge"); err == nil {
+		return "winmerge"
+	}
+
+	if _, err := exec.LookPath("WinMergeU"); err == nil {
+		return "winmergeu"
+	}
+	
+	// return err == nil
+	return ""
+}
+
+func checkAMergeInstalled() bool {
+	_, err := exec.LookPath("amerge")
 	return err == nil
 }
 
@@ -1035,10 +1082,96 @@ func runDelta(file1, file2 string) error {
 			}
 		}
 		return err
-	}
+	} //else {
+	// 	fmt.Printf("Error status [DELTA]: %v\n", err)
+	// }
 
 	return nil
 }
+
+func runMeld(file1, file2 string) error {
+	if !checkMeldInstalled() {
+		return fmt.Errorf("meld is not installed. Install it from: https://meldmerge.org")
+	}
+
+	cmd := exec.Command("meld", file1, file2)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	
+	// meld exit code 1 is NORMAL when files are different
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 1 {
+				return nil
+			}
+		}
+		return err
+	} //else {
+	// 	fmt.Printf("Error status [MELD]: %v\n", err)
+	// }
+
+	return nil
+}
+
+func runWinMerge(file1, file2 string) error {
+	exe := checkWinMergeInstalled()
+	if exe != "" {
+		return fmt.Errorf("winmerge is not installed. Install it from: https://winmerge.org")
+	}
+
+	cmd := exec.Command(exe, file1, file2)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	
+	// wimerge exit code 1 is NORMAL when files are different
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 1 {
+				return nil
+			}
+		}
+		return err
+	} //else {
+	// 	fmt.Printf("Error status [WINMERGE]: %v\n", err)
+	// }
+
+	return nil
+}
+
+func runAMerge(file1, file2 string) error {
+	exe := checkWinMergeInstalled()
+	if exe != "" {
+		return fmt.Errorf("winmerge is not installed. Install it from: https://www.araxis.com/merge")
+	}
+
+	cmd := exec.Command(exe, file1, file2)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	
+	// wimerge exit code 1 is NORMAL when files are different
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 1 {
+				return nil
+			}
+		}
+		return err
+	} //else {
+	// 	fmt.Printf("Error status [AMERGE]: %v\n", err)
+	// }
+
+	return nil
+}
+
 
 // ============================================================================
 // CHECK/STATUS COMMAND - Show file status (git-like)
@@ -2908,29 +3041,192 @@ func getDefaultConfig() *Config {
 	}
 }
 
+// func findConfigFile() string {
+// 	configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
+
+// 	searchPaths := []string{
+// 		".",
+// 		filepath.Join(os.Getenv("HOME"), ".config", "pt"),
+// 		os.Getenv("HOME"),
+// 	}
+
+// 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+// 		searchPaths = append(searchPaths, userProfile, filepath.Join(userProfile, ".pt"))
+// 	}
+
+// 	for _, basePath := range searchPaths {
+// 		for _, configName := range configNames {
+// 			configPath := filepath.Join(basePath, configName)
+// 			if _, err := os.Stat(configPath); err == nil {
+// 				return configPath
+// 			}
+// 		}
+// 	}
+
+// 	return ""
+// }
+
 func findConfigFile() string {
-	configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
+    configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
+    
+    var searchPaths []string
+    
+    runtimeOS := runtime.GOOS
+    exeDir, _ :=	 os.Executable()
+    exeDir = filepath.Dir(exeDir)
+    currentDir, _ := os.Getwd()
+    
+    switch runtimeOS {
+    case "windows":
+        // Windows search paths
+        if appData := os.Getenv("APPDATA"); appData != "" {
+            searchPaths = append(searchPaths,
+                filepath.Join(appData, ".pt"),  // %APPDATA%/.pt/
+                appData,                        // %APPDATA%/
+            )
+        }
+        
+        if programData := os.Getenv("PROGRAMDATA"); programData != "" {
+            searchPaths = append(searchPaths,
+                filepath.Join(programData, ".pt"),  // %PROGRAMDATA%/.pt/
+                programData,                        // %PROGRAMDATA%/
+            )
+        }
+        
+        if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+            searchPaths = append(searchPaths,
+                filepath.Join(userProfile, ".pt"),  // %USERPROFILE%/.pt/
+            )
+        }
+        
+        if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+            searchPaths = append(searchPaths,
+                filepath.Join(localAppData, ".pt"),  // %LOCALAPPDATA%/.pt/
+                localAppData,                         // %LOCALAPPDATA%/
+            )
+        }
+        
+        // Executable directory
+        searchPaths = append(searchPaths,
+            filepath.Join(exeDir, ".pt"),  // exedir/.pt/
+            exeDir,                        // exedir/
+        )
+        
+        // Current directory
+        searchPaths = append(searchPaths,
+            filepath.Join(currentDir, ".pt"),  // currentdir/.pt/
+            currentDir,                        // currentdir/
+        )
+        
+    case "darwin":  // macOS
+        home := os.Getenv("HOME")
+        
+        // macOS specific paths
+        if home != "" {
+            // User-level configs
+            searchPaths = append(searchPaths,
+                filepath.Join(home, ".config", ".pt"),  // ~/.config/.pt/
+                filepath.Join(home, ".config"),         // ~/.config/
+                filepath.Join(home, ".pt"),             // ~/.pt/
+                home,                                   // ~/
+                filepath.Join(home, "Library", "Application Support", ".pt"), // ~/Library/Application Support/.pt/
+                filepath.Join(home, "Library", "Application Support"),        // ~/Library/Application Support/
+            )
+        }
+        
+        // System-level configs
+        searchPaths = append(searchPaths,
+            filepath.Join("/etc", ".pt"),           // /etc/.pt/
+            "/etc",                                 // /etc/
+            filepath.Join("/usr", "etc", ".pt"),    // /usr/etc/.pt/
+            filepath.Join("/usr", "etc"),           // /usr/etc/
+            filepath.Join("/usr", "local", "etc", ".pt"),  // /usr/local/etc/.pt/
+            filepath.Join("/usr", "local", "etc"),         // /usr/local/etc/
+        )
+        
+        // Executable directory
+        searchPaths = append(searchPaths,
+            filepath.Join(exeDir, ".pt"),  // exedir/.pt/
+            exeDir,                        // exedir/
+        )
+        
+        // Current directory
+        searchPaths = append(searchPaths,
+            filepath.Join(currentDir, ".pt"),  // currentdir/.pt/
+            currentDir,                        // currentdir/
+        )
+        
+    default:  // Linux and other Unix-like
+        home := os.Getenv("HOME")
+        
+        if home != "" {
+            // XDG Base Directory Specification + legacy
+            if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
+                searchPaths = append(searchPaths,
+                    filepath.Join(xdgConfigHome, ".pt"),  // $XDG_CONFIG_HOME/.pt/
+                    xdgConfigHome,                        // $XDG_CONFIG_HOME/
+                )
+            } else {
+                searchPaths = append(searchPaths,
+                    filepath.Join(home, ".config", ".pt"),  // $HOME/.config/.pt/
+                    filepath.Join(home, ".config"),         // $HOME/.config/
+                )
+            }
+            
+            searchPaths = append(searchPaths,
+                filepath.Join(home, ".pt"),  // $HOME/.pt/
+                home,                        // $HOME/
+            )
+        }
+        
+        // System-level configs
+        searchPaths = append(searchPaths,
+            filepath.Join("/etc", ".pt"),           // /etc/.pt/
+            "/etc",                                 // /etc/
+            filepath.Join("/usr", "etc", ".pt"),    // /usr/etc/.pt/
+            filepath.Join("/usr", "etc"),           // /usr/etc/
+            filepath.Join("/usr", "local", "etc", ".pt"),  // /usr/local/etc/.pt/
+            filepath.Join("/usr", "local", "etc"),         // /usr/local/etc/
+        )
+        
+        // Executable directory
+        searchPaths = append(searchPaths,
+            filepath.Join(exeDir, ".pt"),  // exedir/.pt/
+            exeDir,                        // exedir/
+        )
+        
+        // Current directory
+        searchPaths = append(searchPaths,
+            filepath.Join(currentDir, ".pt"),  // currentdir/.pt/
+            currentDir,                        // currentdir/
+        )
+    }
+    
+    // Remove duplicates while preserving order
+    // fmt.Printf("searchPaths: %s", searchPaths)
+    uniquePaths := make([]string, 0, len(searchPaths))
+    seen := make(map[string]bool)
+    for _, path := range searchPaths {
+        if !seen[path] {
+            seen[path] = true
+            uniquePaths = append(uniquePaths, path)
+        }
+    }
 
-	searchPaths := []string{
-		".",
-		filepath.Join(os.Getenv("HOME"), ".config", "pt"),
-		os.Getenv("HOME"),
-	}
-
-	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
-		searchPaths = append(searchPaths, userProfile, filepath.Join(userProfile, ".pt"))
-	}
-
-	for _, basePath := range searchPaths {
-		for _, configName := range configNames {
-			configPath := filepath.Join(basePath, configName)
-			if _, err := os.Stat(configPath); err == nil {
-				return configPath
-			}
-		}
-	}
-
-	return ""
+    // fmt.Printf("uniquePaths: %s", uniquePaths)
+    
+    // Search for config file
+    for _, basePath := range uniquePaths {
+        for _, configName := range configNames {
+            configPath := filepath.Join(basePath, configName)
+            if _, err := os.Stat(configPath); err == nil {
+            	// fmt.Printf("configPath: %s", configPath)
+                return configPath
+            }
+        }
+    }
+    
+    return ""
 }
 
 func loadConfig() *Config {
