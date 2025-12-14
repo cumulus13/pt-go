@@ -3,48 +3,59 @@ name: Build and Release Multi-Platform Binaries
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   build-and-release:
-    name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+    name: Build - ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     
     strategy:
       fail-fast: false
       matrix:
         include:
+          # ============================================
+          # Linux Builds (Static - Alpine Compatible)
+          # ============================================
           - goos: linux
             goarch: amd64
             suffix: linux-amd64
-            env: 'CGO_ENABLED=0'
+            description: "Linux x86_64 (static, works on Alpine)"
+            
           - goos: linux
             goarch: arm64
             suffix: linux-arm64
-            env: 'CGO_ENABLED=0'
-          - goos: linux
-            goarch: amd64
-            suffix: linux-glibc-amd64
-            env: ''
-          - goos: linux
-            goarch: arm64
-            suffix: linux-glibc-arm64
-            env: ''
+            description: "Linux ARM64 (static, works on Alpine)"
+            
+          # ============================================
+          # Windows Builds
+          # ============================================
           - goos: windows
             goarch: amd64
             suffix: windows-amd64.exe
-            env: ''
+            description: "Windows x86_64"
+            
+          # ============================================
+          # macOS Builds
+          # ============================================
           - goos: darwin
             goarch: amd64
             suffix: darwin-amd64
-            env: ''
+            description: "macOS x86_64 (Intel)"
+            
           - goos: darwin
             goarch: arm64
             suffix: darwin-arm64
-            env: ''
-            
+            description: "macOS ARM64 (Apple Silicon M1/M2/M3)"
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -53,25 +64,170 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
+          cache: true
           cache-dependency-path: 'go.sum'
           
+      - name: Get Release Tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Download Dependencies
+        run: go mod download
+        
       - name: Build Binary
         env:
-          BUILD_ENV: ${{ matrix.env }}
+          CGO_ENABLED: 0
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          eval $BUILD_ENV
-          echo "Building for $GOOS/$GOARCH with flags: $BUILD_ENV"
+          echo "=========================================="
+          echo "Building PT for $GOOS/$GOARCH"
+          echo "=========================================="
+          echo "CGO_ENABLED: $CGO_ENABLED"
+          echo "Release Tag: ${{ steps.tag.outputs.tag }}"
+          echo "Description: ${{ matrix.description }}"
+          echo ""
           
-          OUTPUT_NAME="pt-${{ github.event.release.tag_name }}-${{ matrix.suffix }}"
-          go build -v -o "$OUTPUT_NAME" ./pt/main.go
+          # Create output filename
+          OUTPUT_NAME="pt-${{ steps.tag.outputs.tag }}-${{ matrix.suffix }}"
+          
+          echo "Building: $OUTPUT_NAME"
+          echo ""
+          
+          # Build with optimizations
+          go build \
+            -v \
+            -trimpath \
+            -ldflags="-s -w -X main.Version=${{ steps.tag.outputs.tag }}" \
+            -o "$OUTPUT_NAME" \
+            ./pt
+          
+          echo ""
+          echo "=========================================="
+          echo "Build complete!"
+          echo "=========================================="
+          
+          # Show binary info
+          ls -lh "$OUTPUT_NAME"
+          file "$OUTPUT_NAME" || true
+          
+          # Verify it's a static binary (Linux only)
+          if [ "$GOOS" = "linux" ]; then
+            echo ""
+            echo "Checking if binary is static..."
+            ldd "$OUTPUT_NAME" 2>&1 | grep "not a dynamic" || {
+              echo "⚠️  Warning: Binary might not be fully static"
+              ldd "$OUTPUT_NAME" || true
+            }
+          fi
+          
+          # Save path for upload
           echo "ASSET_PATH=$(pwd)/$OUTPUT_NAME" >> $GITHUB_ENV
+          echo "ASSET_NAME=$OUTPUT_NAME" >> $GITHUB_ENV
+          
+      - name: Generate Checksums
+        run: |
+          echo "Generating checksums..."
+          sha256sum "${{ env.ASSET_NAME }}" > "${{ env.ASSET_NAME }}.sha256"
+          cat "${{ env.ASSET_NAME }}.sha256"
           
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ASSET_PATH }}
-          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            ${{ env.ASSET_PATH }}
+            ${{ env.ASSET_PATH }}.sha256
+          tag_name: ${{ steps.tag.outputs.tag }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pt-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.ASSET_PATH }}
+          retention-days: 7
+  
+  # ============================================
+  # Generate Release Summary
+  # ============================================
+  release-summary:
+    name: Generate Release Summary
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Create Summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🎉 Release Build Complete!
+          
+          ## 📦 Built Binaries
+          
+          | Platform | Architecture | Binary Name |
+          |----------|--------------|-------------|
+          | 🐧 Linux | x86_64 | `pt-*-linux-amd64` |
+          | 🐧 Linux | ARM64 | `pt-*-linux-arm64` |
+          | 🪟 Windows | x86_64 | `pt-*-windows-amd64.exe` |
+          | 🍎 macOS | Intel | `pt-*-darwin-amd64` |
+          | 🍎 macOS | Apple Silicon | `pt-*-darwin-arm64` |
+          
+          ## ✅ Features
+          
+          - ✅ Static binaries (no dependencies)
+          - ✅ Alpine Linux compatible
+          - ✅ CGO disabled for maximum portability
+          - ✅ SHA256 checksums included
+          
+          ## 📥 Installation
+          
+          ### Linux / macOS
+```bash
+          # Download (replace VERSION with actual version)
+          wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64
+          
+          # Make executable
+          chmod +x pt-VERSION-linux-amd64
+          
+          # Move to PATH
+          sudo mv pt-VERSION-linux-amd64 /usr/local/bin/pt
+          
+          # Verify
+          pt --version
+```
+          
+          ### Alpine Linux
+```bash
+          # Binary works out of box, but install clipboard support
+          apk add xclip
+          
+          # Install PT
+          wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64
+          chmod +x pt-VERSION-linux-amd64
+          mv pt-VERSION-linux-amd64 /usr/local/bin/pt
+```
+          
+          ### Windows
+```powershell
+          # Download from releases page
+          # Add to PATH or use directly
+          pt.exe --version
+```
+          
+          ## 🔐 Verify Checksums
+```bash
+          # Download binary and checksum
+          wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64
+          wget https://github.com/${{ github.repository }}/releases/download/VERSION/pt-VERSION-linux-amd64.sha256
+          
+          # Verify
+          sha256sum -c pt-VERSION-linux-amd64.sha256
+```
+          EOF

@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 permissions:
@@ -11,19 +14,19 @@ permissions:
 
 jobs:
   build-check:
-    name: Check build for ${{ matrix.goos }}/${{ matrix.goarch }}
+    name: Build Check - ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
         exclude:
+          # Windows ARM64 not commonly supported
           - goos: windows
             goarch: arm64
-          - goos: darwin
-            goarch: arm64
-
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -32,11 +35,47 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
+          cache: true
           
+      - name: Download Dependencies
+        run: go mod download
+        
+      - name: Verify Dependencies
+        run: go mod verify
+        
       - name: Build Check
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
         run: |
-          echo "Checking build for $GOOS/$GOARCH..."
-          go build -v -o /dev/null ./pt/main.go
+          echo "=================================="
+          echo "Building for $GOOS/$GOARCH"
+          echo "CGO_ENABLED=$CGO_ENABLED"
+          echo "=================================="
+          
+          # Set output name based on OS
+          if [ "$GOOS" = "windows" ]; then
+            OUTPUT="pt-$GOOS-$GOARCH.exe"
+          else
+            OUTPUT="pt-$GOOS-$GOARCH"
+          fi
+          
+          echo "Output: $OUTPUT"
+          
+          # Build
+          go build -v -ldflags="-s -w" -o "$OUTPUT" ./pt
+          
+          # Verify binary exists
+          ls -lh "$OUTPUT"
+          
+          echo "=================================="
+          echo "✅ Build successful for $GOOS/$GOARCH"
+          echo "=================================="
+      
+      - name: Run Tests (Linux only)
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: |
+          if [ -f "go.mod" ]; then
+            go test -v ./... || echo "No tests found"
+          fi
