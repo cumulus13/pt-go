@@ -36,7 +36,7 @@
 
 ### Optional diff tool
 
-set `diff_tool` in config file pt.yml/pt.yaml
+set `diff_tool` in config file pt.yml/pt.yaml or use   '--tool DIFF_TOOL_NAME' 
 
 | Tool | **Alias (Config Value)** | Platform | Type | License | Home Page / Download |
 |------|--------------------------|----------|------|---------|----------------------|
