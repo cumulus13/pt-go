@@ -947,91 +947,475 @@ func handleDiffClipboardToFile(fileName string) error {
 	return nil
 }
 
-func handleDiffCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("filename required for diff command")
-	}
+// func handleDiffCommand(args []string) error {
+// 	if len(args) < 1 {
+// 		return fmt.Errorf("filename required for diff command")
+// 	}
 
-	filename := args[0]
-	useLast := len(args) > 1 && args[1] == "--last"
+// 	filename := args[0]
+// 	useLast := len(args) > 1 && args[1] == "--last"
 
-	filePath, err := resolveFilePath(filename)
-	if err != nil {
-		return err
-	}
+// 	filePath, err := resolveFilePath(filename)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	backups, err := listBackups(filePath)
-	if err != nil {
-		return err
-	}
+// 	backups, err := listBackups(filePath)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	if len(backups) == 0 {
-		return fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
-	}
+// 	if len(backups) == 0 {
+// 		return fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
+// 	}
 
-	var selectedBackup BackupInfo
+// 	var selectedBackup BackupInfo
 
-	if useLast {
-		selectedBackup = backups[0]
-		fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
-	} else {
-		printBackupTable(filePath, backups)
+// 	if useLast {
+// 		selectedBackup = backups[0]
+// 		fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+// 	} else {
+// 		printBackupTable(filePath, backups)
 
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Enter backup number to compare (1-%d) or 0 to cancel: ", len(backups))
+// 		reader := bufio.NewReader(os.Stdin)
+// 		fmt.Printf("Enter backup number to compare (1-%d) or 0 to cancel: ", len(backups))
 
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
+// 		input, err := reader.ReadString('\n')
+// 		if err != nil {
+// 			return fmt.Errorf("failed to read input: %w", err)
+// 		}
 
-		input = strings.TrimSpace(input)
-		choice, err := strconv.Atoi(input)
-		if err != nil {
-			return fmt.Errorf("invalid input: please enter a number")
-		}
+// 		input = strings.TrimSpace(input)
+// 		choice, err := strconv.Atoi(input)
+// 		if err != nil {
+// 			return fmt.Errorf("invalid input: please enter a number")
+// 		}
 
-		if choice < 0 || choice > len(backups) {
-			return fmt.Errorf("invalid selection: must be between 0 and %d", len(backups))
-		}
+// 		if choice < 0 || choice > len(backups) {
+// 			return fmt.Errorf("invalid selection: must be between 0 and %d", len(backups))
+// 		}
 
-		if choice == 0 {
-			return fmt.Errorf("diff cancelled")
-		}
+// 		if choice == 0 {
+// 			return fmt.Errorf("diff cancelled")
+// 		}
 
-		selectedBackup = backups[choice-1]
-		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
-	}
+// 		selectedBackup = backups[choice-1]
+// 		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+// 	}
 
-	switch appConfig.DiffTool {
-		case "meld", "winmerge", "amerge":
-			fmt.Printf("appConfig.DiffTool: %s", appConfig.DiffTool)	
-	}
+// 	switch appConfig.DiffTool {
+// 		case "meld", "winmerge", "amerge":
+// 			fmt.Printf("appConfig.DiffTool: %s", appConfig.DiffTool)	
+// 	}
 	
 
-	if appConfig.DiffTool == "winmerge" {
-		err = runWinMerge(selectedBackup.Path, filePath)
-		if err != nil {
-			return fmt.Errorf("winmerge execution failed: %w", err)
-		}		
-	} else if appConfig.DiffTool == "meld" {
-		err = runMeld(selectedBackup.Path, filePath)
-		if err != nil {
-			return fmt.Errorf("meld execution failed: %w", err)
-		}
-	} else if appConfig.DiffTool == "amerge" {
-		err = runAMerge(selectedBackup.Path, filePath)
-		if err != nil {
-			return fmt.Errorf("Araxis merge execution failed: %w", err)
-		}
-	} else {
-		err = runDelta(selectedBackup.Path, filePath)
-		if err != nil {
-			return fmt.Errorf("delta execution failed: %w", err)
-		}
-	}
+// 	if appConfig.DiffTool == "winmerge" {
+// 		err = runWinMerge(selectedBackup.Path, filePath)
+// 		if err != nil {
+// 			return fmt.Errorf("winmerge execution failed: %w", err)
+// 		}		
+// 	} else if appConfig.DiffTool == "meld" {
+// 		err = runMeld(selectedBackup.Path, filePath)
+// 		if err != nil {
+// 			return fmt.Errorf("meld execution failed: %w", err)
+// 		}
+// 	} else if appConfig.DiffTool == "amerge" {
+// 		err = runAMerge(selectedBackup.Path, filePath)
+// 		if err != nil {
+// 			return fmt.Errorf("Araxis merge execution failed: %w", err)
+// 		}
+// 	} else {
+// 		err = runDelta(selectedBackup.Path, filePath)
+// 		if err != nil {
+// 			return fmt.Errorf("delta execution failed: %w", err)
+// 		}
+// 	}
 
-	return nil
+// 	return nil
+// }
+
+// ==================== DIFF TOOLS CONFIGURATION ====================
+type DiffToolConfig struct {
+    Name           string   // Tool name (for display)
+    Platform       []string // Supported platforms: "linux", "darwin", "windows"
+    Type           string   // "CLI", "GUI", "TUI"
+    License        string   // "Open Source", "Commercial", "Freeware"
+    HomeURL        string   // URL for home page
+    InstallURL     string   // URL for install instructions
+    BinaryNames    []string // Names of binary possibilities
+    NormalExitCode int      // Exit code that is considered normal (0 or 1)
+    Args           []string // Additional arguments if needed
+}
+
+var diffTools = map[string]DiffToolConfig{
+    "delta": {
+        Name:           "Delta (git diff)",
+        Platform:       []string{"linux", "darwin"},
+        Type:           "CLI",
+        License:        "Open Source",
+        HomeURL:        "https://dandavison.github.io/delta/",
+        InstallURL:     "https://github.com/dandavison/delta#installation",
+        BinaryNames:    []string{"delta"},
+        NormalExitCode: 1,
+    },
+    "diff": {
+        Name:           "GNU diff",
+        Platform:       []string{"linux", "darwin"},
+        Type:           "CLI",
+        License:        "Open Source",
+        HomeURL:        "https://www.gnu.org/software/diffutils/",
+        InstallURL:     "https://www.gnu.org/software/diffutils/#downloading",
+        BinaryNames:    []string{"diff"},
+        NormalExitCode: 1,
+        Args:           []string{"-u"},
+    },
+    "sdiff": {
+        Name:           "GNU sdiff",
+        Platform:       []string{"linux", "darwin"},
+        Type:           "CLI",
+        License:        "Open Source",
+        HomeURL:        "https://www.gnu.org/software/diffutils/",
+        InstallURL:     "https://www.gnu.org/software/diffutils/#downloading",
+        BinaryNames:    []string{"sdiff"},
+        NormalExitCode: 1,
+    },
+    "vimdiff": {
+        Name:           "vimdiff",
+        Platform:       []string{"linux", "darwin"},
+        Type:           "CLI (TUI)",
+        License:        "Open Source",
+        HomeURL:        "https://www.vim.org/",
+        InstallURL:     "https://www.vim.org/download.php",
+        BinaryNames:    []string{"vimdiff", "nvim", "vim"},
+        NormalExitCode: 0,
+        Args:           []string{"-d"},
+    },
+    "meld": {
+        Name:           "Meld",
+        Platform:       []string{"linux", "darwin", "windows"},
+        Type:           "GUI",
+        License:        "Open Source",
+        HomeURL:        "https://meldmerge.org/",
+        InstallURL:     "https://meldmerge.org/#download",
+        BinaryNames:    []string{"meld"},
+        NormalExitCode: 1,
+    },
+    "kdiff3": {
+        Name:           "KDiff3",
+        Platform:       []string{"linux", "darwin", "windows"},
+        Type:           "GUI",
+        License:        "Open Source",
+        HomeURL:        "https://invent.kde.org/sdk/kdiff3",
+        InstallURL:     "https://download.kde.org/stable/kdiff3/",
+        BinaryNames:    []string{"kdiff3"},
+        NormalExitCode: 1,
+    },
+    "diffmerge": {
+        Name:           "DiffMerge",
+        Platform:       []string{"linux", "darwin", "windows"},
+        Type:           "GUI",
+        License:        "Freeware",
+        HomeURL:        "https://sourcegear.com/diffmerge/",
+        InstallURL:     "https://sourcegear.com/diffmerge/downloads.php",
+        BinaryNames:    []string{"diffmerge", "sgdm"},
+        NormalExitCode: 1,
+    },
+    "kompare": {
+        Name:           "Kompare",
+        Platform:       []string{"linux"},
+        Type:           "GUI",
+        License:        "Open Source",
+        HomeURL:        "https://apps.kde.org/kompare/",
+        InstallURL:     "https://apps.kde.org/kompare/",
+        BinaryNames:    []string{"kompare"},
+        NormalExitCode: 1,
+    },
+    "tkdiff": {
+        Name:           "TkDiff",
+        Platform:       []string{"linux", "darwin", "windows"},
+        Type:           "GUI",
+        License:        "Open Source",
+        HomeURL:        "https://sourceforge.net/projects/tkdiff/",
+        InstallURL:     "https://sourceforge.net/projects/tkdiff/files/",
+        BinaryNames:    []string{"tkdiff"},
+        NormalExitCode: 1,
+    },
+    "bcompare": {
+        Name:           "Beyond Compare",
+        Platform:       []string{"linux", "darwin", "windows"},
+        Type:           "GUI + CLI",
+        License:        "Commercial",
+        HomeURL:        "https://www.scootersoftware.com/",
+        InstallURL:     "https://www.scootersoftware.com/download.php",
+        BinaryNames:    []string{"bcompare", "bcomp"},
+        NormalExitCode: 1,
+    },
+    "filemerge": {
+        Name:           "FileMerge (Xcode)",
+        Platform:       []string{"darwin"},
+        Type:           "GUI",
+        License:        "Free (Xcode)",
+        HomeURL:        "https://developer.apple.com/xcode/",
+        InstallURL:     "https://developer.apple.com/download/all/?q=xcode",
+        BinaryNames:    []string{"opendiff"},
+        NormalExitCode: 0,
+    },
+    "kaleidoscope": {
+        Name:           "Kaleidoscope",
+        Platform:       []string{"darwin"},
+        Type:           "GUI",
+        License:        "Commercial",
+        HomeURL:        "https://kaleidoscope.app/",
+        InstallURL:     "https://kaleidoscope.app/download",
+        BinaryNames:    []string{"ksdiff", "kaleidoscope"},
+        NormalExitCode: 1,
+    },
+}
+
+// ==================== HELPER FUNCTIONS ====================
+func findBinary(names []string) (string, bool) {
+    for _, name := range names {
+        if path, err := exec.LookPath(name); err == nil {
+            return path, true
+        }
+    }
+    return "", false
+}
+
+func isPlatformCompatible(toolPlatforms []string) bool {
+    currentOS := runtime.GOOS
+    for _, platform := range toolPlatforms {
+        if (platform == "darwin" && currentOS == "darwin") ||
+           (platform == "windows" && currentOS == "windows") ||
+           (platform == "linux" && currentOS == "linux") {
+            return true
+        }
+    }
+    return false
+}
+
+// ==================== MAIN DIFF FUNCTION ====================
+func runDiff(toolName, file1, file2 string) error {
+    // Validate the tool
+    config, exists := diffTools[toolName]
+    if !exists {
+        return fmt.Errorf("diff tool '%s' not supported", toolName)
+    }
+    
+    // Cek platform compatibility
+    if !isPlatformCompatible(config.Platform) {
+        return fmt.Errorf("%s is not available on %s", config.Name, runtime.GOOS)
+    }
+    
+    // Find binary
+    binaryPath, found := findBinary(config.BinaryNames)
+    if !found {
+        return fmt.Errorf("%s is not installed. Install from: %s", config.Name, config.InstallURL)
+    }
+    
+    // Set up arguments
+    args := []string{}
+    
+    // Handle khusus vim/nvim
+    if toolName == "vimdiff" && (filepath.Base(binaryPath) == "vim" || 
+                                 filepath.Base(binaryPath) == "nvim") {
+        args = append(args, "-d")
+    } else if len(config.Args) > 0 {
+        args = append(args, config.Args...)
+    }
+    
+    args = append(args, file1, file2)
+    
+    // Execute command
+    cmd := exec.Command(binaryPath, args...)
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    cmd.Stdin = os.Stdin
+    
+    // Handle execution
+    err := cmd.Run()
+    
+    if err != nil {
+        if exitErr, ok := err.(*exec.ExitError); ok {
+            if exitErr.ExitCode() == config.NormalExitCode {
+                return nil
+            }
+        }
+        return fmt.Errorf("failed to run %s: %v", config.Name, err)
+    }
+    
+    return nil
+}
+
+// ==================== UPDATED HANDLE DIFF COMMAND ====================
+func handleDiffCommand(args []string) error {
+    if len(args) < 1 {
+        return fmt.Errorf("filename required for diff command")
+    }
+
+    filename := args[0]
+    useLast := len(args) > 1 && args[1] == "--last"
+
+    filePath, err := resolveFilePath(filename)
+    if err != nil {
+        return err
+    }
+
+    backups, err := listBackups(filePath)
+    if err != nil {
+        return err
+    }
+
+    if len(backups) == 0 {
+        return fmt.Errorf("no backups found for: %s (check %s/ directory)", 
+            filePath, appConfig.BackupDirName)
+    }
+
+    var selectedBackup BackupInfo
+
+    if useLast {
+        selectedBackup = backups[0]
+        fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+    } else {
+        printBackupTable(filePath, backups)
+
+        reader := bufio.NewReader(os.Stdin)
+        fmt.Printf("Enter backup number to compare (1-%d) or 0 to cancel: ", len(backups))
+
+        input, err := reader.ReadString('\n')
+        if err != nil {
+            return fmt.Errorf("failed to read input: %w", err)
+        }
+
+        input = strings.TrimSpace(input)
+        choice, err := strconv.Atoi(input)
+        if err != nil {
+            return fmt.Errorf("invalid input: please enter a number")
+        }
+
+        if choice < 0 || choice > len(backups) {
+            return fmt.Errorf("invalid selection: must be between 0 and %d", len(backups))
+        }
+
+        if choice == 0 {
+            return fmt.Errorf("diff cancelled")
+        }
+
+        selectedBackup = backups[choice-1]
+        fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+    }
+
+    // Use tools from config or default to delta
+    toolName := appConfig.DiffTool
+    if toolName == "" {
+        toolName = "delta"
+    }
+    
+    // Validate the tool before execution
+    if _, exists := diffTools[toolName]; !exists {
+        fmt.Printf("%sWarning: diff tool '%s' not found, using default 'delta'%s\n", 
+            ColorYellow, toolName, ColorReset)
+        toolName = "delta"
+    }
+    
+    // Check platform compatibility
+    config := diffTools[toolName]
+    if !isPlatformCompatible(config.Platform) {
+        fmt.Printf("%sWarning: %s not available on %s, using default 'delta'%s\n", 
+            ColorYellow, config.Name, runtime.GOOS, ColorReset)
+        toolName = "delta"
+    }
+    
+    // Check installation
+    if _, found := findBinary(config.BinaryNames); !found {
+        return fmt.Errorf("%s is not installed. Install from: %s\n"+
+            "You can change diff tool in config file or use: pt config diff_tool <toolname>", 
+            config.Name, config.InstallURL)
+    }
+    
+    // Run diff
+    err = runDiff(toolName, selectedBackup.Path, filePath)
+    if err != nil {
+        // Try fallback to delta if the main tool fails
+        if toolName != "delta" {
+            fmt.Printf("%sTrying fallback to delta...%s\n", ColorYellow, ColorReset)
+            err = runDiff("delta", selectedBackup.Path, filePath)
+        }
+        
+        if err != nil {
+            return fmt.Errorf("diff execution failed: %w", err)
+        }
+    }
+
+    return nil
+}
+
+// ==================== UTILITY FUNCTIONS ====================
+func getAvailableTools() []string {
+    available := []string{}
+    for name, config := range diffTools {
+        if isPlatformCompatible(config.Platform) {
+            if _, found := findBinary(config.BinaryNames); found {
+                available = append(available, name)
+            }
+        }
+    }
+    return available
+}
+
+func getSupportedTools() []string {
+    supported := []string{}
+    for name, config := range diffTools {
+        if isPlatformCompatible(config.Platform) {
+            supported = append(supported, name)
+        }
+    }
+    return supported
+}
+
+func checkToolInstalled(toolName string) bool {
+    config, exists := diffTools[toolName]
+    if !exists {
+        return false
+    }
+    if !isPlatformCompatible(config.Platform) {
+        return false
+    }
+    _, found := findBinary(config.BinaryNames)
+    return found
+}
+
+func contains(slice []string, item string) bool {
+    for _, s := range slice {
+        if s == item {
+            return true
+        }
+    }
+    return false
+}
+
+func listAvailableTools() {
+    fmt.Printf("\n%s=== Available Diff Tools (installed) ===%s\n", ColorGreen, ColorReset)
+    available := getAvailableTools()
+    if len(available) > 0 {
+        for _, tool := range available {
+            config := diffTools[tool]
+            fmt.Printf("  %s• %s%s - %s (%s)\n", 
+                ColorCyan, tool, ColorReset, config.Name, config.Type)
+        }
+    } else {
+        fmt.Println("  No diff tools found. Install delta: https://github.com/dandavison/delta")
+    }
+    
+    fmt.Printf("\n%s=== Supported Tools (can be installed) ===%s\n", ColorGreen, ColorReset)
+    supported := getSupportedTools()
+    for _, tool := range supported {
+        if !contains(available, tool) {
+            config := diffTools[tool]
+            fmt.Printf("  • %s - %s (%s) - %s\n", 
+                tool, config.Name, config.Type, config.InstallURL)
+        }
+    }
 }
 
 func checkDeltaInstalled() bool {

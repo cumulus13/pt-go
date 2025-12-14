@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.41-blue.svg)](https://github.com/cumulus13/pt-go)
 
-> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
+> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison (default), support: delta, meld, winmerge, araxis merge/amerge**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
 
 
 ## 🎦 Demo
@@ -48,7 +48,7 @@
 - 💬 **Comment System** - Track why changes were made, not just when
 - 📝 **Contextual Notes** - Add meaningful descriptions to each backup
 - 🔙 **Easy Rollback** - Restore any previous version instantly, see why it was saved
-- 📊 **Version Comparison** - Diff any two versions visually with delta
+- 📊 **Version Comparison** - Diff any two versions visually with delta (default) and support: delta, meld, winmerge, araxis merge/amerge
 - 🎯 **Zero Data Loss** - Never lose work, automatic backup before every write
 - 💾 **Space Efficient** - Only changed files are backed up
 - 🏷️ **Timestamped Versions** - Microsecond precision timestamps + human-readable comments
@@ -109,6 +109,15 @@ scoop install delta
 
 # Or download from: https://github.com/dandavison/delta/releases
 ```
+
+### Optional diif tool
+set `diff_tool` in config file pt.yml/pt/yaml
+
+- [meld](https://meldmerge.org) [https://meldmerge.org](https://meldmerge.org)
+- [winmerge](https://winmerge.org) [https://winmerge.org](https://winmerge.org)
+- [amerge](https://www.araxis.com/merge) [https://www.araxis.com/merge](https://www.araxis.com/merge)
+- 
+
 
 ### Verify Installation
 
