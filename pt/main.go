@@ -5267,12 +5267,12 @@ func main() {
 	    }
 	}
 
-	for i := 1; i < len(os.Args); i++ {
-	    if os.Args[i] == "-z" && i+1 < len(os.Args) {
-	        foundZ = true
-	        break
-	    }
-	}
+	for _, arg := range os.Args[1:] {
+        if arg == "-z" {
+            foundZ = true
+            break
+        }
+    }
 
     // Setup logger based on the parsed debug flag
     setupLogger()
@@ -5421,7 +5421,6 @@ func main() {
 			// 		break
 			// 	}
 			// }
-
 
 			if foundZ {
 				// If -z is found, treat os.Args[2] as the file name and use new logic
