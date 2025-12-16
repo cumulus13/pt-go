@@ -4996,8 +4996,8 @@ func printHelp() {
 
 	fmt.Printf("\n%s👁️  VIEW & DISPLAY:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt show <filename>%s          Display file with syntax highlighting (like bat)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt show <file> -l <lexer>%s  Specify lexer (e.g., go, python, javascript)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt show <file> -t <theme>%s  Specify theme (default: monokai)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -l <lexer>%s   Specify lexer (e.g., go, python, javascript)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -t <theme>%s   Specify theme (default: monokai)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt show <file> --pager%s      Use pager (less) for navigation\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -z [options]%s             Show clipboard content\n", ColorGreen, ColorReset)
 	fmt.Printf("    %s-l, --lexer <type>%s        Syntax highlighting (e.g., go, python)\n", ColorGreen, ColorReset)
@@ -5020,6 +5020,8 @@ func printHelp() {
 	fmt.Printf("  %spt -d <filename>%s            Compare with backup (interactive)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> --last%s     Compare with most recent backup\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> -z%s         Diff clipboard with file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> -z -T meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> -z --tool meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s🌳 TREE & UTILITIES:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -t [path]%s                Show directory tree\n", ColorGreen, ColorReset)
@@ -5051,18 +5053,20 @@ func printHelp() {
 	fmt.Printf("  %s$%s pt commit -m \"fix bugs\"     %s# Backup all changes%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -l notes.txt             %s# List backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt --last      %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -d notes.txt --tool vim  %s# Diff with selection%s using vim diff\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -d notes.txt -T kdiff    %s# Diff with selection%s using kdiff\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt -z          %s# Diff with temp file from clipboard (no backup)%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt show main.go              %s# View with syntax highlighting%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt show main.go             %s# View with syntax highlighting%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt show main.go -t dracula  %s# Use dracula theme%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt show main.go --pager      %s# Use less pager%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt -z -l python -p           %s# Show clipboard with pager%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt show main.go --pager     %s# Use less pager%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -z -l python -p          %s# Show clipboard with pager%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move file.txt docs/      %s# Move single file%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move *.py src/           %s# Move multiple files%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt mv f1.go f2.rs backup/   %s# Move with backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move -r subdir/ newdir/  %s# Move entire directory%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt move \"*.go\" backup/     %s# Wildcard move%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt move \"r:test_.*\" tmp/   %s# Regex move%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt fix                     %s# Fix manual moves%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt move \"*.go\" backup/      %s# Wildcard move%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt move \"r:test_.*\" tmp/    %s# Regex move%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt fix                      %s# Fix manual moves%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  1. %spt check%s                  - See what files changed (like git status)\n", ColorYellow, ColorReset)
@@ -5257,7 +5261,7 @@ func main() {
     }
 
     for i := 1; i < len(os.Args); i++ {
-	    if os.Args[i] == "--tool" && i+1 < len(os.Args) {
+	    if os.Args[i] == "--tool" || os.Args[i] == "-T" && i+1 < len(os.Args) {
 	        difftool = os.Args[i+1]
 	        break
 	    }
