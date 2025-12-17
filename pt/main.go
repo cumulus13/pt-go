@@ -947,7 +947,7 @@ func handleDiffClipboardToFile(fileName string) error {
 	// 6. Run the core diff logic (runDelta) between the temp file and the resolved target file
 	// func runDiff(toolName, file1, file2 string) error {
 	// err = runDelta(tempFile.Name(), filePath)
-	err = runDiff(difftool, tempFile.Name(), filePath)
+	err = runDiff(difftool, tempFile.Name(), filePath, true)
 	if err != nil {
 		// runDelta already handles delta not found error and specific exit codes
 		return fmt.Errorf("failed to run diff tool (delta): %w", err)
@@ -1204,8 +1204,24 @@ func isPlatformCompatible(toolPlatforms []string) bool {
 }
 
 // ==================== MAIN DIFF FUNCTION ====================
-func runDiff(toolName, file1, file2 string) error {
-    // Validate the tool
+func runDiff(toolName, file1, file2 string, auto_backup bool) error {
+    // Backup original content
+    var originalContent []byte
+    
+    if auto_backup {
+        // Read file2 untuk backup
+        content, err := os.ReadFile(file2)
+        if err != nil {
+            return fmt.Errorf("failed to read file %s: %v", file2, err)
+        }
+        originalContent = content
+        
+        // Cek file1 juga bisa dibaca
+        if _, err := os.ReadFile(file1); err != nil {
+            return fmt.Errorf("failed to read file %s: %v", file1, err)
+        }
+    }
+    
     config, exists := diffTools[toolName]
     if !exists {
         return fmt.Errorf("diff tool '%s' not supported", toolName)
@@ -1247,13 +1263,31 @@ func runDiff(toolName, file1, file2 string) error {
     if err != nil {
         if exitErr, ok := err.(*exec.ExitError); ok {
             if exitErr.ExitCode() == config.NormalExitCode {
-                return nil
+                // return nil
+                return handleAutoBackup(auto_backup, file2, originalContent)
             }
         }
         return fmt.Errorf("failed to run %s: %v", config.Name, err)
     }
+
+	// Success: diff tool exited normally
+    return handleAutoBackup(auto_backup, file2, originalContent)
+    // return nil
+}
+
+func handleAutoBackup(auto_backup bool, filePath string, original []byte) error {
+    if !auto_backup {
+        return nil
+    }
     
-    return nil
+    // Check if file changed using your existing function
+    if !checkIfDifferent(filePath, original) {
+        return nil // File unchanged
+    }
+    
+    // File changed, create backup
+    _, err := autoRenameIfExists(filePath, "")
+    return err
 }
 
 // ==================== UPDATED HANDLE DIFF COMMAND ====================
@@ -1354,12 +1388,12 @@ func handleDiffCommand(args []string) error {
     }
     
     // Run diff
-    err = runDiff(toolName, selectedBackup.Path, filePath)
+    err = runDiff(toolName, selectedBackup.Path, filePath, true)
     if err != nil {
         // Try fallback to delta if the main tool fails
         if toolName != "delta" {
             fmt.Printf("%sTrying fallback to delta...%s\n", ColorYellow, ColorReset)
-            err = runDiff("delta", selectedBackup.Path, filePath)
+            err = runDiff("delta", selectedBackup.Path, filePath, false)
         }
         
         if err != nil {
@@ -4756,23 +4790,60 @@ func isFile(path string) bool {
     return !info.IsDir()  // Not directory = true, Directory = false
 }
 
-func checkIfDifferent(filePath string, data string) (bool) {
-	if isFile(data) {
-	    data = string(func() []byte { 
-	        b, _ := os.ReadFile(data); return b 
-	    }())
-	}
+// func checkIfDifferent(filePath string, data string) (bool) {
+// 	if isFile(data) {
+// 	    data = string(func() []byte { 
+// 	        b, _ := os.ReadFile(data); return b 
+// 	    }())
+// 	}
 	
-	if existingData, err := os.ReadFile(filePath); err == nil {
-		if string(existingData) == data {
-			logger.Printf("Content identical, skipping write: %s", filePath)
-			fmt.Printf("ℹ️  Content identical to current file, no changes needed\n")
-			fmt.Printf("📄 File: %s\n", filePath)
-			return false
-		}
-		fmt.Printf("🔍 Content differs, proceeding with backup and write\n")
-	}
-	return true
+// 	if existingData, err := os.ReadFile(filePath); err == nil {
+// 		if string(existingData) == data {
+// 			logger.Printf("Content identical, skipping write: %s", filePath)
+// 			fmt.Printf("ℹ️  Content identical to current file, no changes needed\n")
+// 			fmt.Printf("📄 File: %s\n", filePath)
+// 			return false
+// 		}
+// 		// fmt.Printf("🔍 Content differs, proceeding with backup and write\n")
+// 	}
+// 	return true
+// }
+
+func checkIfDifferent(filePath string, data any) bool {
+    var content string
+
+    // 1. Convert 'any' to string based on its type
+    switch v := data.(type) {
+    case string:
+        // If input is a file path, read its contents. If not, use the string directly.
+        if isFile(v) {
+            b, err := os.ReadFile(v)
+            if err == nil {
+                content = string(b)
+            } else {
+                content = v // fallback if it fails to read the file
+            }
+        } else {
+            content = v
+        }
+    case []byte:
+        content = string(v)
+    default:
+        // Handle if the data type is unknown
+        return true 
+    }
+
+    // 2. Compare with existing files
+    if existingData, err := os.ReadFile(filePath); err == nil {
+        if string(existingData) == content {
+            logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
+            fmt.Printf("ℹ️ Content identical to current file, no changes needed\n")
+            fmt.Printf("📄 File: %s\n", filePath)
+            return false
+        }
+    }
+    
+    return true
 }
 
 func writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) error {
@@ -4783,6 +4854,8 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 	if checkMode && !appendMode {
 		if !checkIfDifferent(filePath, data) {
 			return nil
+		} else {
+			fmt.Printf("🔍 Content differs, proceeding with backup and write\n")
 		}
 	}
 
@@ -5024,6 +5097,7 @@ func printHelp() {
 	fmt.Printf("  %spt <filename> -c%s            Write only if content differs\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt <filename> -m \"msg\"%s      Write with comment\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt + <filename>%s             Append clipboard to file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -b/backup <filename>%s     Backup file with check before\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s👁️  VIEW & DISPLAY:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt show <filename>%s          Display file with syntax highlighting (like bat)\n", ColorGreen, ColorReset)
@@ -5378,6 +5452,33 @@ func main() {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
 			}
+
+		case "backup", "-b":
+			// Parse arguments using parseWriteArgs
+			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+
+			filePath, err := resolveFilePath(filename)
+			if err != nil {
+				filePath = filename
+			}
+
+			backups, _ := listBackups(filePath)
+
+			if len(backups) > 0 {
+				if !checkIfDifferent(filename, backups[0].Path) {
+					os.Exit(1)
+				}
+			}
+
+			if checkMode {
+				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+			}	
+			
+			autoRenameIfExists(filePath, comment)
 
 		case "commit":
 			err := handleCommitCommand(os.Args[2:])
