@@ -67,6 +67,7 @@ var appConfig *Config
 var debugMode bool = false
 var difftool string = "delta"
 var foundZ bool = false
+var checkBefore bool = false
 
 // ANSI color codes for pretty output
 const (
@@ -913,6 +914,10 @@ func handleDiffClipboardToFile(fileName string) error {
 		return fmt.Errorf("failed to read clipboard: %w", err)
 	}
 
+	if !checkIfDifferent(fileName, clipboardText) {
+		return nil
+	}
+
 	if clipboardText == "" {
 		return fmt.Errorf("clipboard is empty, nothing to diff")
 	}
@@ -1307,6 +1312,10 @@ func handleDiffCommand(args []string) error {
 
         selectedBackup = backups[choice-1]
         fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+    }
+
+    if !checkIfDifferent(filePath, selectedBackup.Path) {
+    	return nil
     }
 
     // Use tools from config or default to delta
@@ -3358,7 +3367,7 @@ func restoreBackup(backupPath, originalPath, comment string) error {
 	logger.Printf("Restored: %s from %s", originalPath, backupPath)
 	fmt.Printf("✅ Successfully restored: %s\n", originalPath)
 	fmt.Printf("📦 From backup: %s\n", filepath.Base(backupPath))
-	fmt.Printf("📄 Content size: %d characters\n", len(content))
+	fmt.Printf("📄 %sContent size:%s %d characters\n", ColorBrightBlue, ColorReset, len(content))
 
 	if comment != "" {
 		fmt.Printf("💬 Restore comment: \"%s\"\n", comment)
@@ -4564,7 +4573,7 @@ func resolveFilePath(filename string) (string, error) {
 	}
 
 	if len(results) == 1 {
-		fmt.Printf("%s✓ Found: %s%s\n", ColorGreen, results[0].Path, ColorReset)
+		fmt.Printf("%s✓ Found:%s %s%s%s%s\n", ColorBrightYellow, ColorReset, ColorWhite, ColorBlue, results[0].Path, ColorReset)
 		return results[0].Path, nil
 	}
 
@@ -4730,13 +4739,40 @@ func autoRenameIfExists(filePath, comment string) (string, error) {
 	logger.Printf("Backup created: %s -> %s", filePath, backupPath)
 	if comment != "" {
 		logger.Printf("Backup comment: %s", comment)
-		fmt.Printf("📦 Backup created: %s%s%s\n", ColorGreen, backupFileName, ColorReset)
-		fmt.Printf("💬 Comment: \"%s%s%s\"\n", ColorCyan, comment, ColorReset)
+		fmt.Printf("📦 Backup created: %s%s%s\n", ColorBrightYellow, backupFileName, ColorReset)
+		fmt.Printf("💬 Comment: \"%s%s%s\"\n", ColorBrightMagenta, comment, ColorReset)
 	} else {
-		fmt.Printf("📦 Backup created: %s%s%s\n", ColorGreen, backupFileName, ColorReset)
+		fmt.Printf("📦 Backup created: %s%s%s\n", ColorBrightYellow, backupFileName, ColorReset)
 	}
 
 	return filePath, nil
+}
+
+func isFile(path string) bool {
+    info, err := os.Stat(path)
+    if err != nil {
+        return false  // File does not exist = false
+    }
+    return !info.IsDir()  // Not directory = true, Directory = false
+}
+
+func checkIfDifferent(filePath string, data string) (bool) {
+	if isFile(data) {
+	    data = string(func() []byte { 
+	        b, _ := os.ReadFile(data); return b 
+	    }())
+	}
+	
+	if existingData, err := os.ReadFile(filePath); err == nil {
+		if string(existingData) == data {
+			logger.Printf("Content identical, skipping write: %s", filePath)
+			fmt.Printf("ℹ️  Content identical to current file, no changes needed\n")
+			fmt.Printf("📄 File: %s\n", filePath)
+			return false
+		}
+		fmt.Printf("🔍 Content differs, proceeding with backup and write\n")
+	}
+	return true
 }
 
 func writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) error {
@@ -4745,14 +4781,8 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 	}
 
 	if checkMode && !appendMode {
-		if existingData, err := os.ReadFile(filePath); err == nil {
-			if string(existingData) == data {
-				logger.Printf("Content identical, skipping write: %s", filePath)
-				fmt.Printf("ℹ️  Content identical to current file, no changes needed\n")
-				fmt.Printf("📄 File: %s\n", filePath)
-				return nil
-			}
-			fmt.Printf("🔍 Content differs, proceeding with backup and write\n")
+		if !checkIfDifferent(filePath, data) {
+			return nil
 		}
 	}
 
@@ -4801,7 +4831,7 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 
 	logger.Printf("Successfully %s: %s (%d bytes)", action, filePath, len(data))
 	fmt.Printf("✅ Successfully %s: %s\n", action, filePath)
-	fmt.Printf("📄 Content size: %d characters\n", len(data))
+	fmt.Printf("📄 %sContent size:%s %d characters\n", ColorBrightBlue, ColorReset, len(data))
 
 	return nil
 }
@@ -4826,6 +4856,7 @@ func parseWriteArgs(args []string) (filename string, comment string, checkMode b
 			comment = args[i]
 		case "-c", "--check":
 			checkMode = true
+			checkBefore = true
 		default:
 			return "", "", false, fmt.Errorf("unknown flag: %s", args[i])
 		}
@@ -5274,6 +5305,13 @@ func main() {
         }
     }
 
+    for _, arg := range os.Args[1:] {
+        if arg == "-z" {
+            checkBefore = true
+            break
+        }
+    }
+
     // Setup logger based on the parsed debug flag
     setupLogger()
 
@@ -5421,6 +5459,8 @@ func main() {
 			// 		break
 			// 	}
 			// }
+
+			logger.Printf("foundZ: %v", foundZ);
 
 			if foundZ {
 				// If -z is found, treat os.Args[2] as the file name and use new logic
@@ -5593,7 +5633,5 @@ func main() {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
 			}
-
-
 	}
 }
