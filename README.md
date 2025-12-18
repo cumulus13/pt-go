@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.41-blue.svg)](https://github.com/cumulus13/pt-go)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://pt.readthedocs.io/)
 
-> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison (default), support many diff tool**, directory tree visualization, and safe file deletion. **It's not just a clipboard manager – it's a complete version control system for your files!**
+> **`pt`** is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, **backup comments**, **recursive file search**, **delta diff comparison (default), support many diff tool**, directory tree visualization, and safe file deletion and etc (use -h/--help). **It's not just a clipboard manager – it's a complete version control system for your files!**
 
 
 ## 🎦 Demo
@@ -17,6 +17,8 @@
   <br>
   <a href="https://youtu.be/1BrUiQWi47Y">Demo</a>
 </div>
+
+Another demo video will be made later 👍
 
 ## ✨ Features
 
