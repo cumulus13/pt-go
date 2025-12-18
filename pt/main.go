@@ -60,6 +60,7 @@ type Config struct {
 	BackupDirName    string `yaml:"backup_dir_name"`
 	MaxSearchDepth   int    `yaml:"max_search_depth"`
 	DiffTool         string `yaml:"diff_tool"`
+	AutoBackup       bool   `yaml:"auto_backup"` 
 }
 
 // Global config instance
@@ -142,6 +143,13 @@ type BackupMetadata struct {
 	Timestamp time.Time `json:"timestamp"`
 	Size      int64     `json:"size"`
 	Original  string    `json:"original_file"`
+}
+
+type CommandInfo struct {
+    Command    string
+    Files      []string
+    Flags      map[string]string
+    BoolFlags  map[string]bool
 }
 
 // FileStatus represents the status of a file compared to its last backup
@@ -379,7 +387,8 @@ func handleShowCommand(args []string) error {
 
 	style := styles.Get(themeName)
 	if style == nil {
-		style = styles.Monokai
+		// style = styles.Monokai
+		style = styles.Get("monokai")
 	}
 
 	formatter := formatters.TTY16m
@@ -579,7 +588,7 @@ func handleTempCommand(args []string) error {
 
 		style := styles.Get(themeName)
 		if style == nil {
-			style = styles.Monokai
+			style = styles.Get("monokai")
 		}
 
 		formatter := formatters.TTY16m
@@ -1264,15 +1273,26 @@ func runDiff(toolName, file1, file2 string, auto_backup bool) error {
         if exitErr, ok := err.(*exec.ExitError); ok {
             if exitErr.ExitCode() == config.NormalExitCode {
                 // return nil
-                return handleAutoBackup(auto_backup, file2, originalContent)
+                if toolName != "delta" && config.NormalExitCode != 1 {
+                	return handleAutoBackup(auto_backup, file2, originalContent)	
+                } else {
+                	if exitErr.ExitCode() != 0 && exitErr.ExitCode() != 1 {
+                		fmt.Printf("%s Delta Return Code:%s %v", ColorRed, ColorReset, exitErr.ExitCode())
+                	} else {
+                		return nil
+                	}
+                }
             }
         }
         return fmt.Errorf("failed to run %s: %v", config.Name, err)
     }
 
 	// Success: diff tool exited normally
-    return handleAutoBackup(auto_backup, file2, originalContent)
-    // return nil
+	if toolName != "delta" {
+		return handleAutoBackup(auto_backup, file2, originalContent)	
+	}
+    
+    return nil
 }
 
 func handleAutoBackup(auto_backup bool, filePath string, original []byte) error {
@@ -1297,7 +1317,7 @@ func handleDiffCommand(args []string) error {
     }
 
     filename := args[0]
-    useLast := len(args) > 1 && args[1] == "--last"
+    useLast := len(args) > 1 && args[1] == "--last" || args[1] == "-lt"
 
     filePath, err := resolveFilePath(filename)
     if err != nil {
@@ -1389,12 +1409,12 @@ func handleDiffCommand(args []string) error {
     
     // Run diff
     err = runDiff(toolName, selectedBackup.Path, filePath, true)
-    if err != nil {
+    if err != nil && toolName != "delta" {
         // Try fallback to delta if the main tool fails
-        if toolName != "delta" {
-            fmt.Printf("%sTrying fallback to delta...%s\n", ColorYellow, ColorReset)
-            err = runDiff("delta", selectedBackup.Path, filePath, false)
-        }
+        // if toolName != "delta" {
+        fmt.Printf("%sTrying fallback to delta...%s\n", ColorYellow, ColorReset)
+        err = runDiff("delta", selectedBackup.Path, filePath, false)
+        // }
         
         if err != nil {
             return fmt.Errorf("diff execution failed: %w", err)
@@ -1472,14 +1492,22 @@ func listAvailableTools() {
     }
 }
 
-func checkDeltaInstalled() bool {
+func checkDeltaInstalled() string {
 	_, err := exec.LookPath("delta")
-	return err == nil
+	if err != nil {
+		return ""
+	}
+
+	return "delta"
 }
 
-func checkMeldInstalled() bool {
+func checkMeldInstalled() string {
 	_, err := exec.LookPath("meld")
-	return err == nil
+	if err != nil {
+		return ""
+	}
+
+	return "meld"
 }
 
 func checkWinMergeInstalled() string {
@@ -1495,13 +1523,17 @@ func checkWinMergeInstalled() string {
 	return ""
 }
 
-func checkAMergeInstalled() bool {
+func checkAMergeInstalled() string {
 	_, err := exec.LookPath("amerge")
-	return err == nil
+	if err != nil {
+		return ""
+	}
+
+	return "amerge"
 }
 
 func runDelta(file1, file2 string) error {
-	if !checkDeltaInstalled() {
+	if checkDeltaInstalled() == "" {
 		return fmt.Errorf("delta is not installed. Install it from: https://github.com/dandavison/delta")
 	}
 
@@ -1528,7 +1560,7 @@ func runDelta(file1, file2 string) error {
 }
 
 func runMeld(file1, file2 string) error {
-	if !checkMeldInstalled() {
+	if checkMeldInstalled() == "" {
 		return fmt.Errorf("meld is not installed. Install it from: https://meldmerge.org")
 	}
 
@@ -1583,7 +1615,7 @@ func runWinMerge(file1, file2 string) error {
 }
 
 func runAMerge(file1, file2 string) error {
-	exe := checkWinMergeInstalled()
+	exe := checkAMergeInstalled()
 	if exe != "" {
 		return fmt.Errorf("winmerge is not installed. Install it from: https://www.araxis.com/merge")
 	}
@@ -1934,7 +1966,7 @@ func collectChangedFiles(node *FileStatusInfo, changedFiles *[]string) {
 func handleCommitCommand(args []string) error {
 	// Parse commit message
 	commitMessage := ""
-	for i := 0; i < len(args); i++ {
+	for i := range args {
 		if args[i] == "-m" || args[i] == "--message" {
 			if i+1 < len(args) {
 				commitMessage = args[i+1]
@@ -2168,7 +2200,8 @@ func handleTreeCommand(args []string) error {
 				return fmt.Errorf("-e/--exception requires a value")
 			}
 			i++
-			for _, exc := range strings.Split(args[i], ",") {
+			// for _, exc := range strings.Split(args[i], ",") {
+			for exc := range strings.SplitSeq(args[i], ",") {
 				exceptions[strings.TrimSpace(exc)] = true
 			}
 			i++
@@ -4851,6 +4884,15 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 		return err
 	}
 
+	// Create parent directory if it doesn't exist
+	dir := filepath.Dir(filePath)
+	logger.Printf("Ensured directory exists: %s", dir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+	logger.Printf("Successfully create dir: %s", dir)
+	fmt.Printf("✅ Directory created: %s\n", dir)
+
 	if checkMode && !appendMode {
 		if !checkIfDifferent(filePath, data) {
 			return nil
@@ -4908,6 +4950,7 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 
 	return nil
 }
+
 
 func parseWriteArgs(args []string) (filename string, comment string, checkMode bool, err error) {
 	if len(args) == 0 {
@@ -5031,8 +5074,9 @@ func loadIgnorePatterns(startPath string) []string {
 	// Load .ptignore (higher priority)
 	ptignorePath := filepath.Join(searchDir, ".ptignore")
 	if content, err := os.ReadFile(ptignorePath); err == nil {
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
+		// lines := strings.Split(string(content), "\n")
+		lines := strings.SplitSeq(string(content), "\n")
+		for line := range lines {
 			line = strings.TrimSpace(line)
 			if line != "" && !strings.HasPrefix(line, "#") {
 				patterns = append(patterns, line)
@@ -5044,8 +5088,9 @@ func loadIgnorePatterns(startPath string) []string {
 	// Load .gitignore
 	gitignorePath := filepath.Join(searchDir, ".gitignore")
 	if content, err := os.ReadFile(gitignorePath); err == nil {
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
+		// lines := strings.Split(string(content), "\n")
+		lines := strings.SplitSeq(string(content), "\n")
+		for line := range lines {
 			line = strings.TrimSpace(line)
 			if line != "" && !strings.HasPrefix(line, "#") {
 				patterns = append(patterns, line)
@@ -5119,11 +5164,11 @@ func printHelp() {
 	fmt.Printf("\n%s📦 BACKUP OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -l <filename>%s            List all backups (with comments)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -r <filename>%s            Restore backup (interactive)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -r <filename> --last%s     Restore most recent backup\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -r <filename> --last/-lt%s     Restore most recent backup\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s📊 DIFF OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -d <filename>%s            Compare with backup (interactive)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -d <filename> --last%s     Compare with most recent backup\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> --last/-lt%s     Compare with most recent backup\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> -z%s         Diff clipboard with file\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> -z -T meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> -z --tool meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
@@ -5151,13 +5196,16 @@ func printHelp() {
 
 	fmt.Printf("\n%s🪲 DEBUGGING:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt --debug%s                  Show debug/logging\n", ColorGreen, ColorReset)
+
+	fmt.Printf("\n%s📺 MONITORING MODE:%s\n", ColorBold+ColorYellow, ColorReset)
+	fmt.Printf("  %spt --monitor/-mt%s            Monitoring change and send notification to growl/gntp (port: 23053)\n", ColorGreen, ColorReset)
 	
 	fmt.Printf("\n%s💡 EXAMPLES:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %s$%s pt notes.txt                %s# Save clipboard%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt check                    %s# Show all file statuses%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt commit -m \"fix bugs\"     %s# Backup all changes%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -l notes.txt             %s# List backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt -d notes.txt --last      %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt -d notes.txt --last/-lt  %s# Diff with last backup%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt --tool vim  %s# Diff with selection%s using vim diff\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt -T kdiff    %s# Diff with selection%s using kdiff\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt -d notes.txt -z          %s# Diff with temp file from clipboard (no backup)%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
@@ -5177,8 +5225,8 @@ func printHelp() {
 	fmt.Printf("  1. %spt check%s                  - See what files changed (like git status)\n", ColorYellow, ColorReset)
 	fmt.Printf("  2. %spt commit -m \"msg\"%s        - Backup all changes (like git commit)\n", ColorYellow, ColorReset)
 	fmt.Printf("  3. %spt -l <file>%s              - View commit history\n", ColorYellow, ColorReset)
-	fmt.Printf("  4. %spt -d <file> --last%s       - See what changed\n", ColorYellow, ColorReset)
-	fmt.Printf("  5. %spt -r <file> --last%s       - Rollback if needed\n", ColorYellow, ColorReset)
+	fmt.Printf("  4. %spt -d <file> --last/-lt%s       - See what changed\n", ColorYellow, ColorReset)
+	fmt.Printf("  5. %spt -r <file> --last/-lt%s       - Rollback if needed\n", ColorYellow, ColorReset)
 
 	fmt.Printf("\n%s🎨 THEMES & LEXERS:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %sPopular Themes:%s monokai (default), dracula, solarized-dark, solarized-light,\n", ColorBold, ColorReset)
@@ -5340,7 +5388,638 @@ func printVersion() {
 // MAIN
 // ============================================================================
 
+// func main() {
+// 	if len(os.Args) == 2 {
+// 		switch os.Args[1] {
+// 		case "-h", "--help":
+// 			printHelp()
+// 			os.Exit(0)
+// 		case "-v", "--version":
+// 			printVersion()
+// 			os.Exit(0)
+// 		}
+// 	}
+
+// 	if len(os.Args) < 2 {
+// 		printHelp()
+// 		os.Exit(1)
+// 	}
+
+// 	// Parse global flags first
+//     for _, arg := range os.Args[1:] {
+//         if arg == "--debug" {
+//             debugMode = true
+//             break
+//         }
+//     }
+
+//     for i := 1; i < len(os.Args); i++ {
+// 	    if os.Args[i] == "--tool" || os.Args[i] == "-T" && i+1 < len(os.Args) {
+// 	        difftool = os.Args[i+1]
+// 	        break
+// 	    }
+// 	}
+
+// 	for _, arg := range os.Args[1:] {
+//         if arg == "-z" {
+//             foundZ = true
+//             break
+//         }
+//     }
+
+//     for _, arg := range os.Args[1:] {
+//         if arg == "-z" {
+//             checkBefore = true
+//             break
+//         }
+//     }
+
+//     // Setup logger based on the parsed debug flag
+//     setupLogger()
+
+// 	switch os.Args[1] {
+// 		case "show":
+// 			if len(os.Args) < 3 {
+// 				fmt.Printf("%s❌ Error: Filename required for show command%s\n", ColorRed, ColorReset)
+// 				fmt.Println("\nUsage:")
+// 				fmt.Println("  pt show <filename>")
+// 				fmt.Println("  pt show <filename> --lexer <type> --theme <theme>")
+// 				fmt.Println("  pt show <filename> --pager")
+// 				fmt.Println("\nExamples:")
+// 				fmt.Println("  pt show main.go")
+// 				fmt.Println("  pt show main.go --lexer go --theme dracula")
+// 				fmt.Println("  pt show script.py --theme monokai --pager")
+// 				os.Exit(1)
+// 			}
+
+// 			err := handleShowCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "move", "mv", "-mv":
+// 			if len(os.Args) < 4 {
+// 				fmt.Printf("%s❌ Error: At least source and destination required%s\n", ColorRed, ColorReset)
+// 				fmt.Println("\nUsage:")
+// 				fmt.Println("  pt move <source> <destination>")
+// 				fmt.Println("  pt move <source1> <source2> ... <destination>")
+// 				fmt.Println("  pt mv <source...> <destination> -m \"comment\"")
+// 				fmt.Println("\nExamples:")
+// 				fmt.Println("  pt move file.txt newdir/")
+// 				fmt.Println("  pt move file1.py file2.go file3.rs dest/")
+// 				fmt.Println("  pt mv old.py new/location/renamed.py -m \"reorganize\"")
+// 				fmt.Println("  pt mv *.txt backup/ -m \"archive text files\"")
+// 				os.Exit(1)
+// 			}
+
+// 			err := handleMoveCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+		
+// 		case "fix":
+// 			err := handleFixCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "-z": 
+// 			err := handleTempCommand(os.Args[2:]) // Pass remaining args (like --lexer)
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "check", "-c", "--check":
+// 			// Handle both single file check and full status
+// 			err := handleCheckCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "backup", "-b":
+// 			// Parse arguments using parseWriteArgs
+// 			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			filePath, err := resolveFilePath(filename)
+// 			if err != nil {
+// 				filePath = filename
+// 			}
+
+// 			backups, _ := listBackups(filePath)
+
+// 			if len(backups) > 0 {
+// 				if !checkIfDifferent(filename, backups[0].Path) {
+// 					os.Exit(1)
+// 				}
+// 			}
+
+// 			if checkMode {
+// 				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+// 			}	
+
+// 			autoRenameIfExists(filePath, comment)
+
+// 		case "commit":
+// 			err := handleCommitCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "config":
+// 			if len(os.Args) < 3 {
+// 				fmt.Printf("%s❌ Error: Config subcommand required%s\n", ColorRed, ColorReset)
+// 				fmt.Println("\nAvailable subcommands:")
+// 				fmt.Println("  pt config init [path]  - Create sample config file")
+// 				fmt.Println("  pt config show         - Show current configuration")
+// 				fmt.Println("  pt config path         - Show config file location")
+// 				os.Exit(1)
+// 			}
+			
+// 			err := handleConfigCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "-t", "--tree":
+// 			err := handleTreeCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "-rm", "--remove":
+// 			if len(os.Args) < 3 {
+// 				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			err := handleRemoveCommand(os.Args[2:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		case "-l", "--list":
+// 			if len(os.Args) < 3 {
+// 				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			filePath, err := resolveFilePath(os.Args[2])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			backups, err := listBackups(filePath)
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			if len(backups) == 0 {
+// 				fmt.Printf("ℹ️  No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
+// 			} else {
+// 				printBackupTable(filePath, backups)
+// 			}
+
+// 		case "-d", "--diff":
+// 			if len(os.Args) < 3 { // Minimal arg: pt -d <file_name>
+// 				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			// Check for the specific combination: pt -d <file_name> -z
+// 			// We look for -z in os.Args[3] or later, after the file name at os.Args[2]
+// 			// for _, arg := range os.Args[3:] { // Start checking from the 4th argument (index 3)
+// 			// 	if arg == "-z" {
+// 			// 		foundZ = true
+// 			// 		break
+// 			// 	}
+// 			// }
+
+// 			logger.Printf("foundZ: %v", foundZ);
+
+// 			if foundZ {
+// 				// If -z is found, treat os.Args[2] as the file name and use new logic
+// 				fileName := os.Args[2] // Get the file name argument
+// 				// Call the new function
+// 				err := handleDiffClipboardToFile(fileName)
+// 				if err != nil {
+// 					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 					os.Exit(1)
+// 				}
+// 				return // Exit after handling the -d <file_name> -z case
+// 			} else {
+// 				// If -z is not found, proceed with the original handleDiffCommand logic
+// 				// Pass all arguments starting from the file name (os.Args[2:])
+// 				err := handleDiffCommand(os.Args[2:]) // This expects [filename, optional --last]
+// 				if err != nil {
+// 					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 					os.Exit(1)
+// 				}
+// 			}
+
+// 		case "-r", "--restore":
+// 			if len(os.Args) < 3 {
+// 				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			filename := os.Args[2]
+// 			comment := ""
+// 			useLast := false
+
+// 			for i := 3; i < len(os.Args); i++ {
+// 				if os.Args[i] == "--last" || os.Args[i] == "-lt" {
+// 					useLast = true
+// 				} else if os.Args[i] == "-m" || os.Args[i] == "--message" {
+// 					if i+1 < len(os.Args) {
+// 						i++
+// 						comment = os.Args[i]
+// 					}
+// 				}
+// 			}
+
+// 			filePath, err := resolveFilePath(filename)
+// 			if err != nil {
+// 				filePath = filename
+// 				absPath, err := filepath.Abs(filePath)
+// 				if err == nil {
+// 					filePath = absPath
+// 				}
+// 			}
+
+// 			backups, err := listBackups(filePath)
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			if len(backups) == 0 {
+// 				fmt.Printf("%s❌ Error: No backups found for: %s (check %s/ directory)%s\n", 
+// 					ColorRed, filePath, appConfig.BackupDirName, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			if useLast {
+// 				if comment == "" {
+// 					comment = "Restored from last backup"
+// 				}
+// 				err = restoreBackup(backups[0].Path, filePath, comment)
+// 				if err != nil {
+// 					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 					os.Exit(1)
+// 				}
+// 			} else {
+// 				printBackupTable(filePath, backups)
+
+// 				choice, err := readUserChoice(len(backups))
+// 				if err != nil {
+// 					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 					os.Exit(1)
+// 				}
+
+// 				if choice == 0 {
+// 					fmt.Println("❌ Restore cancelled")
+// 					os.Exit(0)
+// 				}
+
+// 				selectedBackup := backups[choice-1]
+// 				if comment == "" {
+// 					comment = "Restored from backup"
+// 				}
+// 				err = restoreBackup(selectedBackup.Path, filePath, comment)
+// 				if err != nil {
+// 					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 					os.Exit(1)
+// 				}
+// 			}
+
+// 		case "+":
+// 			if len(os.Args) < 3 {
+// 				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			text, err := getClipboardText()
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			if text == "" {
+// 				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			// Parse the arguments for append correctly
+// 			filename := os.Args[2]
+// 			comment := ""
+			
+// 			for i := 3; i < len(os.Args); i++ {
+// 				if os.Args[i] == "-m" || os.Args[i] == "--message" {
+// 					if i+1 < len(os.Args) {
+// 						i++
+// 						comment = os.Args[i]
+// 					}
+// 				}
+// 			}
+
+// 			filePath, err := resolveFilePath(filename)
+// 			if err != nil {
+// 				filePath = filename
+// 			}
+
+// 			err = writeFile(filePath, text, true, false, comment)
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 		default:
+// 			// Use parseWriteArgs for the default write mode
+// 			text, err := getClipboardText()
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			if text == "" {
+// 				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			// Parse arguments using parseWriteArgs
+// 			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+
+// 			filePath, err := resolveFilePath(filename)
+// 			if err != nil {
+// 				filePath = filename
+// 			}
+
+// 			if checkMode {
+// 				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+// 			}
+
+// 			err = writeFile(filePath, text, false, checkMode, comment)
+// 			if err != nil {
+// 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+// 				os.Exit(1)
+// 			}
+// 	}
+// }
+
+// parseArguments extracts command, files, and flags from arguments
+// PRODUCTION-READY with proper conflict resolution and validation
+func parseArguments(args []string) *CommandInfo {
+	info := &CommandInfo{
+		Files:     []string{},
+		Flags:     make(map[string]string),
+		BoolFlags: make(map[string]bool),
+	}
+
+	// Known commands - EXACT MATCH ONLY
+	commands := map[string]bool{
+		"show": true, "move": true, "mv": true, "-mv": true,
+		"fix": true, "check": true, "-c": true, "--check": true,
+		"backup": true, "-b": true, "commit": true, "config": true,
+		"-t": true, "--tree": true, "-rm": true, "--remove": true,
+		"-l": true, "--list": true, "-d": true, "--diff": true,
+		"-r": true, "--restore": true, "+": true,
+		"-mt": true, "--monitor": true,
+	}
+
+	// Value flags that take an argument
+	valueFlags := map[string]bool{
+		"-m": true, "--message": true, 
+		"-T": true, "--tool": true,
+		"--lexer": true, "-l": true,  // NOTE: "-l" conflict with list command!
+		"--theme": true, "-t": true,  // NOTE: "-t" conflict with tree command!
+		"-e": true, "--exception": true,
+	}
+
+	// Boolean flags (standalone)
+	boolFlags := map[string]bool{
+		"-z": true, "--debug": true, 
+		"-c": true,  // Can be BOTH command AND flag!
+		"--last": true, "-lt": true,
+		"--pager": true, "-p": true, "-np": true, "--no-pager": true,
+		"--no-line-numbers": true, "--no-grid": true,
+		"-r": true, "--recursive": true,  // For move command
+	}
+
+	// CRITICAL: Flags that are ALSO commands (need special handling)
+	// These must be checked as COMMAND first if they appear early/alone
+	ambiguousFlags := map[string]bool{
+		"-c": true,  // Can be "check" command OR "-c" flag
+		"-t": true,  // Can be "tree" command OR "-t theme" flag
+		"-l": true,  // Can be "list" command OR "-l lexer" flag
+		"-r": true,  // Can be "restore" command OR "-r recursive" flag
+		"-b": true,  // Can be "backup" command OR "-b" flag
+	}
+
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+
+		// ============================================================
+		// PHASE 1: Check if it's a COMMAND (highest priority)
+		// ============================================================
+		if commands[arg] && info.Command == "" {
+			// Special handling for ambiguous flags
+			if ambiguousFlags[arg] {
+				// If it's ambiguous, treat as command if:
+				// 1. It's the first argument, OR
+				// 2. Next argument looks like a filename/path (not a flag)
+				
+				isCommand := false
+				
+				// First argument is usually a command
+				if i == 0 {
+					isCommand = true
+				} else if i+1 < len(args) {
+					// Check if next arg is a filename (not starting with -)
+					nextArg := args[i+1]
+					if nextArg != "" && nextArg[0] != '-' {
+						isCommand = true
+					}
+				}
+				
+				if isCommand {
+					info.Command = arg
+					i++
+					continue
+				}
+				// Fall through to check as flag
+			} else {
+				// Unambiguous command
+				info.Command = arg
+				i++
+				continue
+			}
+		}
+
+		// ============================================================
+		// PHASE 2: Check VALUE FLAGS (with validation)
+		// ============================================================
+		if valueFlags[arg] {
+			// Validate that next arg exists and is not another flag
+			if i+1 >= len(args) {
+				// Missing value for flag
+				if logger != nil {
+					logger.Printf("Warning: Flag %s requires a value, ignoring", arg)
+				}
+				i++
+				continue
+			}
+			
+			nextArg := args[i+1]
+			
+			// Check if next arg is another flag (starting with -)
+			// This indicates missing value
+			if nextArg[0] == '-' {
+				// Possible error, but could be intentional (e.g., negative number)
+				// Log warning but allow it
+				if logger != nil {
+					logger.Printf("Warning: Flag %s followed by another flag %s", arg, nextArg)
+				}
+			}
+			
+			info.Flags[arg] = nextArg
+			i += 2 // Skip both flag and value
+			continue
+		}
+
+		// ============================================================
+		// PHASE 3: Check BOOLEAN FLAGS
+		// ============================================================
+		if boolFlags[arg] {
+			info.BoolFlags[arg] = true
+			i++
+			continue
+		}
+
+		// ============================================================
+		// PHASE 4: Unknown flag warning
+		// ============================================================
+		if arg[0] == '-' {
+			// This is a flag we don't recognize
+			if logger != nil {
+				logger.Printf("Warning: Unknown flag: %s", arg)
+			}
+			// Treat as file anyway (user might have file named "-something")
+		}
+
+		// ============================================================
+		// PHASE 5: Treat as FILE/ARGUMENT
+		// ============================================================
+		info.Files = append(info.Files, arg)
+		i++
+	}
+
+	// ============================================================
+	// POST-PROCESSING: Validation and normalization
+	// ============================================================
+	
+	// If no command found but we have ambiguous flags set as boolean,
+	// promote them to command
+	if info.Command == "" {
+		// Check in priority order
+		if info.BoolFlags["-c"] {
+			info.Command = "-c"
+			delete(info.BoolFlags, "-c")
+		} else if info.BoolFlags["-t"] && len(info.Files) > 0 {
+			// "-t" is tree command if followed by path
+			info.Command = "-t"
+			delete(info.BoolFlags, "-t")
+		} else if info.BoolFlags["-l"] && len(info.Files) > 0 {
+			// "-l" is list command if followed by filename
+			info.Command = "-l"
+			delete(info.BoolFlags, "-l")
+		} else if info.BoolFlags["-r"] && len(info.Files) > 0 {
+			// "-r" is restore command if followed by filename
+			info.Command = "-r"
+			delete(info.BoolFlags, "-r")
+		} else if info.BoolFlags["-b"] && len(info.Files) > 0 {
+			// "-b" is backup command if followed by filename
+			info.Command = "-b"
+			delete(info.BoolFlags, "-b")
+		}
+	}
+
+	// Normalize flag aliases (use canonical form)
+	if msg, ok := info.Flags["--message"]; ok && info.Flags["-m"] == "" {
+		info.Flags["-m"] = msg
+	}
+	if tool, ok := info.Flags["--tool"]; ok && info.Flags["-T"] == "" {
+		info.Flags["-T"] = tool
+	}
+	if lexer, ok := info.Flags["-l"]; ok && info.Flags["--lexer"] == "" {
+		info.Flags["--lexer"] = lexer
+	}
+	if theme, ok := info.Flags["-t"]; ok && info.Flags["--theme"] == "" {
+		info.Flags["--theme"] = theme
+	}
+	if exc, ok := info.Flags["--exception"]; ok && info.Flags["-e"] == "" {
+		info.Flags["-e"] = exc
+	}
+	
+	// Normalize boolean flag aliases
+	if info.BoolFlags["-lt"] {
+		info.BoolFlags["--last"] = true
+	}
+	if info.BoolFlags["-p"] {
+		info.BoolFlags["--pager"] = true
+	}
+	if info.BoolFlags["-np"] || info.BoolFlags["--no-pager"] {
+		info.BoolFlags["--pager"] = false
+	}
+
+	return info
+}
+
+// setGlobalFlags sets global variables from parsed flags
+func setGlobalFlags(info *CommandInfo) {
+	if info.BoolFlags["--debug"] {
+		debugMode = true
+	}
+	if info.BoolFlags["-z"] {
+		foundZ = true
+	}
+	if info.BoolFlags["-c"] {
+		checkBefore = true
+	}
+	if tool, ok := info.Flags["-T"]; ok {
+		difftool = tool
+	}
+	if tool, ok := info.Flags["--tool"]; ok {
+		difftool = tool
+	}
+}
+
 func main() {
+	if len(os.Args) < 2 {
+		printHelp()
+		os.Exit(1)
+	}
+
+	// Handle special cases first
 	if len(os.Args) == 2 {
 		switch os.Args[1] {
 		case "-h", "--help":
@@ -5352,387 +6031,386 @@ func main() {
 		}
 	}
 
-	if len(os.Args) < 2 {
-		printHelp()
+	// Parse all arguments flexibly
+	info := parseArguments(os.Args[1:])
+
+	// Set global flags
+	setGlobalFlags(info)
+
+	// Setup logger
+	setupLogger()
+
+	// If no command found, treat as default write command
+	if info.Command == "" {
+		handleDefaultWrite(info)
+		return
+	}
+
+	// Route to appropriate handler
+	var err error
+	switch info.Command {
+	case "show":
+		err = handleShowWithInfo(info)
+	case "move", "mv", "-mv":
+		err = handleMoveWithInfo(info)
+	case "fix":
+		err = handleFixWithInfo(info)
+	case "-z":
+		err = handleTempWithInfo(info)
+	case "check", "-c", "--check":
+		err = handleCheckWithInfo(info)
+	case "backup", "-b":
+		err = handleBackupWithInfo(info)
+	case "commit":
+		err = handleCommitWithInfo(info)
+	case "config":
+		err = handleConfigWithInfo(info)
+	case "-t", "--tree":
+		err = handleTreeWithInfo(info)
+	case "-rm", "--remove":
+		err = handleRemoveWithInfo(info)
+	case "-l", "--list":
+		err = handleListWithInfo(info)
+	case "-d", "--diff":
+		err = handleDiffWithInfo(info)
+	case "-r", "--restore":
+		err = handleRestoreWithInfo(info)
+	case "+":
+		err = handleAppendWithInfo(info)
+	case "-mt", "--monitor":
+		err = handleMonitorWithInfo(info)
+	}
+
+	if err != nil {
+		fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		os.Exit(1)
+	}
+}
+
+// Handler wrappers using CommandInfo
+
+func handleShowWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required for show command%s\n", ColorRed, ColorReset)
+		fmt.Println("\nUsage:")
+		fmt.Println("  pt show <filename>")
+		fmt.Println("  pt <filename> show --lexer <type> --theme <theme>")
+		fmt.Println("  pt show <filename> --pager")
 		os.Exit(1)
 	}
 
-	// Parse global flags first
-    for _, arg := range os.Args[1:] {
-        if arg == "--debug" {
-            debugMode = true
-            break
-        }
-    }
-
-    for i := 1; i < len(os.Args); i++ {
-	    if os.Args[i] == "--tool" || os.Args[i] == "-T" && i+1 < len(os.Args) {
-	        difftool = os.Args[i+1]
-	        break
-	    }
+	// Reconstruct args for existing handler
+	args := []string{info.Files[0]}
+	if lexer, ok := info.Flags["--lexer"]; ok {
+		args = append(args, "--lexer", lexer)
+	}
+	if theme, ok := info.Flags["--theme"]; ok {
+		args = append(args, "--theme", theme)
+	}
+	if info.BoolFlags["--pager"] {
+		args = append(args, "--pager")
 	}
 
-	for _, arg := range os.Args[1:] {
-        if arg == "-z" {
-            foundZ = true
-            break
-        }
-    }
+	return handleShowCommand(args)
+}
 
-    for _, arg := range os.Args[1:] {
-        if arg == "-z" {
-            checkBefore = true
-            break
-        }
-    }
+func handleMoveWithInfo(info *CommandInfo) error {
+	if len(info.Files) < 2 {
+		fmt.Printf("%s❌ Error: At least source and destination required%s\n", ColorRed, ColorReset)
+		fmt.Println("\nUsage:")
+		fmt.Println("  pt move <source> <destination>")
+		fmt.Println("  pt <source> move <destination>")
+		fmt.Println("  pt <source1> <source2> move <destination> -m \"comment\"")
+		os.Exit(1)
+	}
 
-    // Setup logger based on the parsed debug flag
-    setupLogger()
+	args := info.Files
+	if msg, ok := info.Flags["-m"]; ok {
+		args = append(args, "-m", msg)
+	}
+	if msg, ok := info.Flags["--message"]; ok {
+		args = append(args, "--message", msg)
+	}
+	if info.BoolFlags["-r"] || info.BoolFlags["--recursive"] {
+		args = append(args, "-r")
+	}
 
-	switch os.Args[1] {
-		case "show":
-			if len(os.Args) < 3 {
-				fmt.Printf("%s❌ Error: Filename required for show command%s\n", ColorRed, ColorReset)
-				fmt.Println("\nUsage:")
-				fmt.Println("  pt show <filename>")
-				fmt.Println("  pt show <filename> --lexer <type> --theme <theme>")
-				fmt.Println("  pt show <filename> --pager")
-				fmt.Println("\nExamples:")
-				fmt.Println("  pt show main.go")
-				fmt.Println("  pt show main.go --lexer go --theme dracula")
-				fmt.Println("  pt show script.py --theme monokai --pager")
-				os.Exit(1)
-			}
+	return handleMoveCommand(args)
+}
 
-			err := handleShowCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+func handleFixWithInfo(info *CommandInfo) error {
+	return handleFixCommand(info.Files)
+}
 
-		case "move", "mv", "-mv":
-			if len(os.Args) < 4 {
-				fmt.Printf("%s❌ Error: At least source and destination required%s\n", ColorRed, ColorReset)
-				fmt.Println("\nUsage:")
-				fmt.Println("  pt move <source> <destination>")
-				fmt.Println("  pt move <source1> <source2> ... <destination>")
-				fmt.Println("  pt mv <source...> <destination> -m \"comment\"")
-				fmt.Println("\nExamples:")
-				fmt.Println("  pt move file.txt newdir/")
-				fmt.Println("  pt move file1.py file2.go file3.rs dest/")
-				fmt.Println("  pt mv old.py new/location/renamed.py -m \"reorganize\"")
-				fmt.Println("  pt mv *.txt backup/ -m \"archive text files\"")
-				os.Exit(1)
-			}
+func handleTempWithInfo(info *CommandInfo) error {
+	args := info.Files
+	if lexer, ok := info.Flags["--lexer"]; ok {
+		args = append(args, "--lexer", lexer)
+	}
+	if theme, ok := info.Flags["--theme"]; ok {
+		args = append(args, "--theme", theme)
+	}
+	if info.BoolFlags["--pager"] {
+		args = append(args, "--pager")
+	}
+	return handleTempCommand(args)
+}
 
-			err := handleMoveCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
-		
-		case "fix":
-			err := handleFixCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+func handleCheckWithInfo(info *CommandInfo) error {
+	return handleCheckCommand(info.Files)
+}
 
-		case "-z": 
-			err := handleTempCommand(os.Args[2:]) // Pass remaining args (like --lexer)
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+func handleBackupWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+		os.Exit(1)
+	}
 
-		case "check", "-c", "--check":
-			// Handle both single file check and full status
-			err := handleCheckCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	filename := info.Files[0]
+	comment := info.Flags["-m"]
+	if comment == "" {
+		comment = info.Flags["--message"]
+	}
 
-		case "backup", "-b":
-			// Parse arguments using parseWriteArgs
-			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		filePath = filename
+	}
 
-			filePath, err := resolveFilePath(filename)
-			if err != nil {
-				filePath = filename
-			}
+	backups, _ := listBackups(filePath)
+	if len(backups) > 0 {
+		if !checkIfDifferent(filename, backups[0].Path) {
+			os.Exit(1)
+		}
+	}
 
-			backups, _ := listBackups(filePath)
+	if checkBefore {
+		fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+	}
 
-			if len(backups) > 0 {
-				if !checkIfDifferent(filename, backups[0].Path) {
-					os.Exit(1)
-				}
-			}
+	autoRenameIfExists(filePath, comment)
+	return nil
+}
 
-			if checkMode {
-				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
-			}	
-			
-			autoRenameIfExists(filePath, comment)
+func handleCommitWithInfo(info *CommandInfo) error {
+	args := info.Files
+	if msg, ok := info.Flags["-m"]; ok {
+		args = append(args, "-m", msg)
+	}
+	if msg, ok := info.Flags["--message"]; ok {
+		args = append(args, "--message", msg)
+	}
+	return handleCommitCommand(args)
+}
 
-		case "commit":
-			err := handleCommitCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+func handleConfigWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Config subcommand required%s\n", ColorRed, ColorReset)
+		fmt.Println("\nAvailable subcommands:")
+		fmt.Println("  pt config init [path]")
+		fmt.Println("  pt config show")
+		fmt.Println("  pt config path")
+		os.Exit(1)
+	}
+	return handleConfigCommand(info.Files)
+}
 
-		case "config":
-			if len(os.Args) < 3 {
-				fmt.Printf("%s❌ Error: Config subcommand required%s\n", ColorRed, ColorReset)
-				fmt.Println("\nAvailable subcommands:")
-				fmt.Println("  pt config init [path]  - Create sample config file")
-				fmt.Println("  pt config show         - Show current configuration")
-				fmt.Println("  pt config path         - Show config file location")
-				os.Exit(1)
-			}
-			
-			err := handleConfigCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+func handleTreeWithInfo(info *CommandInfo) error {
+	args := info.Files
+	if exc, ok := info.Flags["-e"]; ok {
+		args = append(args, "-e", exc)
+	}
+	if exc, ok := info.Flags["--exception"]; ok {
+		args = append(args, "--exception", exc)
+	}
+	return handleTreeCommand(args)
+}
 
-		case "-t", "--tree":
-			err := handleTreeCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+func handleRemoveWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+		os.Exit(1)
+	}
+	
+	args := info.Files
+	if msg, ok := info.Flags["-m"]; ok {
+		args = append(args, "-m", msg)
+	}
+	if msg, ok := info.Flags["--message"]; ok {
+		args = append(args, "--message", msg)
+	}
+	
+	return handleRemoveCommand(args)
+}
 
-		case "-rm", "--remove":
-			if len(os.Args) < 3 {
-				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-				os.Exit(1)
-			}
+func handleListWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+		os.Exit(1)
+	}
 
-			err := handleRemoveCommand(os.Args[2:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	filePath, err := resolveFilePath(info.Files[0])
+	if err != nil {
+		return err
+	}
 
-		case "-l", "--list":
-			if len(os.Args) < 3 {
-				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-				os.Exit(1)
-			}
+	backups, err := listBackups(filePath)
+	if err != nil {
+		return err
+	}
 
-			filePath, err := resolveFilePath(os.Args[2])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	if len(backups) == 0 {
+		fmt.Printf("ℹ️  No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
+	} else {
+		printBackupTable(filePath, backups)
+	}
+	return nil
+}
 
-			backups, err := listBackups(filePath)
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+func handleDiffWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+		os.Exit(1)
+	}
 
-			if len(backups) == 0 {
-				fmt.Printf("ℹ️  No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
-			} else {
-				printBackupTable(filePath, backups)
-			}
+	fileName := info.Files[0]
 
-		case "-d", "--diff":
-			if len(os.Args) < 3 { // Minimal arg: pt -d <file_name>
-				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-				os.Exit(1)
-			}
+	// Check if -z flag is present
+	if info.BoolFlags["-z"] {
+		return handleDiffClipboardToFile(fileName)
+	}
 
-			// Check for the specific combination: pt -d <file_name> -z
-			// We look for -z in os.Args[3] or later, after the file name at os.Args[2]
-			// for _, arg := range os.Args[3:] { // Start checking from the 4th argument (index 3)
-			// 	if arg == "-z" {
-			// 		foundZ = true
-			// 		break
-			// 	}
-			// }
+	// Regular diff command
+	args := []string{fileName}
+	if info.BoolFlags["--last"] || info.BoolFlags["-lt"] {
+		args = append(args, "--last")
+	}
+	return handleDiffCommand(args)
+}
 
-			logger.Printf("foundZ: %v", foundZ);
+func handleRestoreWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+		os.Exit(1)
+	}
 
-			if foundZ {
-				// If -z is found, treat os.Args[2] as the file name and use new logic
-				fileName := os.Args[2] // Get the file name argument
-				// Call the new function
-				err := handleDiffClipboardToFile(fileName)
-				if err != nil {
-					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-					os.Exit(1)
-				}
-				return // Exit after handling the -d <file_name> -z case
-			} else {
-				// If -z is not found, proceed with the original handleDiffCommand logic
-				// Pass all arguments starting from the file name (os.Args[2:])
-				err := handleDiffCommand(os.Args[2:]) // This expects [filename, optional --last]
-				if err != nil {
-					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-					os.Exit(1)
-				}
-			}
+	filename := info.Files[0]
+	comment := info.Flags["-m"]
+	if comment == "" {
+		comment = info.Flags["--message"]
+	}
+	useLast := info.BoolFlags["--last"] || info.BoolFlags["-lt"]
 
-		case "-r", "--restore":
-			if len(os.Args) < 3 {
-				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-				os.Exit(1)
-			}
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		filePath = filename
+		absPath, err := filepath.Abs(filePath)
+		if err == nil {
+			filePath = absPath
+		}
+	}
 
-			filename := os.Args[2]
-			comment := ""
-			useLast := false
+	backups, err := listBackups(filePath)
+	if err != nil {
+		return err
+	}
 
-			for i := 3; i < len(os.Args); i++ {
-				if os.Args[i] == "--last" {
-					useLast = true
-				} else if os.Args[i] == "-m" || os.Args[i] == "--message" {
-					if i+1 < len(os.Args) {
-						i++
-						comment = os.Args[i]
-					}
-				}
-			}
+	if len(backups) == 0 {
+		fmt.Printf("%s❌ Error: No backups found for: %s (check %s/ directory)%s\n",
+			ColorRed, filePath, appConfig.BackupDirName, ColorReset)
+		os.Exit(1)
+	}
 
-			filePath, err := resolveFilePath(filename)
-			if err != nil {
-				filePath = filename
-				absPath, err := filepath.Abs(filePath)
-				if err == nil {
-					filePath = absPath
-				}
-			}
+	if useLast {
+		if comment == "" {
+			comment = "Restored from last backup"
+		}
+		return restoreBackup(backups[0].Path, filePath, comment)
+	}
 
-			backups, err := listBackups(filePath)
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	printBackupTable(filePath, backups)
+	choice, err := readUserChoice(len(backups))
+	if err != nil {
+		return err
+	}
 
-			if len(backups) == 0 {
-				fmt.Printf("%s❌ Error: No backups found for: %s (check %s/ directory)%s\n", 
-					ColorRed, filePath, appConfig.BackupDirName, ColorReset)
-				os.Exit(1)
-			}
+	if choice == 0 {
+		fmt.Println("❌ Restore cancelled")
+		os.Exit(0)
+	}
 
-			if useLast {
-				if comment == "" {
-					comment = "Restored from last backup"
-				}
-				err = restoreBackup(backups[0].Path, filePath, comment)
-				if err != nil {
-					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-					os.Exit(1)
-				}
-			} else {
-				printBackupTable(filePath, backups)
+	selectedBackup := backups[choice-1]
+	if comment == "" {
+		comment = "Restored from backup"
+	}
+	return restoreBackup(selectedBackup.Path, filePath, comment)
+}
 
-				choice, err := readUserChoice(len(backups))
-				if err != nil {
-					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-					os.Exit(1)
-				}
+func handleAppendWithInfo(info *CommandInfo) error {
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+		os.Exit(1)
+	}
 
-				if choice == 0 {
-					fmt.Println("❌ Restore cancelled")
-					os.Exit(0)
-				}
+	text, err := getClipboardText()
+	if err != nil {
+		return err
+	}
 
-				selectedBackup := backups[choice-1]
-				if comment == "" {
-					comment = "Restored from backup"
-				}
-				err = restoreBackup(selectedBackup.Path, filePath, comment)
-				if err != nil {
-					fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-					os.Exit(1)
-				}
-			}
+	if text == "" {
+		fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+		os.Exit(1)
+	}
 
-		case "+":
-			if len(os.Args) < 3 {
-				fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
-				os.Exit(1)
-			}
+	filename := info.Files[0]
+	comment := info.Flags["-m"]
+	if comment == "" {
+		comment = info.Flags["--message"]
+	}
 
-			text, err := getClipboardText()
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		filePath = filename
+	}
 
-			if text == "" {
-				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
-				os.Exit(1)
-			}
+	return writeFile(filePath, text, true, false, comment)
+}
 
-			// Parse the arguments for append correctly
-			filename := os.Args[2]
-			comment := ""
-			
-			for i := 3; i < len(os.Args); i++ {
-				if os.Args[i] == "-m" || os.Args[i] == "--message" {
-					if i+1 < len(os.Args) {
-						i++
-						comment = os.Args[i]
-					}
-				}
-			}
+func handleDefaultWrite(info *CommandInfo) {
+	text, err := getClipboardText()
+	if err != nil {
+		fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		os.Exit(1)
+	}
 
-			filePath, err := resolveFilePath(filename)
-			if err != nil {
-				filePath = filename
-			}
+	if text == "" {
+		fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
+		os.Exit(1)
+	}
 
-			err = writeFile(filePath, text, true, false, comment)
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	if len(info.Files) == 0 {
+		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
+		os.Exit(1)
+	}
 
-		default:
-			// Use parseWriteArgs for the default write mode
-			text, err := getClipboardText()
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	filename := info.Files[0]
+	comment := info.Flags["-m"]
+	if comment == "" {
+		comment = info.Flags["--message"]
+	}
 
-			if text == "" {
-				fmt.Printf("%s⚠️  Warning: Clipboard is empty%s\n", ColorYellow, ColorReset)
-				os.Exit(1)
-			}
+	filePath, err := resolveFilePath(filename)
+	if err != nil {
+		filePath = filename
+	}
 
-			// Parse arguments using parseWriteArgs
-			filename, comment, checkMode, err := parseWriteArgs(os.Args[1:])
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	if checkBefore {
+		fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+	}
 
-			filePath, err := resolveFilePath(filename)
-			if err != nil {
-				filePath = filename
-			}
-
-			if checkMode {
-				fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
-			}
-
-			err = writeFile(filePath, text, false, checkMode, comment)
-			if err != nil {
-				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-				os.Exit(1)
-			}
+	err = writeFile(filePath, text, false, checkBefore, comment)
+	if err != nil {
+		fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		os.Exit(1)
 	}
 }

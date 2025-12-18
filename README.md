@@ -22,15 +22,17 @@
 
 ### Core Features
 - 📝 **Quick Save** - Write clipboard content to file with one command
-- 📦 **Auto Backup** - Automatic timestamped backups stored in `./backup/` directory
-- 💬 **Backup Comments** - Add descriptive comments to track why changes were made ✨ NEW!
+- 📦 **Auto Backup** - Automatic timestamped backups stored in `./pt/` directory
+- 💬 **Backup Comments** - Add descriptive comments to track why changes were made
 - ➕ **Append Mode** - Add content without creating backups
 - 🔄 **Restore** - Interactive or quick restore from backups with comments
-- 📊 **Beautiful Listings** - Formatted table view of all backups with sizes and comments ✨ NEW!
+- 📊 **Beautiful Listings** - Formatted table view of all backups with sizes and comments
 - 🔒 **Production Hardened** - Path validation, size limits, error handling
 - 🎨 **Colorful Output** - ANSI colors for better readability
 - 📈 **Audit Logging** - All operations logged for tracking
-- ✅ **Check Mode** - Skip writes if content unchanged (saves disk space) ✨ NEW!
+- ✅ **Check Mode** - Skip writes if content unchanged (saves disk space)
+- 📺 **Monitoring Mode** - Run monitoring mode for auto backup file changed, good for using with Diff/Merge GUI Tools ✨ NEW!
+- 👁️ and many more, use -h/--help
 
 ---
 
