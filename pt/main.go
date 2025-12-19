@@ -1268,6 +1268,7 @@ func runDiff(toolName, file1, file2 string, auto_backup bool) error {
     
     // Handle execution
     err := cmd.Run()
+    logger.Printf("runDif, err: %v", err)
     
     if err != nil {
         if exitErr, ok := err.(*exec.ExitError); ok {
@@ -1285,6 +1286,10 @@ func runDiff(toolName, file1, file2 string, auto_backup bool) error {
             }
         }
         return fmt.Errorf("failed to run %s: %v", config.Name, err)
+    } else {
+    	if toolName == "delta" {
+    		fmt.Printf("✅ %s%sDelta:%s %sNo Different between files%s", ColorWhite, ColorMagenta, ColorReset, ColorCyan, ColorReset)
+    	}
     }
 
 	// Success: diff tool exited normally
@@ -4640,7 +4645,7 @@ func resolveFilePath(filename string) (string, error) {
 	}
 
 	if len(results) == 1 {
-		fmt.Printf("%s✓ Found:%s %s%s%s%s\n", ColorBrightYellow, ColorReset, ColorWhite, ColorBlue, results[0].Path, ColorReset)
+		fmt.Printf("%s✅ Found:%s %s%s%s%s\n", ColorYellow, ColorReset, ColorWhite, ColorCyan, results[0].Path, ColorReset)
 		return results[0].Path, nil
 	}
 
