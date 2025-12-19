@@ -350,38 +350,86 @@ func triggerFileAction(path string, action string) {
 }
 
 // autoBackupFile creates a backup when file changes
+// func autoBackupFile(filePath string, comment string) error {
+// 	// Check if file exists
+// 	if _, err := os.Stat(filePath); err != nil {
+// 		return err
+// 	}
+
+// 	// Get existing backups
+// 	backups, err := listBackups(filePath)
+// 	if err != nil {
+// 		// If error getting backups, proceed with backup anyway
+// 		if logger != nil {
+// 			logger.Printf("Warning: could not list backups: %v", err)
+// 		}
+// 	}
+
+// 	// Check if content is different from last backup
+// 	if len(backups) > 0 {
+// 		// Use checkIfDifferent with file paths (it handles file reading internally)
+// 		if !checkIfDifferent(filePath, backups[0].Path) {
+// 			// Content is identical, skip backup
+// 			return nil
+// 		}
+// 	}
+
+// 	// Create backup using autoRenameIfExists
+// 	// This returns (string, error) not just error
+// 	_, err = autoRenameIfExists(filePath, comment)
+// 	return err
+// }
+
 func autoBackupFile(filePath string, comment string) error {
-	// Check if file exists
-	if _, err := os.Stat(filePath); err != nil {
+	backups, err := listBackups(filePath)
+    if err != nil {
+    	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+        sendFileNotification(filePath, "error", time.Now().Format("15:04:05"), err)
+        return err
+    }
+
+    text, err := os.ReadFile(filePath)
+    if err != nil {
+    	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		sendFileNotification(filePath, "error", time.Now().Format("15:04:05"), err)
 		return err
 	}
 
-	// Get existing backups
-	backups, err := listBackups(filePath)
-	if err != nil {
-		// If error getting backups, proceed with backup anyway
-		if logger != nil {
-			logger.Printf("Warning: could not list backups: %v", err)
+    if len(backups) == 0 {
+        fmt.Printf("No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
+        // Konversi []byte ke string
+        // err = writeFile(filePath, string(text), false, checkBefore, comment)
+        _, err = autoRenameIfExists(filePath, comment)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			return err
 		}
-	}
-
-	// Check if content is different from last backup
-	if len(backups) > 0 {
-		// Use checkIfDifferent with file paths (it handles file reading internally)
-		if !checkIfDifferent(filePath, backups[0].Path) {
-			// Content is identical, skip backup
+    } else {
+	    var selectedBackup BackupInfo
+	    selectedBackup = backups[0]
+        fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	    
+		if !checkIfDifferent(selectedBackup.Path, text) {
+			fmt.Printf("⚠ %sLast backup:%s %s%s%s%s %sand clipboard is identical%s\n", 
+				ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, 
+				ColorReset, ColorYellow, ColorReset)
 			return nil
 		}
+
+		// Konversi []byte ke string
+		// err = writeFile(filePath, string(text), false, checkBefore, comment)
+		_, err = autoRenameIfExists(filePath, comment)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			return err
+		}
 	}
 
-	// Create backup using autoRenameIfExists
-	// This returns (string, error) not just error
-	_, err = autoRenameIfExists(filePath, comment)
-	return err
+	return nil
 }
 
 // sendFileNotification sends notification via Growl/GNTP
-func sendFileNotification(path string, action string, timestamp string) {
+func sendFileNotification(path string, action string, timestamp string, optionalErr ...error) {
 	absPath, _ := filepath.Abs(path)
 	title := "File Monitor - pt"
 	message := fmt.Sprintf("[%s] File %s\n%s", timestamp, action, absPath)
@@ -397,6 +445,8 @@ func sendFileNotification(path string, action string, timestamp string) {
 		{Event: "file_created", Enabled: true},
 		{Event: "error", Enabled: true},
 	}
+
+	// Register returns error, bukan []error
 	err := client.Register(events)
 	if err != nil {
 		if logger != nil {
@@ -423,11 +473,23 @@ func sendFileNotification(path string, action string, timestamp string) {
 		}
 	}
 
+	// Notify returns error, bukan []error
 	err = client.Notify(msg)
 	if err != nil {
 		if logger != nil {
 			logger.Printf("Failed to send notification: %v", err)
 		}
+	}
+
+	// Periksa optionalErr (bukan errors)
+	if len(optionalErr) > 0 && optionalErr[0] != nil {
+		// Untuk error notification, kita buat client baru atau gunakan yang sama
+		client.Notify(&gntp.Message{
+			Event:  "error",
+			Title:  title,
+			Text:   fmt.Sprintf("pt monitoring Error: %v", optionalErr[0]),
+			Sticky: true,
+		})
 	}
 }
 

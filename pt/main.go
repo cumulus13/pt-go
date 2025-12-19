@@ -452,81 +452,6 @@ func handleShowCommand(args []string) error {
 // TEMP COMMAND (-z) - Display clipboard content with syntax highlighting
 // ============================================================================
 
-// handleTempCommand writes clipboard content to a temp file and displays it with less
-// func handleTempCommand(args []string) error {
-// 	text, err := getClipboardText()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to read clipboard: %w", err)
-// 	}
-
-// 	if text == "" {
-// 		return fmt.Errorf("clipboard is empty")
-// 	}
-
-// 	// Determine lexer for syntax highlighting
-// 	lexerName := ""
-// 	for i := 0; i < len(args); i++ {
-// 		if args[i] == "--lexer" && i+1 < len(args) {
-// 			lexerName = args[i+1]
-// 			break
-// 		}
-// 	}
-
-// 	// Create a temporary file
-// 	tmpFile, err := os.CreateTemp("", "pt_temp_*.txt")
-// 	if err != nil {
-// 		return fmt.Errorf("failed to create temporary file: %w", err)
-// 	}
-// 	defer os.Remove(tmpFile.Name()) // Clean up the temp file after the function exits
-// 	defer tmpFile.Close()
-
-// 	// Write clipboard content to the temp file
-// 	_, err = tmpFile.WriteString(text)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to write to temporary file: %w", err)
-// 	}
-
-// 	// Flush the file to ensure content is written
-// 	tmpFile.Sync()
-
-// 	// Check if a lexer is specified
-// 	if lexerName != "" {
-// 		// Use chroma quick.Highlight to format the content and write directly to stdout
-// 		// This avoids issues with less stdin
-// 		logger.Printf("Highlighting with lexer: '%s'", lexerName)
-// 		// Use "terminal16m" or "terminal" style for ANSI colors
-// 		err = quick.Highlight(os.Stdout, text, lexerName, "terminal16m", "terminal16m")
-// 		if err != nil {
-// 			// If highlighting fails, log a warning and proceed with plain output
-// 			logger.Printf("Warning: failed to highlight with lexer '%s': %v", lexerName, err)
-// 			// Write plain text to stdout
-// 			_, err = os.Stdout.WriteString(text)
-// 			if err != nil {
-// 				return fmt.Errorf("failed to write plain text to stdout: %w", err)
-// 			}
-// 		}
-// 	} else {
-// 		// If no lexer, write plain text to stdout
-// 		logger.Printf("Displaying plain text")
-// 		_, err = os.Stdout.WriteString(text)
-// 		if err != nil {
-// 			return fmt.Errorf("failed to write plain text to stdout: %w", err)
-// 		}
-// 	}
-
-// 	// Optionally, add a footer to indicate end of output
-// 	fmt.Println("\n--- End of clipboard content ---")
-// 	fmt.Printf("Temp file location: %s (will be deleted)\n", tmpFile.Name())
-// 	fmt.Printf("Size: %d bytes\n", len(text))
-// 	fmt.Printf("Time: %s\n", time.Now().Format("2006-01-02 15:04:05"))
-
-// 	return nil
-// }
-
-// ============================================================================
-// TEMP COMMAND (-z) - Display clipboard content with syntax highlighting
-// ============================================================================
-
 func handleTempCommand(args []string) error {
 	text, err := getClipboardText()
 	if err != nil {
@@ -644,56 +569,6 @@ func handleTempCommand(args []string) error {
 	return nil
 }
 
-// displayWithPager displays content using less or more pager
-// func displayWithPager(content string) error {
-// 	pagers := []string{"less", "more", "cat"}
-// 	var pagerCmd string
-
-// 	for _, p := range pagers {
-// 		if _, err := exec.LookPath(p); err == nil {
-// 			pagerCmd = p
-// 			break
-// 		}
-// 	}
-
-// 	if pagerCmd == "" {
-// 		fmt.Print(content)
-// 		return nil
-// 	}
-
-// 	var cmd *exec.Cmd
-// 	if pagerCmd == "less" {
-// 		cmd = exec.Command("less", "-R", "-F", "-X")
-// 	} else {
-// 		cmd = exec.Command(pagerCmd)
-// 	}
-
-// 	pipe, err := cmd.StdinPipe()
-// 	if err != nil {
-// 		fmt.Print(content)
-// 		return nil
-// 	}
-
-// 	cmd.Stdout = os.Stdout
-// 	cmd.Stderr = os.Stderr
-
-// 	if err := cmd.Start(); err != nil {
-// 		fmt.Print(content)
-// 		return nil
-// 	}
-
-// 	_, err = pipe.Write([]byte(content))
-// 	if err != nil {
-// 		pipe.Close()
-// 		cmd.Wait()
-// 		fmt.Print(content)
-// 		return nil
-// 	}
-
-// 	pipe.Close()
-// 	return cmd.Wait()
-// }
-
 // displayWithPager displays content using less/more in streaming mode.
 func displayWithPager(content string) error {
     pagers := []string{"less", "more"}
@@ -757,161 +632,6 @@ func displayWithPager(content string) error {
     return cmd.Wait()
 }
 
-// displayWithPager is a drop-in replacement pager WITHOUT 'less' binary and WITH ANSI support.
-// func displayWithPager(content string) error {
-// 	// Strip ANSI escape sequences
-// 	clean := stripansi.Strip(content)
-
-// 	app := tview.NewApplication()
-
-// 	tv := tview.NewTextView().
-// 		SetDynamicColors(true).
-// 		SetRegions(true).
-// 		SetWrap(true).
-// 		SetScrollable(true)
-
-// 	tv.SetText(clean)
-// 	tv.ScrollToBeginning()
-
-// 	lines := strings.Split(clean, "\n")
-// 	var searchText string
-
-// 	// -------- Scroll Helpers --------
-// 	scrollUp := func() {
-// 		row, col := tv.GetScrollOffset()
-// 		if row > 0 {
-// 			tv.ScrollTo(row-1, col)
-// 		}
-// 	}
-
-// 	scrollDown := func() {
-// 		row, col := tv.GetScrollOffset()
-// 		tv.ScrollTo(row+1, col)
-// 	}
-
-// 	pageUp := func() {
-// 		row, col := tv.GetScrollOffset()
-// 		newRow := row - 20
-// 		if newRow < 0 {
-// 			newRow = 0
-// 		}
-// 		tv.ScrollTo(newRow, col)
-// 	}
-
-// 	pageDown := func() {
-// 		row, col := tv.GetScrollOffset()
-// 		tv.ScrollTo(row+20, col)
-// 	}
-
-// 	// -------- Search Functions --------
-// 	highlightMatches := func(q string) {
-// 		if q == "" {
-// 			tv.SetText(clean)
-// 			return
-// 		}
-
-// 		var out strings.Builder
-// 		lq := strings.ToLower(q)
-
-// 		for _, line := range lines {
-// 			ll := strings.ToLower(line)
-// 			pos := strings.Index(ll, lq)
-
-// 			if pos >= 0 {
-// 				out.WriteString(line[:pos])
-// 				out.WriteString("[yellow]")
-// 				out.WriteString(line[pos : pos+len(q)])
-// 				out.WriteString("[-]")
-// 				out.WriteString(line[pos+len(q):])
-// 			} else {
-// 				out.WriteString(line)
-// 			}
-// 			out.WriteString("\n")
-// 		}
-
-// 		tv.SetText(out.String())
-// 	}
-
-// 	jumpToFirst := func() {
-// 		if searchText == "" {
-// 			return
-// 		}
-// 		lq := strings.ToLower(searchText)
-// 		for i, line := range lines {
-// 			if strings.Contains(strings.ToLower(line), lq) {
-// 				tv.ScrollTo(i, 0)
-// 				return
-// 			}
-// 		}
-// 	}
-
-// 	// -------- Key Handler --------
-// 	tv.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
-
-// 		switch ev.Rune() {
-// 		case 'q':
-// 			app.Stop()
-// 			return nil
-
-// 		case 'j':
-// 			scrollDown()
-// 			return nil
-
-// 		case 'k':
-// 			scrollUp()
-// 			return nil
-
-// 		case 'g':
-// 			tv.ScrollToBeginning()
-// 			return nil
-
-// 		case 'G':
-// 			tv.ScrollToEnd()
-// 			return nil
-
-// 		case '/':
-// 			input := tview.NewInputField().
-// 				SetLabel("Search: ")
-
-// 			input.SetDoneFunc(func(key tcell.Key) {
-// 				searchText = input.GetText()
-// 				highlightMatches(searchText)
-// 				jumpToFirst()
-// 				app.SetRoot(tv, true)
-// 			})
-
-// 			app.SetRoot(input, true)
-// 			return nil
-// 		}
-
-// 		switch ev.Key() {
-// 		case tcell.KeyPgUp:
-// 			pageUp()
-// 			return nil
-
-// 		case tcell.KeyPgDn:
-// 			pageDown()
-// 			return nil
-
-// 		case tcell.KeyUp:
-// 			scrollUp()
-// 			return nil
-
-// 		case tcell.KeyDown:
-// 			scrollDown()
-// 			return nil
-// 		}
-
-// 		return ev
-// 	})
-
-// 	return app.SetRoot(tv, true).Run()
-// }
-
-
-
-// handleDiffClipboardToFile reads clipboard, saves to temp file, and diffs with the resolved target file
-
 // ============================================================================
 // DIFF COMMAND - Compare files or clipboard
 // ============================================================================
@@ -970,93 +690,6 @@ func handleDiffClipboardToFile(fileName string) error {
 
 	return nil
 }
-
-// func handleDiffCommand(args []string) error {
-// 	if len(args) < 1 {
-// 		return fmt.Errorf("filename required for diff command")
-// 	}
-
-// 	filename := args[0]
-// 	useLast := len(args) > 1 && args[1] == "--last"
-
-// 	filePath, err := resolveFilePath(filename)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	backups, err := listBackups(filePath)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if len(backups) == 0 {
-// 		return fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
-// 	}
-
-// 	var selectedBackup BackupInfo
-
-// 	if useLast {
-// 		selectedBackup = backups[0]
-// 		fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
-// 	} else {
-// 		printBackupTable(filePath, backups)
-
-// 		reader := bufio.NewReader(os.Stdin)
-// 		fmt.Printf("Enter backup number to compare (1-%d) or 0 to cancel: ", len(backups))
-
-// 		input, err := reader.ReadString('\n')
-// 		if err != nil {
-// 			return fmt.Errorf("failed to read input: %w", err)
-// 		}
-
-// 		input = strings.TrimSpace(input)
-// 		choice, err := strconv.Atoi(input)
-// 		if err != nil {
-// 			return fmt.Errorf("invalid input: please enter a number")
-// 		}
-
-// 		if choice < 0 || choice > len(backups) {
-// 			return fmt.Errorf("invalid selection: must be between 0 and %d", len(backups))
-// 		}
-
-// 		if choice == 0 {
-// 			return fmt.Errorf("diff cancelled")
-// 		}
-
-// 		selectedBackup = backups[choice-1]
-// 		fmt.Printf("\n%s📊 Comparing with: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
-// 	}
-
-// 	switch appConfig.DiffTool {
-// 		case "meld", "winmerge", "amerge":
-// 			fmt.Printf("appConfig.DiffTool: %s", appConfig.DiffTool)	
-// 	}
-	
-
-// 	if appConfig.DiffTool == "winmerge" {
-// 		err = runWinMerge(selectedBackup.Path, filePath)
-// 		if err != nil {
-// 			return fmt.Errorf("winmerge execution failed: %w", err)
-// 		}		
-// 	} else if appConfig.DiffTool == "meld" {
-// 		err = runMeld(selectedBackup.Path, filePath)
-// 		if err != nil {
-// 			return fmt.Errorf("meld execution failed: %w", err)
-// 		}
-// 	} else if appConfig.DiffTool == "amerge" {
-// 		err = runAMerge(selectedBackup.Path, filePath)
-// 		if err != nil {
-// 			return fmt.Errorf("Araxis merge execution failed: %w", err)
-// 		}
-// 	} else {
-// 		err = runDelta(selectedBackup.Path, filePath)
-// 		if err != nil {
-// 			return fmt.Errorf("delta execution failed: %w", err)
-// 		}
-// 	}
-
-// 	return nil
-// }
 
 // ==================== DIFF TOOLS CONFIGURATION ====================
 type DiffToolConfig struct {
@@ -3523,31 +3156,6 @@ func getDefaultConfig() *Config {
 	}
 }
 
-// func findConfigFile() string {
-// 	configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
-
-// 	searchPaths := []string{
-// 		".",
-// 		filepath.Join(os.Getenv("HOME"), ".config", "pt"),
-// 		os.Getenv("HOME"),
-// 	}
-
-// 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
-// 		searchPaths = append(searchPaths, userProfile, filepath.Join(userProfile, ".pt"))
-// 	}
-
-// 	for _, basePath := range searchPaths {
-// 		for _, configName := range configNames {
-// 			configPath := filepath.Join(basePath, configName)
-// 			if _, err := os.Stat(configPath); err == nil {
-// 				return configPath
-// 			}
-// 		}
-// 	}
-
-// 	return ""
-// }
-
 func findConfigFile() string {
     configNames := []string{"pt.yml", "pt.yaml", ".pt.yml", ".pt.yaml"}
     
@@ -3905,31 +3513,6 @@ func loadBackupMetadata(backupPath string) (string, error) {
 
 	return metadata.Comment, nil
 }
-
-// func loadGitIgnore(rootPath string) (*GitIgnore, error) {
-// 	gitignorePath := filepath.Join(rootPath, ".gitignore")
-// 	gi := &GitIgnore{patterns: make([]string, 0)}
-	
-// 	file, err := os.Open(gitignorePath)
-// 	if err != nil {
-// 		if os.IsNotExist(err) {
-// 			return gi, nil
-// 		}
-// 		return nil, err
-// 	}
-// 	defer file.Close()
-
-// 	scanner := bufio.NewScanner(file)
-// 	for scanner.Scan() {
-// 		line := strings.TrimSpace(scanner.Text())
-// 		if line == "" || strings.HasPrefix(line, "#") {
-// 			continue
-// 		}
-// 		gi.patterns = append(gi.patterns, line)
-// 	}
-
-// 	return gi, scanner.Err()
-// }
 
 // loadGitIgnoreAndPtIgnore loads patterns from .gitignore and .ptignore in the root path
 func loadGitIgnoreAndPtIgnore(rootPath string) (*GitIgnore, error) {
@@ -4919,84 +4502,6 @@ func isFile(path string) bool {
         return false
     }
 }
-
-
-// func isFile(path string) bool {
-// 	logger.Printf("isFile: start checking ...")
-//     info, err := os.Stat(path)
-//     logger.Printf("isFile: info: %s", info)
-//     if err != nil {
-//     	logger.Printf("isFile: err: %v", err)
-//         return false  // File does not exist = false
-//     }
-//     logger.Printf("isFile: err: %v", !info.IsDir())
-//     return !info.IsDir()  // Not directory = true, Directory = false
-// }
-
-// func checkIfDifferent(filePath string, data string) (bool) {
-// 	if isFile(data) {
-// 	    data = string(func() []byte { 
-// 	        b, _ := os.ReadFile(data); return b 
-// 	    }())
-// 	}
-	
-// 	if existingData, err := os.ReadFile(filePath); err == nil {
-// 		if string(existingData) == data {
-// 			logger.Printf("Content identical, skipping write: %s", filePath)
-// 			fmt.Printf("ℹ️  Content identical to current file, no changes needed\n")
-// 			fmt.Printf("📄 File: %s\n", filePath)
-// 			return false
-// 		}
-// 		// fmt.Printf("🔍 Content differs, proceeding with backup and write\n")
-// 	}
-// 	return true
-// }
-
-// func checkIfDifferent(filePath string, data any) bool {
-//     var content string
-   	
-//    	logger.Printf("checkIfDifferent %s and data", filePath)
-
-//     // 1. Convert 'any' to string based on its type
-//     switch v := data.(type) {
-//     case string:
-//     	logger.Printf("checkIfDifferent data is string [0]")
-//         // If input is a file path, read its contents. If not, use the string directly.
-//         if isFile(v) {
-//         	logger.Printf("checkIfDifferent data is string and file")
-//             b, err := os.ReadFile(v)
-//             if err == nil {
-//                 content = string(b)
-//             } else {
-//                 content = v // fallback if it fails to read the file
-//             }
-//         } else {
-//         	logger.Printf("checkIfDifferent data is string [1]")
-//             content = v
-//         }
-//     case []byte:
-//     	logger.Printf("checkIfDifferent data is byte")
-//         content = string(v)
-//     default:
-//         // Handle if the data type is unknown
-//         logger.Printf("checkIfDifferent data is unknown !")
-//         return true 
-//     }
-
-//     // 2. Compare with existing files
-//     if existingData, err := os.ReadFile(filePath); err == nil {
-//         if string(existingData) == content {
-//             logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
-//             fmt.Printf("ℹ️ %s%sContent identical to current file%s, %s%sno changes needed%s\n", ColorWhite, BgBlue, ColorReset, ColorWhite, BgYellow, ColorReset)
-//             fmt.Printf("📄 File: %s\n", filePath)
-//             return false
-//         }
-//     } else {
-//     	logger.Printf("checkIfDifferent error: %v", err)
-//     }
-//    
-//     return true
-// }
 
 func checkIfDifferent(filePath string, data any) bool {
     logger.Printf("checkIfDifferent %s and data", filePath)
@@ -6198,80 +5703,6 @@ func setGlobalFlags(info *CommandInfo) {
 	}
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		printHelp()
-		os.Exit(1)
-	}
-
-	// Handle special cases first
-	if len(os.Args) == 2 {
-		switch os.Args[1] {
-		case "-h", "--help":
-			printHelp()
-			os.Exit(0)
-		case "-v", "--version":
-			printVersion()
-			os.Exit(0)
-		}
-	}
-
-	// Parse all arguments flexibly
-	info := parseArguments(os.Args[1:])
-
-	// Set global flags
-	setGlobalFlags(info)
-
-	// Setup logger
-	setupLogger()
-
-	// If no command found, treat as default write command
-	if info.Command == "" {
-		handleDefaultWrite(info)
-		return
-	}
-
-	// Route to appropriate handler
-	var err error
-	switch info.Command {
-	case "show":
-		err = handleShowWithInfo(info)
-	case "move", "mv", "-mv":
-		err = handleMoveWithInfo(info)
-	case "fix":
-		err = handleFixWithInfo(info)
-	case "-z":
-		err = handleTempWithInfo(info)
-	case "check", "-c", "--check":
-		err = handleCheckWithInfo(info)
-	case "backup", "-b":
-		err = handleBackupWithInfo(info)
-	case "commit":
-		err = handleCommitWithInfo(info)
-	case "config":
-		err = handleConfigWithInfo(info)
-	case "-t", "--tree":
-		err = handleTreeWithInfo(info)
-	case "-rm", "--remove":
-		err = handleRemoveWithInfo(info)
-	case "-l", "--list":
-		err = handleListWithInfo(info)
-	case "-d", "--diff":
-		err = handleDiffWithInfo(info)
-	case "-r", "--restore":
-		err = handleRestoreWithInfo(info)
-	case "+":
-		err = handleAppendWithInfo(info)
-	case "-mt", "--monitor":
-		err = handleMonitorWithInfo(info)
-	}
-
-	if err != nil {
-		fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-		os.Exit(1)
-	}
-}
-
 // Handler wrappers using CommandInfo
 
 func handleShowWithInfo(info *CommandInfo) error {
@@ -6362,18 +5793,54 @@ func handleBackupWithInfo(info *CommandInfo) error {
 		filePath = filename
 	}
 
-	backups, _ := listBackups(filePath)
-	if len(backups) > 0 {
-		if !checkIfDifferent(filename, backups[0].Path) {
-			os.Exit(1)
-		}
-	}
-
 	if checkBefore {
 		fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
+
+		text, err := os.ReadFile(filePath)
+
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+
+		backups, err := listBackups(filePath)
+	    if err != nil {
+	    	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+	        os.Exit(1)
+	    }
+
+	    if len(backups) == 0 {
+	        fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
+	        // err = writeFile(filePath, text, false, checkBefore, comment)
+	        _, err = autoRenameIfExists(filePath, comment)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+	    } else {
+		    var selectedBackup BackupInfo
+
+		    selectedBackup = backups[0]
+	        fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+		    
+			
+			if !checkIfDifferent(selectedBackup.Path, text) {
+				fmt.Printf("⚠ %sLast backup:%s %s%s%s%s %sand clipboard is identical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, ColorReset, ColorYellow, ColorReset)
+				os.Exit(1)
+			}
+
+			// err = writeFile(filePath, text, false, checkBefore, comment)
+			_, err = autoRenameIfExists(filePath, comment)
+			if err != nil {
+				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+				os.Exit(1)
+			}
+		}
+	} else {
+		_, err = autoRenameIfExists(filePath, comment)
+		return err
 	}
 
-	autoRenameIfExists(filePath, comment)
 	return nil
 }
 
@@ -6652,5 +6119,80 @@ func handleDefaultWrite(info *CommandInfo) {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 			os.Exit(1)
 		}
+	}
+}
+
+
+func main() {
+	if len(os.Args) < 2 {
+		printHelp()
+		os.Exit(1)
+	}
+
+	// Handle special cases first
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case "-h", "--help":
+			printHelp()
+			os.Exit(0)
+		case "-v", "--version":
+			printVersion()
+			os.Exit(0)
+		}
+	}
+
+	// Parse all arguments flexibly
+	info := parseArguments(os.Args[1:])
+
+	// Set global flags
+	setGlobalFlags(info)
+
+	// Setup logger
+	setupLogger()
+
+	// If no command found, treat as default write command
+	if info.Command == "" {
+		handleDefaultWrite(info)
+		return
+	}
+
+	// Route to appropriate handler
+	var err error
+	switch info.Command {
+	case "show":
+		err = handleShowWithInfo(info)
+	case "move", "mv", "-mv":
+		err = handleMoveWithInfo(info)
+	case "fix":
+		err = handleFixWithInfo(info)
+	case "-z":
+		err = handleTempWithInfo(info)
+	case "check", "-c", "--check":
+		err = handleCheckWithInfo(info)
+	case "backup", "-b":
+		err = handleBackupWithInfo(info)
+	case "commit":
+		err = handleCommitWithInfo(info)
+	case "config":
+		err = handleConfigWithInfo(info)
+	case "-t", "--tree":
+		err = handleTreeWithInfo(info)
+	case "-rm", "--remove":
+		err = handleRemoveWithInfo(info)
+	case "-l", "--list":
+		err = handleListWithInfo(info)
+	case "-d", "--diff":
+		err = handleDiffWithInfo(info)
+	case "-r", "--restore":
+		err = handleRestoreWithInfo(info)
+	case "+":
+		err = handleAppendWithInfo(info)
+	case "-mt", "--monitor":
+		err = handleMonitorWithInfo(info)
+	}
+
+	if err != nil {
+		fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		os.Exit(1)
 	}
 }
