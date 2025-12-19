@@ -25,6 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"context"
+    "unicode/utf8"
+
 	// "golang.org/x/sys/windows"
 	"github.com/atotto/clipboard"
 	"gopkg.in/yaml.v3"
@@ -34,6 +37,7 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 	"golang.org/x/term"
+	"github.com/spf13/afero"
 
 	// "github.com/gdamore/tcell/v2"
 	// "github.com/acarl005/stripansi"
@@ -69,6 +73,8 @@ var debugMode bool = false
 var difftool string = "delta"
 var foundZ bool = false
 var checkBefore bool = false
+// Global filesystem variable - defaults to OS filesystem
+var fs afero.Fs = afero.NewOsFs()
 
 // ANSI color codes for pretty output
 const (
@@ -4758,21 +4764,7 @@ func getClipboardText() (string, error) {
 	return text, nil
 }
 
-func autoRenameIfExists(filePath, comment string) (string, error) {
-	info, err := os.Stat(filePath)
-	if os.IsNotExist(err) {
-		return filePath, nil
-	}
-	if err != nil {
-		return filePath, fmt.Errorf("failed to check file: %w", err)
-	}
-
-	if info.Size() == 0 {
-		logger.Printf("Skipping backup of empty file: %s", filePath)
-		return filePath, nil
-	}
-
-	// Ensure .pt directory exists (searches parent dirs)
+func getBackupPath(filePath string) (string, error) {
 	ptRoot, err := ensurePTDir(filePath)
 	if err != nil {
 		return filePath, err
@@ -4793,6 +4785,26 @@ func autoRenameIfExists(filePath, comment string) (string, error) {
 
 	backupPath := filepath.Join(backupDir, backupFileName)
 
+	return backupPath, err
+}
+
+func autoRenameIfExists(filePath, comment string) (string, error) {
+	info, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		return filePath, nil
+	}
+	if err != nil {
+		return filePath, fmt.Errorf("failed to check file: %w", err)
+	}
+
+	if info.Size() == 0 {
+		logger.Printf("Skipping backup of empty file: %s", filePath)
+		return filePath, nil
+	}
+
+	// Ensure .pt directory exists (searches parent dirs)
+	backupPath, _ := getBackupPath(filePath)
+
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return filePath, fmt.Errorf("failed to read file for backup: %w", err)
@@ -4809,6 +4821,7 @@ func autoRenameIfExists(filePath, comment string) (string, error) {
 	}
 
 	logger.Printf("Backup created: %s -> %s", filePath, backupPath)
+	backupFileName := filepath.Base(backupPath)
 	if comment != "" {
 		logger.Printf("Backup comment: %s", comment)
 		fmt.Printf("📦 Backup created: %s%s%s\n", ColorBrightYellow, backupFileName, ColorReset)
@@ -4820,13 +4833,105 @@ func autoRenameIfExists(filePath, comment string) (string, error) {
 	return filePath, nil
 }
 
-func isFile(path string) bool {
-    info, err := os.Stat(path)
-    if err != nil {
-        return false  // File does not exist = false
+func isFileWithTimeout(path string, timeout time.Duration) bool {
+    type result struct {
+        info os.FileInfo
+        err  error
     }
-    return !info.IsDir()  // Not directory = true, Directory = false
+    
+    ch := make(chan result, 1)
+    
+    go func() {
+        info, err := os.Stat(path)
+        ch <- result{info, err}
+    }()
+    
+    select {
+    case res := <-ch:
+        if res.err != nil {
+            return false
+        }
+        return !res.info.IsDir()
+    case <-time.After(timeout):
+        logger.Printf("isFile: timeout after %v for path: %s", timeout, path)
+        return false
+    }
 }
+
+func isFile(path string) bool {
+    if len(path) == 0 {
+        return false
+    }
+    
+    if !utf8.ValidString(path) {
+        return false
+    }
+    
+    cleanPath := filepath.Clean(path)
+    
+    // Reject if it's too long
+    if len(cleanPath) > 32768 {
+        return false
+    }
+    
+    // FILTERS ARE NOT PATH
+    lowerPath := strings.ToLower(cleanPath)
+    
+    // Quickly disavow URLs
+    if strings.HasPrefix(lowerPath, "http://") || 
+       strings.HasPrefix(lowerPath, "https://") ||
+       strings.HasPrefix(lowerPath, "ftp://") ||
+       strings.HasPrefix(lowerPath, "file://") {
+        return false
+    }
+    
+    // Reject if there is a newline
+    if strings.Contains(cleanPath, "\n") || strings.Contains(cleanPath, "\r") {
+        return false
+    }
+    
+    // Tolak JSON/XML looking
+    trimmed := strings.TrimSpace(cleanPath)
+    if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && 
+       len(cleanPath) > 500 {
+        return false
+    }
+    
+    // CHECK WITH AFERO + TIMEOUT
+    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+    defer cancel()
+    
+    resultChan := make(chan bool, 1)
+    
+    go func() {
+        info, err := fs.Stat(cleanPath)
+        if err != nil {
+            resultChan <- false
+            return
+        }
+        resultChan <- !info.IsDir()
+    }()
+    
+    select {
+    case result := <-resultChan:
+        return result
+    case <-ctx.Done():
+        return false
+    }
+}
+
+
+// func isFile(path string) bool {
+// 	logger.Printf("isFile: start checking ...")
+//     info, err := os.Stat(path)
+//     logger.Printf("isFile: info: %s", info)
+//     if err != nil {
+//     	logger.Printf("isFile: err: %v", err)
+//         return false  // File does not exist = false
+//     }
+//     logger.Printf("isFile: err: %v", !info.IsDir())
+//     return !info.IsDir()  // Not directory = true, Directory = false
+// }
 
 // func checkIfDifferent(filePath string, data string) (bool) {
 // 	if isFile(data) {
@@ -4849,12 +4954,16 @@ func isFile(path string) bool {
 
 func checkIfDifferent(filePath string, data any) bool {
     var content string
+   	
+   	logger.Printf("checkIfDifferent %s and data", filePath)
 
     // 1. Convert 'any' to string based on its type
     switch v := data.(type) {
     case string:
+    	logger.Printf("checkIfDifferent data is string [0]")
         // If input is a file path, read its contents. If not, use the string directly.
         if isFile(v) {
+        	logger.Printf("checkIfDifferent data is string and file")
             b, err := os.ReadFile(v)
             if err == nil {
                 content = string(b)
@@ -4862,12 +4971,15 @@ func checkIfDifferent(filePath string, data any) bool {
                 content = v // fallback if it fails to read the file
             }
         } else {
+        	logger.Printf("checkIfDifferent data is string [1]")
             content = v
         }
     case []byte:
+    	logger.Printf("checkIfDifferent data is byte")
         content = string(v)
     default:
         // Handle if the data type is unknown
+        logger.Printf("checkIfDifferent data is unknown !")
         return true 
     }
 
@@ -4879,6 +4991,8 @@ func checkIfDifferent(filePath string, data any) bool {
             fmt.Printf("📄 File: %s\n", filePath)
             return false
         }
+    } else {
+    	logger.Printf("checkIfDifferent error: %v", err)
     }
     
     return true
@@ -4892,12 +5006,16 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 	// Create parent directory if it doesn't exist
 	dir := filepath.Dir(filePath)
 	logger.Printf("Ensured directory exists: %s", dir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", dir, err)
-	}
-	logger.Printf("Successfully create dir: %s", dir)
-	fmt.Printf("✅ Directory created: %s\n", dir)
+	
+	if stat, err := os.Stat(dir); err != nil && !stat.IsDir() {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+		logger.Printf("Successfully create dir: %s", dir)
+		fmt.Printf("✅ Directory created: %s\n", dir)
 
+	} 
+	
 	if checkMode && !appendMode {
 		if !checkIfDifferent(filePath, data) {
 			return nil
@@ -6380,7 +6498,36 @@ func handleAppendWithInfo(info *CommandInfo) error {
 		filePath = filename
 	}
 
-	return writeFile(filePath, text, true, false, comment)
+	backups, err := listBackups(filePath)
+	if err != nil {
+	    return err
+	}
+
+	if len(backups) == 0 {
+	    fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
+	    return writeFile(filePath, text, true, false, comment)
+		// if err != nil {
+		// 	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		// 	os.Exit(1)
+		// }
+	} else {
+	    var selectedBackup BackupInfo
+
+	    selectedBackup = backups[0]
+	    fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	    
+		
+		if !checkIfDifferent(selectedBackup.Path, text) {
+			fmt.Printf("⚠️ %sLast backup:%s %s%s%s%s %sand clipboard is identical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, ColorReset, ColorYellow, ColorReset)
+			os.Exit(1)
+		}
+
+		return writeFile(filePath, text, true, false, comment)
+		// if err != nil {
+		// 	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		// 	os.Exit(1)
+		// }
+	}
 }
 
 func handleDefaultWrite(info *CommandInfo) {
@@ -6415,9 +6562,35 @@ func handleDefaultWrite(info *CommandInfo) {
 		fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
 	}
 
-	err = writeFile(filePath, text, false, checkBefore, comment)
-	if err != nil {
-		fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
-		os.Exit(1)
+	backups, err := listBackups(filePath)
+    if err != nil {
+    	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+        os.Exit(1)
+    }
+
+    if len(backups) == 0 {
+        fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
+        err = writeFile(filePath, text, false, checkBefore, comment)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+    } else {
+	    var selectedBackup BackupInfo
+
+	    selectedBackup = backups[0]
+        fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	    
+		
+		if !checkIfDifferent(selectedBackup.Path, text) {
+			fmt.Printf("⚠ %sLast backup:%s %s%s%s%s %sand clipboard is identical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, ColorReset, ColorYellow, ColorReset)
+			os.Exit(1)
+		}
+
+		err = writeFile(filePath, text, false, checkBefore, comment)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
 	}
 }
