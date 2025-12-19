@@ -4952,51 +4952,111 @@ func isFile(path string) bool {
 // 	return true
 // }
 
-func checkIfDifferent(filePath string, data any) bool {
-    var content string
+// func checkIfDifferent(filePath string, data any) bool {
+//     var content string
    	
-   	logger.Printf("checkIfDifferent %s and data", filePath)
+//    	logger.Printf("checkIfDifferent %s and data", filePath)
 
-    // 1. Convert 'any' to string based on its type
-    switch v := data.(type) {
-    case string:
-    	logger.Printf("checkIfDifferent data is string [0]")
-        // If input is a file path, read its contents. If not, use the string directly.
-        if isFile(v) {
-        	logger.Printf("checkIfDifferent data is string and file")
-            b, err := os.ReadFile(v)
-            if err == nil {
-                content = string(b)
-            } else {
-                content = v // fallback if it fails to read the file
-            }
-        } else {
-        	logger.Printf("checkIfDifferent data is string [1]")
-            content = v
-        }
-    case []byte:
-    	logger.Printf("checkIfDifferent data is byte")
-        content = string(v)
-    default:
-        // Handle if the data type is unknown
-        logger.Printf("checkIfDifferent data is unknown !")
-        return true 
+//     // 1. Convert 'any' to string based on its type
+//     switch v := data.(type) {
+//     case string:
+//     	logger.Printf("checkIfDifferent data is string [0]")
+//         // If input is a file path, read its contents. If not, use the string directly.
+//         if isFile(v) {
+//         	logger.Printf("checkIfDifferent data is string and file")
+//             b, err := os.ReadFile(v)
+//             if err == nil {
+//                 content = string(b)
+//             } else {
+//                 content = v // fallback if it fails to read the file
+//             }
+//         } else {
+//         	logger.Printf("checkIfDifferent data is string [1]")
+//             content = v
+//         }
+//     case []byte:
+//     	logger.Printf("checkIfDifferent data is byte")
+//         content = string(v)
+//     default:
+//         // Handle if the data type is unknown
+//         logger.Printf("checkIfDifferent data is unknown !")
+//         return true 
+//     }
+
+//     // 2. Compare with existing files
+//     if existingData, err := os.ReadFile(filePath); err == nil {
+//         if string(existingData) == content {
+//             logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
+//             fmt.Printf("ℹ️ %s%sContent identical to current file%s, %s%sno changes needed%s\n", ColorWhite, BgBlue, ColorReset, ColorWhite, BgYellow, ColorReset)
+//             fmt.Printf("📄 File: %s\n", filePath)
+//             return false
+//         }
+//     } else {
+//     	logger.Printf("checkIfDifferent error: %v", err)
+//     }
+//    
+//     return true
+// }
+
+func checkIfDifferent(filePath string, data any) bool {
+    logger.Printf("checkIfDifferent %s and data", filePath)
+    
+    // Baca konten dari file target terlebih dahulu
+    existingData, err := os.ReadFile(filePath)
+    if err != nil {
+        // File belum ada, pasti berbeda
+        logger.Printf("checkIfDifferent: target file doesn't exist or can't be read")
+        return true
     }
-
-    // 2. Compare with existing files
-    if existingData, err := os.ReadFile(filePath); err == nil {
-        if string(existingData) == content {
-            logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
-            fmt.Printf("ℹ️ Content identical to current file, no changes needed\n")
-            fmt.Printf("📄 File: %s\n", filePath)
-            return false
-        }
-    } else {
-    	logger.Printf("checkIfDifferent error: %v", err)
+    existingContent := string(existingData)
+    
+    // Normalisasi data input menjadi string konten
+    inputContent, err := normalizeDataToString(data)
+    if err != nil {
+        logger.Printf("checkIfDifferent: failed to normalize data: %v", err)
+        return true
+    }
+    
+    // Bandingkan konten yang sudah dinormalisasi
+    if existingContent == inputContent {
+        logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
+        fmt.Printf("ℹ️ %s%sContent identical to current file%s, %s%sno changes needed%s\n", 
+            ColorWhite, BgBlue, ColorReset, ColorWhite, BgYellow, ColorReset)
+        fmt.Printf("📄 File: %s\n", filePath)
+        return false
     }
     
     return true
 }
+
+// Helper function untuk normalisasi semua tipe data menjadi string konten
+func normalizeDataToString(data any) (string, error) {
+    switch v := data.(type) {
+    case string:
+        logger.Printf("normalizeDataToString: input is string")
+        // Cek apakah string ini adalah path file yang valid
+        if isFile(v) {
+            logger.Printf("normalizeDataToString: string is a file path")
+            b, err := os.ReadFile(v)
+            if err != nil {
+                return "", fmt.Errorf("failed to read file %s: %w", v, err)
+            }
+            return string(b), nil
+        }
+        // Jika bukan file, anggap sebagai konten langsung
+        logger.Printf("normalizeDataToString: string is direct content")
+        return v, nil
+        
+    case []byte:
+        logger.Printf("normalizeDataToString: input is []byte")
+        return string(v), nil
+        
+    default:
+        logger.Printf("normalizeDataToString: unsupported type %T", v)
+        return "", fmt.Errorf("unsupported data type: %T", v)
+    }
+}
+
 
 func writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) error {
 	if err := validatePath(filePath); err != nil {
