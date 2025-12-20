@@ -302,9 +302,9 @@ func handleShowCommand(args []string) error {
 				themeName = args[i+1]
 				i++
 			}
-		case "--no-line-numbers":
+		case "--no-line-numbers", "-nl":
 			showLineNumbers = false
-		case "--no-grid":
+		case "--no-grid", "-ng":
 			showGrid = false
 		case "--no-pager", "-np":
 			usePager = false
@@ -1065,6 +1065,146 @@ func handleDiffCommand(args []string) error {
         }
     }
 
+    return nil
+}
+
+func handleDiffCommand2(args []string, isClipboard *bool) error {
+
+	var filePath string
+    // var text string
+    useLast := false
+    var selectedBackup BackupInfo
+    // var err error
+
+    // Parse arguments
+    // for i := 0; i < len(args); i++ {
+    for i := range args {
+        arg := args[i]
+        
+        if arg == "--last" || arg == "-lt" {
+            useLast = true
+            continue
+        }
+        
+        // First non-flag argument is assumed to be file path
+        if filePath == "" && arg[0] != '-' {
+            filePath = arg
+            logger.Printf("filePath [0]: %s", filePath)
+        }
+    }
+
+    logger.Printf("filePath [00]: %s", filePath)
+
+    if filePath != "" {
+        resolvedPath, err := resolveFilePath(filePath)
+        logger.Printf("resolvedPath: %s", resolvedPath)
+        if err != nil {
+            fmt.Printf("❎ %sfile%s %s%s%s %snot found!%s\n", 
+                ColorRed, ColorReset, ColorYellow, filePath, 
+                ColorReset, ColorRed, ColorReset)
+            return err
+        }
+        filePath = resolvedPath
+        logger.Printf("filePath [1]: %s", filePath)
+        
+        if !isFile(filePath) {
+            return fmt.Errorf("file does not exist: %s", filePath)
+        }
+    }
+
+    logger.Printf("filePath [2]: %s", filePath)
+
+    if useLast {
+        if filePath == "" {
+            return fmt.Errorf("--last option requires a file path")
+        }
+        
+        backups, err := listBackups(filePath)
+        if err != nil {
+            fmt.Printf("❎ %sno backup for:%s %s%s%s %snot found!%s: %s%v%s\n", 
+                ColorRed, ColorReset, ColorYellow, filePath, 
+                ColorReset, ColorRed, ColorReset, ColorYellow, err, ColorReset)
+            return err
+        }
+
+        if len(backups) == 0 {
+            return fmt.Errorf("no backups found for: %s (check %s/ directory)", 
+                filePath, appConfig.BackupDirName)
+        }
+
+        selectedBackup = backups[0]
+        fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", 
+            ColorCyan, selectedBackup.Name, ColorReset)
+    }
+
+    fmt.Printf("%sDiffing use%s %s%s`%s`%s\n", 
+        ColorMagenta, ColorReset, ColorWhite, ColorBlue, "PDiff2", ColorReset)
+
+    // Run diff
+    pdiff := &PDiff2{}
+
+	// Handle different comparison scenarios
+    if *isClipboard && filePath != "" {
+        // Compare file with clipboard
+        text, err := getClipboardText()
+        if err != nil {
+            fmt.Printf("❌ %sError getting data from clipboard%s\n", 
+                ColorRed, ColorReset)
+            return err
+        }
+        
+        diff, err := pdiff.DiffFiles(filePath, text)
+        if err != nil {
+            return fmt.Errorf("diff failed: %w", err)
+        }
+        
+        pdiff.PrintDiff(diff)
+        
+    } else if filePath != "" && useLast {
+        logger.Printf("Compare file with last backup")
+        if selectedBackup.Path == "" {
+            return fmt.Errorf("no backup selected for comparison")
+        }
+        
+        diff, err := pdiff.DiffFiles(filePath, selectedBackup.Path)
+        if err != nil {
+            fmt.Printf("%sdiff execution failed for%s %s%s%s <-> %s%s%s: %v\n", 
+                ColorRed, ColorReset, ColorCyan, filePath, 
+                ColorReset, ColorYellow, selectedBackup.Name, ColorReset, err)
+            return err
+        }
+        
+        pdiff.PrintDiff(diff)
+        
+    } else if filePath != "" {
+	    logger.Printf("Compare with git (assuming file is in git repo)")
+	    // Compare specific file with git
+	    if _, err := os.Stat(".git"); os.IsNotExist(err) {
+	        return fmt.Errorf("not a Git repository")
+	    }
+	    
+	    // Pass filePath to GetGitDiff
+	    diffText, err := pdiff.GetGitDiff(false, filePath)
+	    if err != nil {
+	        return fmt.Errorf("git diff failed: %w", err)
+	    }
+	    
+	    pdiff.PrintDiff(diffText)
+        
+    } else {
+        logger.Printf("No file specified, show git diff of current repo")
+        if _, err := os.Stat(".git"); os.IsNotExist(err) {
+            return fmt.Errorf("not a Git repository")
+        }
+        
+        diffText, err := pdiff.GetGitDiff(false)
+        if err != nil {
+            return fmt.Errorf("git diff failed: %w", err)
+        }
+        
+        pdiff.PrintDiff(diffText)
+    }
+    
     return nil
 }
 
@@ -4572,14 +4712,31 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 	dir := filepath.Dir(filePath)
 	logger.Printf("Ensured directory exists: %s", dir)
 	
-	if stat, err := os.Stat(dir); err != nil && !stat.IsDir() {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
-		}
-		logger.Printf("Successfully create dir: %s", dir)
-		fmt.Printf("✅ Directory created: %s\n", dir)
+	// if stat, err := os.Stat(dir); err != nil && !stat.IsDir() {
+	// 	if err := os.MkdirAll(dir, 0755); err != nil {
+	// 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	// 	}
+	// 	logger.Printf("Successfully create dir: %s", dir)
+	// 	fmt.Printf("✅ Directory created: %s\n", dir)
 
-	} 
+	// } 
+
+	stat, err := os.Stat(dir)
+	if err != nil {
+		// Directory doesn't exist, create it
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			}
+			logger.Printf("Successfully created dir: %s", dir)
+			fmt.Printf("✅ Directory created: %s\n", dir)
+		} else {
+			return fmt.Errorf("failed to check directory %s: %w", dir, err)
+		}
+	} else if !stat.IsDir() {
+		// Path exists but is not a directory
+		return fmt.Errorf("path exists but is not a directory: %s", dir)
+	}
 	
 	if checkMode && !appendMode {
 		if !checkIfDifferent(filePath, data) {
@@ -4860,6 +5017,10 @@ func printHelp() {
 	fmt.Printf("  %spt -d <filename> -z%s         Diff clipboard with file\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> -z -T meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -d <filename> -z --tool meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd                         %s Diff with colors and git style \n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd <filename> -z           %s Diff with colors and git style between filename and clipboard \n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd <filename1> <filename1> %s Diff with colors and git style between filename1 and filename2 \n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd <filename> --last       %s Diff with colors and git style between filename and last backup \n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s🌳 TREE & UTILITIES:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt -t [path]%s                Show directory tree\n", ColorGreen, ColorReset)
@@ -5490,7 +5651,7 @@ func parseArguments(args []string) *CommandInfo {
 		"-t": true, "--tree": true, "-rm": true, "--remove": true,
 		"-l": true, "--list": true, "-d": true, "--diff": true,
 		"-r": true, "--restore": true, "+": true,
-		"-mt": true, "--monitor": true,
+		"-mt": true, "--monitor": true, "-dd": true, "--diff2": true,
 	}
 
 	// Value flags that take an argument
@@ -5940,6 +6101,22 @@ func handleDiffWithInfo(info *CommandInfo) error {
 	return handleDiffCommand(args)
 }
 
+func handleDiffWithInfo2(info *CommandInfo) error {
+	useClipboard := false
+	if info.BoolFlags["-z"] {
+		useClipboard = true
+	}
+
+	args := []string{}
+	args = append(args, info.Files...)
+
+	if info.BoolFlags["--last"] || info.BoolFlags["-lt"] {
+		args = append(args, "--last")
+	}
+	
+	return handleDiffCommand2(args, &useClipboard)
+}
+
 func handleRestoreWithInfo(info *CommandInfo) error {
 	if len(info.Files) == 0 {
 		fmt.Printf("%s❌ Error: Filename required%s\n", ColorRed, ColorReset)
@@ -6049,6 +6226,7 @@ func handleAppendWithInfo(info *CommandInfo) error {
 			os.Exit(1)
 		}
 
+		// func writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) 
 		return writeFile(filePath, text, true, false, comment)
 		// if err != nil {
 		// 	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -6089,6 +6267,11 @@ func handleDefaultWrite(info *CommandInfo) {
 		fmt.Printf("🔍 Check mode enabled - will skip if content identical\n")
 	}
 
+	if !checkIfDifferent(filePath, text) {
+		fmt.Printf(" ⚠ %sFile:%s %s%s%s%s %sand clipboard is identical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, filePath, ColorReset, ColorYellow, ColorReset)
+		os.Exit(1)
+	}
+
 	backups, err := listBackups(filePath)
     if err != nil {
     	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -6096,7 +6279,7 @@ func handleDefaultWrite(info *CommandInfo) {
     }
 
     if len(backups) == 0 {
-        fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
+        fmt.Printf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
         err = writeFile(filePath, text, false, checkBefore, comment)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -6110,10 +6293,11 @@ func handleDefaultWrite(info *CommandInfo) {
 	    
 		
 		if !checkIfDifferent(selectedBackup.Path, text) {
-			fmt.Printf("⚠ %sLast backup:%s %s%s%s%s %sand clipboard is identical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, ColorReset, ColorYellow, ColorReset)
+			fmt.Printf(" ⚠ %sLast backup:%s %s%s%s%s %sand clipboard is identical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, ColorReset, ColorYellow, ColorReset)
 			os.Exit(1)
 		}
 
+		// func writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) 
 		err = writeFile(filePath, text, false, checkBefore, comment)
 		if err != nil {
 			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
@@ -6159,11 +6343,11 @@ func main() {
 	// Route to appropriate handler
 	var err error
 	switch info.Command {
-	case "show":
+	case "show", "-ss":
 		err = handleShowWithInfo(info)
 	case "move", "mv", "-mv":
 		err = handleMoveWithInfo(info)
-	case "fix":
+	case "fix", "-f":
 		err = handleFixWithInfo(info)
 	case "-z":
 		err = handleTempWithInfo(info)
@@ -6183,6 +6367,8 @@ func main() {
 		err = handleListWithInfo(info)
 	case "-d", "--diff":
 		err = handleDiffWithInfo(info)
+	case "-dd", "--diff2":
+		err = handleDiffWithInfo2(info)
 	case "-r", "--restore":
 		err = handleRestoreWithInfo(info)
 	case "+":

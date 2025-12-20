@@ -336,7 +336,8 @@ func triggerFileAction(path string, action string) {
 		// NOTE: After adding AutoBackup field to Config struct in main.go,
 		// this will work automatically. Default is TRUE.
 		if appConfig.AutoBackup == nil || *appConfig.AutoBackup {
-			comment := fmt.Sprintf("Auto-backup on %s", action)
+			// comment := fmt.Sprintf("Auto-backup on %s", action)
+			comment := ""
 			err := autoBackupFile(absPath, comment)
 			if err != nil {
 				if logger != nil {
