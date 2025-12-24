@@ -57,14 +57,26 @@ const (
 var Version string = "dev"
 
 // Config holds the application configuration
+type MenuIconsConfig struct {
+	Start        string `yaml:"start"`
+	Stop         string `yaml:"stop"`
+	Pause        string `yaml:"pause"`
+	Resume       string `yaml:"resume"`
+	Notification string `yaml:"notification"`
+	Exit         string `yaml:"exit"`
+}
+
 type Config struct {
-	MaxClipboardSize int    `yaml:"max_clipboard_size"`
-	MaxBackupCount   int    `yaml:"max_backup_count"`
-	MaxFilenameLen   int    `yaml:"max_filename_length"`
-	BackupDirName    string `yaml:"backup_dir_name"`
-	MaxSearchDepth   int    `yaml:"max_search_depth"`
-	DiffTool         string `yaml:"diff_tool"`
-	AutoBackup      *bool   `yaml:"auto_backup"` 
+	MaxClipboardSize int              `yaml:"max_clipboard_size"`
+	MaxBackupCount   int              `yaml:"max_backup_count"`
+	MaxFilenameLen   int              `yaml:"max_filename_length"`
+	BackupDirName    string           `yaml:"backup_dir_name"`
+	MaxSearchDepth   int              `yaml:"max_search_depth"`
+	DiffTool         string           `yaml:"diff_tool"`
+	AutoBackup      *bool             `yaml:"auto_backup"`
+	TrayIcon        string            `yaml:"tray_icon"`        // Main tray icon
+	MenuIconsDir    string            `yaml:"menu_icons_dir"`   // Directory for menu icons
+	MenuIcons       MenuIconsConfig   `yaml:"menu_icons"`       // Individual menu icon names
 }
 
 // Global config instance
@@ -950,7 +962,7 @@ func handleAutoBackup(auto_backup bool, filePath string, original []byte) error 
     }
     
     // File changed, create backup
-    _, err := autoRenameIfExists(filePath, "")
+    _, err := autoRenameIfExists(filePath, "", false)
     return err
 }
 
@@ -1857,7 +1869,7 @@ func handleCommitCommand(args []string) error {
 		relPath, _ := filepath.Rel(projectRoot, file)
 
 		// Create backup
-		_, err := autoRenameIfExists(file, commitMessage)
+		_, err := autoRenameIfExists(file, commitMessage, false)
 		if err != nil {
 			fmt.Printf("%s✗%s %s: %v\n", ColorRed, ColorReset, relPath, err)
 			failCount++
@@ -2112,7 +2124,7 @@ func handleRemoveCommand(args []string) error {
 		if comment == "" {
 			comment = "Deleted file backup"
 		}
-		_, err = autoRenameIfExists(filePath, comment)
+		_, err = autoRenameIfExists(filePath, comment, false)
 		if err != nil {
 			return fmt.Errorf("failed to create backup: %w", err)
 		}
@@ -2662,7 +2674,7 @@ func handleMoveCommand(args []string) error {
 
 		// Create backup of the move operation if comment provided
 		if comment != "" {
-			_, err = autoRenameIfExists(finalDestPath, "move: "+comment)
+			_, err = autoRenameIfExists(finalDestPath, "move: "+comment, false)
 			if err != nil {
 				logger.Printf("Warning: failed to create move backup for %s: %v", finalDestPath, err)
 			}
@@ -3196,7 +3208,7 @@ func restoreBackup(backupPath, originalPath, comment string) error {
 		if comment == "" {
 			comment = "Backup before restore"
 		}
-		_, err = autoRenameIfExists(originalPath, comment)
+		_, err = autoRenameIfExists(originalPath, comment, false)
 		if err != nil {
 			return fmt.Errorf("failed to backup current file: %w", err)
 		}
@@ -4511,7 +4523,7 @@ func getBackupPath(filePath string) (string, error) {
 	return backupPath, err
 }
 
-func autoRenameIfExists(filePath, comment string) (string, error) {
+func autoRenameIfExists(filePath, comment string, check bool) (string, error) {
 	info, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
 		return filePath, nil
@@ -4523,6 +4535,33 @@ func autoRenameIfExists(filePath, comment string) (string, error) {
 	if info.Size() == 0 {
 		logger.Printf("Skipping backup of empty file: %s", filePath)
 		return filePath, nil
+	}
+
+	if check {
+		filePath, err := resolveFilePath(filePath)
+		if err != nil {
+			filePath = filePath
+		}
+
+		backups, err := listBackups(filePath)
+	    if err != nil {
+	    	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+	        os.Exit(1)
+	    }
+
+	    if len(backups) > 0 {
+		    var selectedBackup BackupInfo
+
+		    selectedBackup = backups[0]
+	        fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+		    
+			
+			if !checkIfDifferent(filePath, selectedBackup.Path) {
+				fmt.Printf(" ⚠ %sLast backup:%s %s%s%s%s %sand%s %s'%s'%s %sis%s %s%sidentical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, ColorReset, ColorYellow, ColorReset, ColorCyan, filePath, ColorReset, ColorYellow, ColorReset, ColorWhite, BgMagenta, ColorReset)
+				return filePath, nil
+			}
+		}
+		
 	}
 
 	// Ensure .pt directory exists (searches parent dirs)
@@ -4646,27 +4685,27 @@ func isFile(path string) bool {
 func checkIfDifferent(filePath string, data any) bool {
     logger.Printf("checkIfDifferent %s and data", filePath)
     
-    // Baca konten dari file target terlebih dahulu
+    // Read the contents of the target file first
     existingData, err := os.ReadFile(filePath)
     if err != nil {
-        // File belum ada, pasti berbeda
+        // The file doesn't exist yet, it must be different
         logger.Printf("checkIfDifferent: target file doesn't exist or can't be read")
         return true
     }
     existingContent := string(existingData)
     
-    // Normalisasi data input menjadi string konten
+    // Normalize input data to content string
     inputContent, err := normalizeDataToString(data)
     if err != nil {
         logger.Printf("checkIfDifferent: failed to normalize data: %v", err)
         return true
     }
     
-    // Bandingkan konten yang sudah dinormalisasi
+    // Compare normalized content
     if existingContent == inputContent {
         logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
-        fmt.Printf("ℹ️ %s%sContent identical to current file%s, %s%sno changes needed%s\n", 
-            ColorWhite, BgBlue, ColorReset, ColorWhite, BgYellow, ColorReset)
+        fmt.Printf("ℹ️ %s%sContent identical to%s %s`%s`%s, %s%sno changes needed%s\n", 
+            ColorWhite, BgBlue, ColorReset, ColorCyan, filePath, ColorReset, ColorWhite, BgYellow, ColorReset)
         fmt.Printf("📄 File: %s\n", filePath)
         return false
     }
@@ -4752,7 +4791,7 @@ func writeFile(filePath string, data string, appendMode bool, checkMode bool, co
 
 	if !appendMode {
 		var err error
-		filePath, err = autoRenameIfExists(filePath, comment)
+		filePath, err = autoRenameIfExists(filePath, comment, false)
 		if err != nil {
 			return err
 		}
@@ -5973,7 +6012,7 @@ func handleBackupWithInfo(info *CommandInfo) error {
 	    if len(backups) == 0 {
 	        fmt.Errorf("no backups found for: %s (check %s/ directory)", filePath, appConfig.BackupDirName)
 	        // err = writeFile(filePath, text, false, checkBefore, comment)
-	        _, err = autoRenameIfExists(filePath, comment)
+	        _, err = autoRenameIfExists(filePath, comment, false)
 			if err != nil {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
@@ -5991,14 +6030,14 @@ func handleBackupWithInfo(info *CommandInfo) error {
 			}
 
 			// err = writeFile(filePath, text, false, checkBefore, comment)
-			_, err = autoRenameIfExists(filePath, comment)
+			_, err = autoRenameIfExists(filePath, comment, false)
 			if err != nil {
 				fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
 				os.Exit(1)
 			}
 		}
 	} else {
-		_, err = autoRenameIfExists(filePath, comment)
+		_, err = autoRenameIfExists(filePath, comment, false)
 		return err
 	}
 
@@ -6269,6 +6308,12 @@ func handleDefaultWrite(info *CommandInfo) {
 
 	if !checkIfDifferent(filePath, text) {
 		fmt.Printf(" ⚠ %sFile:%s %s%s%s%s %sand clipboard is identical%s\n", ColorYellow, ColorReset, ColorWhite, ColorBlue, filePath, ColorReset, ColorYellow, ColorReset)
+		os.Exit(1)
+	} else {
+		err = writeFile(filePath, text, false, checkBefore, comment)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		}
 		os.Exit(1)
 	}
 
