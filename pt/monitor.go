@@ -86,7 +86,11 @@ func handleMonitorCommand(args []string) error {
 				i++ // Skip next arg with '-'
 			
 		} else {
-			paths = append(paths, args[i])
+			if string(args[i][0]) != "-" && i+1 < len(args) {
+				exceptions = append(exceptions, args[i])
+			} else if (string(args[i]) != "-e" || args[i] != "--exception") && i+1 < len(args) {
+				paths = append(paths, args[i])
+			}
 		}
 	}
 
