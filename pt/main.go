@@ -869,14 +869,14 @@ func runDiff(toolName, file1, file2 string, auto_backup bool) error {
     var originalContent []byte
     
     if auto_backup {
-        // Read file2 untuk backup
+        // Read file2 for backup
         content, err := os.ReadFile(file2)
         if err != nil {
             return fmt.Errorf("failed to read file %s: %v", file2, err)
         }
         originalContent = content
         
-        // Cek file1 juga bisa dibaca
+        // Check file1 can also be read
         if _, err := os.ReadFile(file1); err != nil {
             return fmt.Errorf("failed to read file %s: %v", file1, err)
         }
@@ -964,6 +964,82 @@ func handleAutoBackup(auto_backup bool, filePath string, original []byte) error 
     // File changed, create backup
     _, err := autoRenameIfExists(filePath, "", false)
     return err
+}
+
+// ==================== UPDATED HANDLE DIFF COMMAND ====================
+func handleDiffFile(args []string) error {
+    if len(args) < 1 {
+        return fmt.Errorf("filename required for diff command")
+    }
+
+    filename1 := args[1]
+    filename2 := args[0]
+
+
+    filePath2, err := resolveFilePath(filename2)
+    if err != nil {
+        return err
+    }
+
+    filePath1, err := resolveFilePath(filename1)
+    if err != nil {
+        return err
+    }
+
+    if !checkIfDifferent(filePath1, filePath2) {
+    	return nil
+    }
+
+    // Use tools from config or default to delta
+    toolName := appConfig.DiffTool
+    if toolName == "" {
+    	if difftool != "" {
+    		toolName = difftool
+    	} else {
+    		toolName = "delta"	
+    	}
+        
+    }
+    
+    fmt.Printf("%sDiffing use%s %s%s`%s`%s\n", ColorMagenta, ColorReset, ColorWhite, ColorBlue, toolName, ColorReset)
+
+    // Validate the tool before execution
+    if _, exists := diffTools[toolName]; !exists {
+        fmt.Printf("%sWarning: diff tool '%s' not found, using default 'delta'%s\n", 
+            ColorYellow, toolName, ColorReset)
+        toolName = "delta"
+    }
+    
+    // Check platform compatibility
+    config := diffTools[toolName]
+    if !isPlatformCompatible(config.Platform) {
+        fmt.Printf("%sWarning: %s not available on %s, using default 'delta'%s\n", 
+            ColorYellow, config.Name, runtime.GOOS, ColorReset)
+        toolName = "delta"
+    }
+    
+    // Check installation
+    if _, found := findBinary(config.BinaryNames); !found {
+        return fmt.Errorf("%s is not installed. Install from: %s\n"+
+            "You can change diff tool in config file or use: pt config diff_tool <toolname>", 
+            config.Name, config.InstallURL)
+    }
+    
+    // Run diff
+    err = runDiff(toolName, filePath1, filePath2, true)
+    if err != nil && toolName != "delta" {
+        // Try fallback to delta if the main tool fails
+        // if toolName != "delta" {
+        fmt.Printf("%sTrying fallback to delta...%s\n", ColorYellow, ColorReset)
+        err = runDiff("delta", filePath1, filePath2, false)
+        // }
+        
+        if err != nil {
+            return fmt.Errorf("diff execution failed: %w", err)
+        }
+    }
+
+    return nil
 }
 
 // ==================== UPDATED HANDLE DIFF COMMAND ====================
@@ -2388,7 +2464,7 @@ func cleanOrphanedBackups(orphaned []OrphanedBackup) error {
 // MOVE COMMAND - Move file(s) and adjust all backups
 // ============================================================================
 
-func handleMoveCommand(args []string) error {
+func handleMoveCommand(args []string, overwrite bool) error {
 	if len(args) < 2 {
 		return fmt.Errorf("move requires at least source and destination: pt move <source...> <destination>")
 	}
@@ -2485,13 +2561,19 @@ func handleMoveCommand(args []string) error {
 	if destInfo, err := os.Stat(destResolved); err == nil {
 		if !destInfo.IsDir() {
 			// Destination exists but is not a directory
+			// Single file to existing file - not allowed without -o (overwrite)
 			if len(sourceFiles) > 1 {
 				return fmt.Errorf("destination must be a directory when moving multiple files")
+			} else if !overwrite {
+				return fmt.Errorf("destination already exists: %s", destResolved)	
+			} else {
+				fmt.Printf("destination already exists and will be overwrite: %s !", destResolved)
+
 			}
-			// Single file to existing file - not allowed
-			return fmt.Errorf("destination already exists: %s", destResolved)
+			
+		} else {
+			destIsDir = true
 		}
-		destIsDir = true
 	} else {
 		// Destination doesn't exist
 		if len(sourceFiles) > 1 {
@@ -2554,9 +2636,11 @@ func handleMoveCommand(args []string) error {
 
 		// Check if destination already exists
 		if _, err := os.Stat(finalDestPath); err == nil {
-			fmt.Printf("  %s❌ Destination exists: %s%s\n", ColorRed, finalDestPath, ColorReset)
-			failCount++
-			continue
+			if !overwrite {
+				fmt.Printf("  %s❌ Destination exists: %s%s\n", ColorRed, finalDestPath, ColorReset)
+				failCount++
+				continue
+			}
 		}
 
 		// Validate destination path
@@ -5022,71 +5106,72 @@ func printHelp() {
 	fmt.Printf("%s╚══════════════════════════════════════════════════════════╝%s\n\n", ColorCyan, ColorReset)
 
 	fmt.Printf("%s📝 BASIC OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt <filename>%s               Write clipboard to file\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt <filename> -c%s            Write only if content differs\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt <filename> -m \"msg\"%s      Write with comment\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt + <filename>%s             Append clipboard to file\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -b/backup <filename>%s     Backup file with check before\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt <filename>%s                         Write clipboard to file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt <filename> -c%s                      Write only if content differs\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt <filename> -m \"msg\"%s                Write with comment\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt + <filename>%s                       Append clipboard to file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -b/backup <filename>%s               Backup file with check before\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s👁️  VIEW & DISPLAY:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt show <filename>%s          Display file with syntax highlighting (like bat)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt show <file> -l <lexer>%s   Specify lexer (e.g., go, python, javascript)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt show <file> -t <theme>%s   Specify theme (default: monokai)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt show <file> --pager%s      Use pager (less) for navigation\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -z [options]%s             Show clipboard content\n", ColorGreen, ColorReset)
-	fmt.Printf("    %s-l, --lexer <type>%s        Syntax highlighting (e.g., go, python)\n", ColorGreen, ColorReset)
-	fmt.Printf("    %s-t, --theme <theme>%s       Color theme (default: monokai)\n", ColorGreen, ColorReset)
-	fmt.Printf("    %s-np, --no-pager%s               Use pager mode (less)\n", ColorGreen, ColorReset)
-	fmt.Printf("    %s--no-line-numbers%s         Disable line numbers\n", ColorGreen, ColorReset)
-	fmt.Printf("    %s--no-grid%s                 Disable grid separators\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <filename>%s                    Display file with syntax highlighting (like bat)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -l <lexer>%s             Specify lexer (e.g., go, python, javascript)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> -t <theme>%s             Specify theme (default: monokai)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt show <file> --pager%s                Use pager (less) for navigation\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -z [options]%s                       Show clipboard content\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s-l, --lexer <type>%s                  Syntax highlighting (e.g., go, python)\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s-t, --theme <theme>%s                 Color theme (default: monokai)\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s-np, --no-pager%s                     Use pager mode (less)\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s--no-line-numbers%s                   Disable line numbers\n", ColorGreen, ColorReset)
+	fmt.Printf("    %s--no-grid%s                           Disable grid separators\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt check%s                    Show status of all files (like git status)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt check <filename>%s         Check single file status\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt commit -m \"message\"%s      Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt check%s                              Show status of all files (like git status)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt check <filename>%s                   Check single file status\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt commit -m \"message\"%s                Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s📦 BACKUP OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt -l <filename>%s            List all backups (with comments)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -r <filename>%s            Restore backup (interactive)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -r <filename> --last/-lt%s     Restore most recent backup\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -l <filename>%s                      List all backups (with comments)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -r <filename>%s                      Restore backup (interactive)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -r <filename> --last/-lt%s           Restore most recent backup\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s📊 DIFF OPERATIONS:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt -d <filename>%s            Compare with backup (interactive)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -d <filename> --last/-lt%s     Compare with most recent backup\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -d <filename> -z%s         Diff clipboard with file\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -d <filename> -z -T meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -d <filename> -z --tool meld%s Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -dd                         %s Diff with colors and git style \n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -dd <filename> -z           %s Diff with colors and git style between filename and clipboard \n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -dd <filename1> <filename1> %s Diff with colors and git style between filename1 and filename2 \n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -dd <filename> --last       %s Diff with colors and git style between filename and last backup \n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename>%s                      Compare with backup (interactive)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename_diff> <filename_orig>%s Compare 2 files with backup\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> --last/-lt%s           Compare with most recent backup\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> -z%s                   Diff clipboard with file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> -z -T meld%s           Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -d <filename> -z --tool meld%s       Diff clipboard with file use meld diff tool\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd                         %s       Diff with colors and git style \n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd <filename> -z           %s       Diff with colors and git style between filename and clipboard \n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd <filename1> <filename1> %s       Diff with colors and git style between filename1 and filename2 \n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -dd <filename> --last       %s       Diff with colors and git style between filename and last backup \n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s🌳 TREE & UTILITIES:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt -t [path]%s                Show directory tree\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -t [path] -e items,items%s       Tree with exceptions\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -rm <filename>%s           Safe delete (backup first)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt move <src> <dst>%s         Move file and adjust backups\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt move <src...> <dst>%s      Move multiple files to directory\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt mv <src...> <dst> -m%s     Move with comment\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt move -r <dir> <dest>%s     Move directory recursively\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt move \"*.py\" dest/%s        Move with wildcard\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt move \"regex:test.*\" dest/%s Move with regex\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt fix%s                      Detect & fix manual moves\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -t [path]%s                          Show directory tree\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -t [path] -e items,items%s           Tree with exceptions\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -rm <filename>%s                     Safe delete (backup first)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt move <src> <dst>%s                   Move file and adjust backups\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt move <src...> <dst>%s                Move multiple files to directory\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt mv <src...> <dst> -m%s               Move with comment\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt move -r <dir> <dest>%s               Move directory recursively\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt move \"*.py\" dest/%s                  Move with wildcard\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt move \"regex:test.*\" dest/%s          Move with regex\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt fix%s                                Detect & fix manual moves\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s⚙️ CONFIGURATION:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt config init%s              Create sample config file\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt config show%s              Show current configuration\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt config path%s              Show config file location\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt config init%s                        Create sample config file\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt config show%s                        Show current configuration\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt config path%s                        Show config file location\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%sℹ️ INFORMATION:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt -h, --help%s               Show this help message\n", ColorGreen, ColorReset)
-	fmt.Printf("  %spt -v, --version%s            Show version information\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -h, --help%s                         Show this help message\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt -v, --version%s                      Show version information\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s🪲 DEBUGGING:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt --debug%s                  Show debug/logging\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt --debug%s                            Show debug/logging\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s📺 MONITORING MODE:%s\n", ColorBold+ColorYellow, ColorReset)
-	fmt.Printf("  %spt --monitor/-mt%s            Monitoring change and send notification to growl/gntp (port: 23053)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt --monitor/-mt%s                      Monitoring change and send notification to growl/gntp (port: 23053)\n", ColorGreen, ColorReset)
 	
 	fmt.Printf("\n%s💡 EXAMPLES:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %s$%s pt notes.txt                %s# Save clipboard%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
@@ -5103,18 +5188,19 @@ func printHelp() {
 	fmt.Printf("  %s$%s pt -z -l python -p          %s# Show clipboard with pager%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move file.txt docs/      %s# Move single file%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move *.py src/           %s# Move multiple files%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
-	fmt.Printf("  %s$%s pt mv f1.go f2.rs backup/   %s# Move with backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt mv f1.go f2.rs           %s# Move with backups%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
+	fmt.Printf("  %s$%s pt mv f1.go f2.rs -o        %s# Move with backups and overwrite exist destination%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move -r subdir/ newdir/  %s# Move entire directory%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move \"*.go\" backup/      %s# Wildcard move%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt move \"r:test_.*\" tmp/    %s# Regex move%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	fmt.Printf("  %s$%s pt fix                      %s# Fix manual moves%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
 	
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorCyan, ColorReset)
-	fmt.Printf("  1. %spt check%s                  - See what files changed (like git status)\n", ColorYellow, ColorReset)
-	fmt.Printf("  2. %spt commit -m \"msg\"%s        - Backup all changes (like git commit)\n", ColorYellow, ColorReset)
-	fmt.Printf("  3. %spt -l <file>%s              - View commit history\n", ColorYellow, ColorReset)
-	fmt.Printf("  4. %spt -d <file> --last/-lt%s       - See what changed\n", ColorYellow, ColorReset)
-	fmt.Printf("  5. %spt -r <file> --last/-lt%s       - Rollback if needed\n", ColorYellow, ColorReset)
+	fmt.Printf("  1. %spt check%s                   - See what files changed (like git status)\n", ColorYellow, ColorReset)
+	fmt.Printf("  2. %spt commit -m \"msg\"%s         - Backup all changes (like git commit)\n", ColorYellow, ColorReset)
+	fmt.Printf("  3. %spt -l <file>%s               - View commit history\n", ColorYellow, ColorReset)
+	fmt.Printf("  4. %spt -d <file> --last/-lt%s    - See what changed\n", ColorYellow, ColorReset)
+	fmt.Printf("  5. %spt -r <file> --last/-lt%s    - Rollback if needed\n", ColorYellow, ColorReset)
 
 	fmt.Printf("\n%s🎨 THEMES & LEXERS:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %sPopular Themes:%s monokai (default), dracula, solarized-dark, solarized-light,\n", ColorBold, ColorReset)
@@ -5710,6 +5796,7 @@ func parseArguments(args []string) *CommandInfo {
 		"--pager": true, "-p": true, "-np": true, "--no-pager": true,
 		"--no-line-numbers": true, "--no-grid": true,
 		"-r": true, "--recursive": true,  // For move command
+		"-o": true, "--overwrite": true,
 	}
 
 	// CRITICAL: Flags that are ALSO commands (need special handling)
@@ -5951,7 +6038,11 @@ func handleMoveWithInfo(info *CommandInfo) error {
 		args = append(args, "-r")
 	}
 
-	return handleMoveCommand(args)
+	var overwrite = false
+	if info.BoolFlags["-o"] || info.BoolFlags["--overwrote"] {
+		overwrite = true
+	}
+	return handleMoveCommand(args, overwrite)
 }
 
 func handleFixWithInfo(info *CommandInfo) error {
@@ -6125,7 +6216,11 @@ func handleDiffWithInfo(info *CommandInfo) error {
 		os.Exit(1)
 	}
 
+	var fileName2 = ""
 	fileName := info.Files[0]
+	if len(info.Files) > 1 {
+		fileName2 = info.Files[1]
+	}
 
 	// Check if -z flag is present
 	if info.BoolFlags["-z"] {
@@ -6136,6 +6231,8 @@ func handleDiffWithInfo(info *CommandInfo) error {
 	args := []string{fileName}
 	if info.BoolFlags["--last"] || info.BoolFlags["-lt"] {
 		args = append(args, "--last")
+	} else if fileName2 != "" && isFile(fileName2) {
+		return handleDiffFile(info.Files)
 	}
 	return handleDiffCommand(args)
 }
