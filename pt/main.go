@@ -5151,6 +5151,7 @@ func printHelp() {
 	fmt.Printf("  %spt -t [path] -e items,items%s           Tree with exceptions\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt -rm <filename>%s                     Safe delete (backup first)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt move <src> <dst>%s                   Move file and adjust backups\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt move <src> <dst> -o %s               Move file and adjust backups and overwrite destination if exist\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt move <src...> <dst>%s                Move multiple files to directory\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt mv <src...> <dst> -m%s               Move with comment\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt move -r <dir> <dest>%s               Move directory recursively\n", ColorGreen, ColorReset)
@@ -6018,6 +6019,9 @@ func handleShowWithInfo(info *CommandInfo) error {
 }
 
 func handleMoveWithInfo(info *CommandInfo) error {
+	
+	//CommandInfo is a Struct
+
 	if len(info.Files) < 2 {
 		fmt.Printf("%s❌ Error: At least source and destination required%s\n", ColorRed, ColorReset)
 		fmt.Println("\nUsage:")
