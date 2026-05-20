@@ -1,0 +1,2261 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>@font-face {
+  font-family: octicons-link;
+  src: url(data:font/woff;charset=utf-8;base64,d09GRgABAAAAAAZwABAAAAAACFQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABEU0lHAAAGaAAAAAgAAAAIAAAAAUdTVUIAAAZcAAAACgAAAAoAAQAAT1MvMgAAAyQAAABJAAAAYFYEU3RjbWFwAAADcAAAAEUAAACAAJThvmN2dCAAAATkAAAABAAAAAQAAAAAZnBnbQAAA7gAAACyAAABCUM+8IhnYXNwAAAGTAAAABAAAAAQABoAI2dseWYAAAFsAAABPAAAAZwcEq9taGVhZAAAAsgAAAA0AAAANgh4a91oaGVhAAADCAAAABoAAAAkCA8DRGhtdHgAAAL8AAAADAAAAAwGAACfbG9jYQAAAsAAAAAIAAAACABiATBtYXhwAAACqAAAABgAAAAgAA8ASm5hbWUAAAToAAABQgAAAlXu73sOcG9zdAAABiwAAAAeAAAAME3QpOBwcmVwAAAEbAAAAHYAAAB/aFGpk3jaTY6xa8JAGMW/O62BDi0tJLYQincXEypYIiGJjSgHniQ6umTsUEyLm5BV6NDBP8Tpts6F0v+k/0an2i+itHDw3v2+9+DBKTzsJNnWJNTgHEy4BgG3EMI9DCEDOGEXzDADU5hBKMIgNPZqoD3SilVaXZCER3/I7AtxEJLtzzuZfI+VVkprxTlXShWKb3TBecG11rwoNlmmn1P2WYcJczl32etSpKnziC7lQyWe1smVPy/Lt7Kc+0vWY/gAgIIEqAN9we0pwKXreiMasxvabDQMM4riO+qxM2ogwDGOZTXxwxDiycQIcoYFBLj5K3EIaSctAq2kTYiw+ymhce7vwM9jSqO8JyVd5RH9gyTt2+J/yUmYlIR0s04n6+7Vm1ozezUeLEaUjhaDSuXHwVRgvLJn1tQ7xiuVv/ocTRF42mNgZGBgYGbwZOBiAAFGJBIMAAizAFoAAABiAGIAznjaY2BkYGAA4in8zwXi+W2+MjCzMIDApSwvXzC97Z4Ig8N/BxYGZgcgl52BCSQKAA3jCV8CAABfAAAAAAQAAEB42mNgZGBg4f3vACQZQABIMjKgAmYAKEgBXgAAeNpjYGY6wTiBgZWBg2kmUxoDA4MPhGZMYzBi1AHygVLYQUCaawqDA4PChxhmh/8ODDEsvAwHgMKMIDnGL0x7gJQCAwMAJd4MFwAAAHjaY2BgYGaA4DAGRgYQkAHyGMF8NgYrIM3JIAGVYYDT+AEjAwuDFpBmA9KMDEwMCh9i/v8H8sH0/4dQc1iAmAkALaUKLgAAAHjaTY9LDsIgEIbtgqHUPpDi3gPoBVyRTmTddOmqTXThEXqrob2gQ1FjwpDvfwCBdmdXC5AVKFu3e5MfNFJ29KTQT48Ob9/lqYwOGZxeUelN2U2R6+cArgtCJpauW7UQBqnFkUsjAY/kOU1cP+DAgvxwn1chZDwUbd6CFimGXwzwF6tPbFIcjEl+vvmM/byA48e6tWrKArm4ZJlCbdsrxksL1AwWn/yBSJKpYbq8AXaaTb8AAHja28jAwOC00ZrBeQNDQOWO//sdBBgYGRiYWYAEELEwMTE4uzo5Zzo5b2BxdnFOcALxNjA6b2ByTswC8jYwg0VlNuoCTWAMqNzMzsoK1rEhNqByEyerg5PMJlYuVueETKcd/89uBpnpvIEVomeHLoMsAAe1Id4AAAAAAAB42oWQT07CQBTGv0JBhagk7HQzKxca2sJCE1hDt4QF+9JOS0nbaaYDCQfwCJ7Au3AHj+LO13FMmm6cl7785vven0kBjHCBhfpYuNa5Ph1c0e2Xu3jEvWG7UdPDLZ4N92nOm+EBXuAbHmIMSRMs+4aUEd4Nd3CHD8NdvOLTsA2GL8M9PODbcL+hD7C1xoaHeLJSEao0FEW14ckxC+TU8TxvsY6X0eLPmRhry2WVioLpkrbp84LLQPGI7c6sOiUzpWIWS5GzlSgUzzLBSikOPFTOXqly7rqx0Z1Q5BAIoZBSFihQYQOOBEdkCOgXTOHA07HAGjGWiIjaPZNW13/+lm6S9FT7rLHFJ6fQbkATOG1j2OFMucKJJsxIVfQORl+9Jyda6Sl1dUYhSCm1dyClfoeDve4qMYdLEbfqHf3O/AdDumsjAAB42mNgYoAAZQYjBmyAGYQZmdhL8zLdDEydARfoAqIAAAABAAMABwAKABMAB///AA8AAQAAAAAAAAAAAAAAAAABAAAAAA==) format('woff');
+}
+
+@media (prefers-color-scheme: dark) {
+  body,
+  [data-theme="dark"] {
+    /*dark*/
+    color-scheme: dark;
+    --color-prettylights-syntax-comment: #8b949e;
+    --color-prettylights-syntax-constant: #79c0ff;
+    --color-prettylights-syntax-entity: #d2a8ff;
+    --color-prettylights-syntax-storage-modifier-import: #c9d1d9;
+    --color-prettylights-syntax-entity-tag: #7ee787;
+    --color-prettylights-syntax-keyword: #ff7b72;
+    --color-prettylights-syntax-string: #a5d6ff;
+    --color-prettylights-syntax-variable: #ffa657;
+    --color-prettylights-syntax-brackethighlighter-unmatched: #f85149;
+    --color-prettylights-syntax-invalid-illegal-text: #f0f6fc;
+    --color-prettylights-syntax-invalid-illegal-bg: #8e1519;
+    --color-prettylights-syntax-carriage-return-text: #f0f6fc;
+    --color-prettylights-syntax-carriage-return-bg: #b62324;
+    --color-prettylights-syntax-string-regexp: #7ee787;
+    --color-prettylights-syntax-markup-list: #f2cc60;
+    --color-prettylights-syntax-markup-heading: #1f6feb;
+    --color-prettylights-syntax-markup-italic: #c9d1d9;
+    --color-prettylights-syntax-markup-bold: #c9d1d9;
+    --color-prettylights-syntax-markup-deleted-text: #ffdcd7;
+    --color-prettylights-syntax-markup-deleted-bg: #67060c;
+    --color-prettylights-syntax-markup-inserted-text: #aff5b4;
+    --color-prettylights-syntax-markup-inserted-bg: #033a16;
+    --color-prettylights-syntax-markup-changed-text: #ffdfb6;
+    --color-prettylights-syntax-markup-changed-bg: #5a1e02;
+    --color-prettylights-syntax-markup-ignored-text: #c9d1d9;
+    --color-prettylights-syntax-markup-ignored-bg: #1158c7;
+    --color-prettylights-syntax-meta-diff-range: #d2a8ff;
+    --color-prettylights-syntax-brackethighlighter-angle: #8b949e;
+    --color-prettylights-syntax-sublimelinter-gutter-mark: #484f58;
+    --color-prettylights-syntax-constant-other-reference-link: #a5d6ff;
+    --color-fg-default: #e6edf3;
+    --color-fg-muted: #848d97;
+    --color-fg-subtle: #6e7681;
+    --color-canvas-default: #0d1117;
+    --color-canvas-subtle: #161b22;
+    --color-border-default: #30363d;
+    --color-border-muted: #21262d;
+    --color-neutral-muted: rgba(110,118,129,0.4);
+    --color-accent-fg: #2f81f7;
+    --color-accent-emphasis: #1f6feb;
+    --color-success-fg: #3fb950;
+    --color-success-emphasis: #238636;
+    --color-attention-fg: #d29922;
+    --color-attention-emphasis: #9e6a03;
+    --color-attention-subtle: rgba(187,128,9,0.15);
+    --color-danger-fg: #f85149;
+    --color-danger-emphasis: #da3633;
+    --color-done-fg: #a371f7;
+    --color-done-emphasis: #8957e5;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  body,
+  [data-theme="light"] {
+    /*light*/
+    color-scheme: light;
+    --color-prettylights-syntax-comment: #57606a;
+    --color-prettylights-syntax-constant: #0550ae;
+    --color-prettylights-syntax-entity: #6639ba;
+    --color-prettylights-syntax-storage-modifier-import: #24292f;
+    --color-prettylights-syntax-entity-tag: #116329;
+    --color-prettylights-syntax-keyword: #cf222e;
+    --color-prettylights-syntax-string: #0a3069;
+    --color-prettylights-syntax-variable: #953800;
+    --color-prettylights-syntax-brackethighlighter-unmatched: #82071e;
+    --color-prettylights-syntax-invalid-illegal-text: #f6f8fa;
+    --color-prettylights-syntax-invalid-illegal-bg: #82071e;
+    --color-prettylights-syntax-carriage-return-text: #f6f8fa;
+    --color-prettylights-syntax-carriage-return-bg: #cf222e;
+    --color-prettylights-syntax-string-regexp: #116329;
+    --color-prettylights-syntax-markup-list: #3b2300;
+    --color-prettylights-syntax-markup-heading: #0550ae;
+    --color-prettylights-syntax-markup-italic: #24292f;
+    --color-prettylights-syntax-markup-bold: #24292f;
+    --color-prettylights-syntax-markup-deleted-text: #82071e;
+    --color-prettylights-syntax-markup-deleted-bg: #ffebe9;
+    --color-prettylights-syntax-markup-inserted-text: #116329;
+    --color-prettylights-syntax-markup-inserted-bg: #dafbe1;
+    --color-prettylights-syntax-markup-changed-text: #953800;
+    --color-prettylights-syntax-markup-changed-bg: #ffd8b5;
+    --color-prettylights-syntax-markup-ignored-text: #eaeef2;
+    --color-prettylights-syntax-markup-ignored-bg: #0550ae;
+    --color-prettylights-syntax-meta-diff-range: #8250df;
+    --color-prettylights-syntax-brackethighlighter-angle: #57606a;
+    --color-prettylights-syntax-sublimelinter-gutter-mark: #8c959f;
+    --color-prettylights-syntax-constant-other-reference-link: #0a3069;
+    --color-fg-default: #1F2328;
+    --color-fg-muted: #656d76;
+    --color-fg-subtle: #6e7781;
+    --color-canvas-default: #ffffff;
+    --color-canvas-subtle: #f6f8fa;
+    --color-border-default: #d0d7de;
+    --color-border-muted: hsla(210,18%,87%,1);
+    --color-neutral-muted: rgba(175,184,193,0.2);
+    --color-accent-fg: #0969da;
+    --color-accent-emphasis: #0969da;
+    --color-success-fg: #1a7f37;
+    --color-success-emphasis: #1f883d;
+    --color-attention-fg: #9a6700;
+    --color-attention-emphasis: #9a6700;
+    --color-attention-subtle: #fff8c5;
+    --color-danger-fg: #d1242f;
+    --color-danger-emphasis: #cf222e;
+    --color-done-fg: #8250df;
+    --color-done-emphasis: #8250df;
+  }
+}
+
+body {
+    max-width: 980px;
+    margin: 16px auto;
+    background-color: var(--color-canvas-default);
+}
+
+.markdown-body .octicon-link:before {
+  font: normal normal normal 16px/1 octicons-link;
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  content: '\f05c';
+  vertical-align: middle;
+}
+
+.markdown-body {
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  margin: 0;
+  color: var(--color-fg-default);
+  background-color: var(--color-canvas-default);
+  font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+  font-size: 16px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.markdown-body .octicon {
+  display: inline-block;
+  fill: currentColor;
+  vertical-align: text-bottom;
+}
+
+.markdown-body h1:hover .anchor .octicon-link:before,
+.markdown-body h2:hover .anchor .octicon-link:before,
+.markdown-body h3:hover .anchor .octicon-link:before,
+.markdown-body h4:hover .anchor .octicon-link:before,
+.markdown-body h5:hover .anchor .octicon-link:before,
+.markdown-body h6:hover .anchor .octicon-link:before {
+  width: 16px;
+  height: 16px;
+  content: ' ';
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
+}
+
+.markdown-body details,
+.markdown-body figcaption,
+.markdown-body figure {
+  display: block;
+}
+
+.markdown-body summary {
+  display: list-item;
+}
+
+.markdown-body [hidden] {
+  display: none !important;
+}
+
+.markdown-body a {
+  background-color: transparent;
+  color: var(--color-accent-fg);
+  text-decoration: none;
+}
+
+.markdown-body abbr[title] {
+  border-bottom: none;
+  -webkit-text-decoration: underline dotted;
+  text-decoration: underline dotted;
+}
+
+.markdown-body b,
+.markdown-body strong {
+  font-weight: var(--base-text-weight-semibold, 600);
+}
+
+.markdown-body dfn {
+  font-style: italic;
+}
+
+.markdown-body h1 {
+  margin: .67em 0;
+  font-weight: var(--base-text-weight-semibold, 600);
+  padding-bottom: .3em;
+  font-size: 2em;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+
+.markdown-body mark {
+  background-color: var(--color-attention-subtle);
+  color: var(--color-fg-default);
+}
+
+.markdown-body small {
+  font-size: 90%;
+}
+
+.markdown-body sub,
+.markdown-body sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.markdown-body sub {
+  bottom: -0.25em;
+}
+
+.markdown-body sup {
+  top: -0.5em;
+}
+
+.markdown-body img {
+  border-style: none;
+  max-width: 100%;
+  box-sizing: content-box;
+  background-color: var(--color-canvas-default);
+}
+
+.markdown-body code,
+.markdown-body kbd,
+.markdown-body pre,
+.markdown-body samp {
+  font-family: monospace;
+  font-size: 1em;
+}
+
+.markdown-body figure {
+  margin: 1em 40px;
+}
+
+.markdown-body hr {
+  box-sizing: content-box;
+  overflow: hidden;
+  background: transparent;
+  border-bottom: 1px solid var(--color-border-muted);
+  height: .25em;
+  padding: 0;
+  margin: 24px 0;
+  background-color: var(--color-border-default);
+  border: 0;
+}
+
+.markdown-body input {
+  font: inherit;
+  margin: 0;
+  overflow: visible;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.markdown-body [type=button],
+.markdown-body [type=reset],
+.markdown-body [type=submit] {
+  -webkit-appearance: button;
+  appearance: button;
+}
+
+.markdown-body [type=checkbox],
+.markdown-body [type=radio] {
+  box-sizing: border-box;
+  padding: 0;
+}
+
+.markdown-body [type=number]::-webkit-inner-spin-button,
+.markdown-body [type=number]::-webkit-outer-spin-button {
+  height: auto;
+}
+
+.markdown-body [type=search]::-webkit-search-cancel-button,
+.markdown-body [type=search]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.markdown-body ::-webkit-input-placeholder {
+  color: inherit;
+  opacity: .54;
+}
+
+.markdown-body ::-webkit-file-upload-button {
+  -webkit-appearance: button;
+  appearance: button;
+  font: inherit;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body ::placeholder {
+  color: var(--color-fg-subtle);
+  opacity: 1;
+}
+
+.markdown-body hr::before {
+  display: table;
+  content: "";
+}
+
+.markdown-body hr::after {
+  display: table;
+  clear: both;
+  content: "";
+}
+
+.markdown-body table {
+  border-spacing: 0;
+  border-collapse: collapse;
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.markdown-body td,
+.markdown-body th {
+  padding: 0;
+}
+
+.markdown-body details summary {
+  cursor: pointer;
+}
+
+.markdown-body details:not([open])>*:not(summary) {
+  display: none !important;
+}
+
+.markdown-body a:focus,
+.markdown-body [role=button]:focus,
+.markdown-body input[type=radio]:focus,
+.markdown-body input[type=checkbox]:focus {
+  outline: 2px solid var(--color-accent-fg);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.markdown-body a:focus:not(:focus-visible),
+.markdown-body [role=button]:focus:not(:focus-visible),
+.markdown-body input[type=radio]:focus:not(:focus-visible),
+.markdown-body input[type=checkbox]:focus:not(:focus-visible) {
+  outline: solid 1px transparent;
+}
+
+.markdown-body a:focus-visible,
+.markdown-body [role=button]:focus-visible,
+.markdown-body input[type=radio]:focus-visible,
+.markdown-body input[type=checkbox]:focus-visible {
+  outline: 2px solid var(--color-accent-fg);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.markdown-body a:not([class]):focus,
+.markdown-body a:not([class]):focus-visible,
+.markdown-body input[type=radio]:focus,
+.markdown-body input[type=radio]:focus-visible,
+.markdown-body input[type=checkbox]:focus,
+.markdown-body input[type=checkbox]:focus-visible {
+  outline-offset: 0;
+}
+
+.markdown-body kbd {
+  display: inline-block;
+  padding: 3px 5px;
+  font: 11px ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
+  line-height: 10px;
+  color: var(--color-fg-default);
+  vertical-align: middle;
+  background-color: var(--color-canvas-subtle);
+  border: solid 1px var(--color-neutral-muted);
+  border-bottom-color: var(--color-neutral-muted);
+  border-radius: 6px;
+  box-shadow: inset 0 -1px 0 var(--color-neutral-muted);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: var(--base-text-weight-semibold, 600);
+  line-height: 1.25;
+}
+
+.markdown-body h2 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  padding-bottom: .3em;
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+
+.markdown-body h3 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 1.25em;
+}
+
+.markdown-body h4 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 1em;
+}
+
+.markdown-body h5 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: .875em;
+}
+
+.markdown-body h6 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: .85em;
+  color: var(--color-fg-muted);
+}
+
+.markdown-body p {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.markdown-body blockquote {
+  margin: 0;
+  padding: 0 1em;
+  color: var(--color-fg-muted);
+  border-left: .25em solid var(--color-border-default);
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-left: 2em;
+}
+
+.markdown-body ol ol,
+.markdown-body ul ol {
+  list-style-type: lower-roman;
+}
+
+.markdown-body ul ul ol,
+.markdown-body ul ol ol,
+.markdown-body ol ul ol,
+.markdown-body ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+.markdown-body dd {
+  margin-left: 0;
+}
+
+.markdown-body tt,
+.markdown-body code,
+.markdown-body samp {
+  font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
+  font-size: 12px;
+}
+
+.markdown-body pre {
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
+  font-size: 12px;
+  word-wrap: normal;
+}
+
+.markdown-body .octicon {
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-body input::-webkit-outer-spin-button,
+.markdown-body input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.markdown-body .mr-2 {
+  margin-right: var(--base-size-8, 8px) !important;
+}
+
+.markdown-body::before {
+  display: table;
+  content: "";
+}
+
+.markdown-body::after {
+  display: table;
+  clear: both;
+  content: "";
+}
+
+.markdown-body>*:first-child {
+  margin-top: 0 !important;
+}
+
+.markdown-body>*:last-child {
+  margin-bottom: 0 !important;
+}
+
+.markdown-body a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.markdown-body .absent {
+  color: var(--color-danger-fg);
+}
+
+.markdown-body .anchor {
+  float: left;
+  padding-right: 4px;
+  margin-left: -20px;
+  line-height: 1;
+}
+
+.markdown-body .anchor:focus {
+  outline: none;
+}
+
+.markdown-body p,
+.markdown-body blockquote,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body dl,
+.markdown-body table,
+.markdown-body pre,
+.markdown-body details {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.markdown-body blockquote>:first-child {
+  margin-top: 0;
+}
+
+.markdown-body blockquote>:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body h1 .octicon-link,
+.markdown-body h2 .octicon-link,
+.markdown-body h3 .octicon-link,
+.markdown-body h4 .octicon-link,
+.markdown-body h5 .octicon-link,
+.markdown-body h6 .octicon-link {
+  color: var(--color-fg-default);
+  vertical-align: middle;
+  visibility: hidden;
+}
+
+.markdown-body h1:hover .anchor,
+.markdown-body h2:hover .anchor,
+.markdown-body h3:hover .anchor,
+.markdown-body h4:hover .anchor,
+.markdown-body h5:hover .anchor,
+.markdown-body h6:hover .anchor {
+  text-decoration: none;
+}
+
+.markdown-body h1:hover .anchor .octicon-link,
+.markdown-body h2:hover .anchor .octicon-link,
+.markdown-body h3:hover .anchor .octicon-link,
+.markdown-body h4:hover .anchor .octicon-link,
+.markdown-body h5:hover .anchor .octicon-link,
+.markdown-body h6:hover .anchor .octicon-link {
+  visibility: visible;
+}
+
+.markdown-body h1 tt,
+.markdown-body h1 code,
+.markdown-body h2 tt,
+.markdown-body h2 code,
+.markdown-body h3 tt,
+.markdown-body h3 code,
+.markdown-body h4 tt,
+.markdown-body h4 code,
+.markdown-body h5 tt,
+.markdown-body h5 code,
+.markdown-body h6 tt,
+.markdown-body h6 code {
+  padding: 0 .2em;
+  font-size: inherit;
+}
+
+.markdown-body summary h1,
+.markdown-body summary h2,
+.markdown-body summary h3,
+.markdown-body summary h4,
+.markdown-body summary h5,
+.markdown-body summary h6 {
+  display: inline-block;
+}
+
+.markdown-body summary h1 .anchor,
+.markdown-body summary h2 .anchor,
+.markdown-body summary h3 .anchor,
+.markdown-body summary h4 .anchor,
+.markdown-body summary h5 .anchor,
+.markdown-body summary h6 .anchor {
+  margin-left: -40px;
+}
+
+.markdown-body summary h1,
+.markdown-body summary h2 {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.markdown-body ul.no-list,
+.markdown-body ol.no-list {
+  padding: 0;
+  list-style-type: none;
+}
+
+.markdown-body ol[type="a s"] {
+  list-style-type: lower-alpha;
+}
+
+.markdown-body ol[type="A s"] {
+  list-style-type: upper-alpha;
+}
+
+.markdown-body ol[type="i s"] {
+  list-style-type: lower-roman;
+}
+
+.markdown-body ol[type="I s"] {
+  list-style-type: upper-roman;
+}
+
+.markdown-body ol[type="1"] {
+  list-style-type: decimal;
+}
+
+.markdown-body div>ol:not([type]) {
+  list-style-type: decimal;
+}
+
+.markdown-body ul ul,
+.markdown-body ul ol,
+.markdown-body ol ol,
+.markdown-body ol ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.markdown-body li>p {
+  margin-top: 16px;
+}
+
+.markdown-body li+li {
+  margin-top: .25em;
+}
+
+.markdown-body dl {
+  padding: 0;
+}
+
+.markdown-body dl dt {
+  padding: 0;
+  margin-top: 16px;
+  font-size: 1em;
+  font-style: italic;
+  font-weight: var(--base-text-weight-semibold, 600);
+}
+
+.markdown-body dl dd {
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.markdown-body table th {
+  font-weight: var(--base-text-weight-semibold, 600);
+}
+
+.markdown-body table th,
+.markdown-body table td {
+  padding: 6px 13px;
+  border: 1px solid var(--color-border-default);
+}
+
+.markdown-body table td>:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body table tr {
+  background-color: var(--color-canvas-default);
+  border-top: 1px solid var(--color-border-muted);
+}
+
+.markdown-body table tr:nth-child(2n) {
+  background-color: var(--color-canvas-subtle);
+}
+
+.markdown-body table img {
+  background-color: transparent;
+}
+
+.markdown-body img[align=right] {
+  padding-left: 20px;
+}
+
+.markdown-body img[align=left] {
+  padding-right: 20px;
+}
+
+.markdown-body .emoji {
+  max-width: none;
+  vertical-align: text-top;
+  background-color: transparent;
+}
+
+.markdown-body span.frame {
+  display: block;
+  overflow: hidden;
+}
+
+.markdown-body span.frame>span {
+  display: block;
+  float: left;
+  width: auto;
+  padding: 7px;
+  margin: 13px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+}
+
+.markdown-body span.frame span img {
+  display: block;
+  float: left;
+}
+
+.markdown-body span.frame span span {
+  display: block;
+  padding: 5px 0 0;
+  clear: both;
+  color: var(--color-fg-default);
+}
+
+.markdown-body span.align-center {
+  display: block;
+  overflow: hidden;
+  clear: both;
+}
+
+.markdown-body span.align-center>span {
+  display: block;
+  margin: 13px auto 0;
+  overflow: hidden;
+  text-align: center;
+}
+
+.markdown-body span.align-center span img {
+  margin: 0 auto;
+  text-align: center;
+}
+
+.markdown-body span.align-right {
+  display: block;
+  overflow: hidden;
+  clear: both;
+}
+
+.markdown-body span.align-right>span {
+  display: block;
+  margin: 13px 0 0;
+  overflow: hidden;
+  text-align: right;
+}
+
+.markdown-body span.align-right span img {
+  margin: 0;
+  text-align: right;
+}
+
+.markdown-body span.float-left {
+  display: block;
+  float: left;
+  margin-right: 13px;
+  overflow: hidden;
+}
+
+.markdown-body span.float-left span {
+  margin: 13px 0 0;
+}
+
+.markdown-body span.float-right {
+  display: block;
+  float: right;
+  margin-left: 13px;
+  overflow: hidden;
+}
+
+.markdown-body span.float-right>span {
+  display: block;
+  margin: 13px auto 0;
+  overflow: hidden;
+  text-align: right;
+}
+
+.markdown-body code,
+.markdown-body tt {
+  padding: .2em .4em;
+  margin: 0;
+  font-size: 85%;
+  white-space: break-spaces;
+  background-color: var(--color-neutral-muted);
+  border-radius: 6px;
+}
+
+.markdown-body code br,
+.markdown-body tt br {
+  display: none;
+}
+
+.markdown-body del code {
+  text-decoration: inherit;
+}
+
+.markdown-body samp {
+  font-size: 85%;
+}
+
+.markdown-body pre code {
+  font-size: 100%;
+}
+
+.markdown-body pre>code {
+  padding: 0;
+  margin: 0;
+  word-break: normal;
+  white-space: pre;
+  background: transparent;
+  border: 0;
+}
+
+.markdown-body .highlight {
+  margin-bottom: 16px;
+}
+
+.markdown-body .highlight pre {
+  margin-bottom: 0;
+  word-break: normal;
+}
+
+.markdown-body .highlight pre,
+.markdown-body pre {
+  padding: 16px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  color: var(--color-fg-default);
+  background-color: var(--color-canvas-subtle);
+  border-radius: 6px;
+}
+
+.markdown-body pre code,
+.markdown-body pre tt {
+  display: inline;
+  max-width: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  line-height: inherit;
+  word-wrap: normal;
+  background-color: transparent;
+  border: 0;
+}
+
+.markdown-body .csv-data td,
+.markdown-body .csv-data th {
+  padding: 5px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.markdown-body .csv-data .blob-num {
+  padding: 10px 8px 9px;
+  text-align: right;
+  background: var(--color-canvas-default);
+  border: 0;
+}
+
+.markdown-body .csv-data tr {
+  border-top: 0;
+}
+
+.markdown-body .csv-data th {
+  font-weight: var(--base-text-weight-semibold, 600);
+  background: var(--color-canvas-subtle);
+  border-top: 0;
+}
+
+.markdown-body [data-footnote-ref]::before {
+  content: "[";
+}
+
+.markdown-body [data-footnote-ref]::after {
+  content: "]";
+}
+
+.markdown-body .footnotes {
+  font-size: 12px;
+  color: var(--color-fg-muted);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.markdown-body .footnotes ol {
+  padding-left: 16px;
+}
+
+.markdown-body .footnotes ol ul {
+  display: inline-block;
+  padding-left: 16px;
+  margin-top: 16px;
+}
+
+.markdown-body .footnotes li {
+  position: relative;
+}
+
+.markdown-body .footnotes li:target::before {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  bottom: -8px;
+  left: -24px;
+  pointer-events: none;
+  content: "";
+  border: 2px solid var(--color-accent-emphasis);
+  border-radius: 6px;
+}
+
+.markdown-body .footnotes li:target {
+  color: var(--color-fg-default);
+}
+
+.markdown-body .footnotes .data-footnote-backref g-emoji {
+  font-family: monospace;
+}
+
+.markdown-body .pl-c {
+  color: var(--color-prettylights-syntax-comment);
+}
+
+.markdown-body .pl-c1,
+.markdown-body .pl-s .pl-v {
+  color: var(--color-prettylights-syntax-constant);
+}
+
+.markdown-body .pl-e,
+.markdown-body .pl-en {
+  color: var(--color-prettylights-syntax-entity);
+}
+
+.markdown-body .pl-smi,
+.markdown-body .pl-s .pl-s1 {
+  color: var(--color-prettylights-syntax-storage-modifier-import);
+}
+
+.markdown-body .pl-ent {
+  color: var(--color-prettylights-syntax-entity-tag);
+}
+
+.markdown-body .pl-k {
+  color: var(--color-prettylights-syntax-keyword);
+}
+
+.markdown-body .pl-s,
+.markdown-body .pl-pds,
+.markdown-body .pl-s .pl-pse .pl-s1,
+.markdown-body .pl-sr,
+.markdown-body .pl-sr .pl-cce,
+.markdown-body .pl-sr .pl-sre,
+.markdown-body .pl-sr .pl-sra {
+  color: var(--color-prettylights-syntax-string);
+}
+
+.markdown-body .pl-v,
+.markdown-body .pl-smw {
+  color: var(--color-prettylights-syntax-variable);
+}
+
+.markdown-body .pl-bu {
+  color: var(--color-prettylights-syntax-brackethighlighter-unmatched);
+}
+
+.markdown-body .pl-ii {
+  color: var(--color-prettylights-syntax-invalid-illegal-text);
+  background-color: var(--color-prettylights-syntax-invalid-illegal-bg);
+}
+
+.markdown-body .pl-c2 {
+  color: var(--color-prettylights-syntax-carriage-return-text);
+  background-color: var(--color-prettylights-syntax-carriage-return-bg);
+}
+
+.markdown-body .pl-sr .pl-cce {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-string-regexp);
+}
+
+.markdown-body .pl-ml {
+  color: var(--color-prettylights-syntax-markup-list);
+}
+
+.markdown-body .pl-mh,
+.markdown-body .pl-mh .pl-en,
+.markdown-body .pl-ms {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-markup-heading);
+}
+
+.markdown-body .pl-mi {
+  font-style: italic;
+  color: var(--color-prettylights-syntax-markup-italic);
+}
+
+.markdown-body .pl-mb {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-markup-bold);
+}
+
+.markdown-body .pl-md {
+  color: var(--color-prettylights-syntax-markup-deleted-text);
+  background-color: var(--color-prettylights-syntax-markup-deleted-bg);
+}
+
+.markdown-body .pl-mi1 {
+  color: var(--color-prettylights-syntax-markup-inserted-text);
+  background-color: var(--color-prettylights-syntax-markup-inserted-bg);
+}
+
+.markdown-body .pl-mc {
+  color: var(--color-prettylights-syntax-markup-changed-text);
+  background-color: var(--color-prettylights-syntax-markup-changed-bg);
+}
+
+.markdown-body .pl-mi2 {
+  color: var(--color-prettylights-syntax-markup-ignored-text);
+  background-color: var(--color-prettylights-syntax-markup-ignored-bg);
+}
+
+.markdown-body .pl-mdr {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-meta-diff-range);
+}
+
+.markdown-body .pl-ba {
+  color: var(--color-prettylights-syntax-brackethighlighter-angle);
+}
+
+.markdown-body .pl-sg {
+  color: var(--color-prettylights-syntax-sublimelinter-gutter-mark);
+}
+
+.markdown-body .pl-corl {
+  text-decoration: underline;
+  color: var(--color-prettylights-syntax-constant-other-reference-link);
+}
+
+.markdown-body g-emoji {
+  display: inline-block;
+  min-width: 1ch;
+  font-family: "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol";
+  font-size: 1em;
+  font-style: normal !important;
+  font-weight: var(--base-text-weight-normal, 400);
+  line-height: 1;
+  vertical-align: -0.075em;
+}
+
+.markdown-body g-emoji img {
+  width: 1em;
+  height: 1em;
+}
+
+.markdown-body .task-list-item {
+  list-style-type: none;
+}
+
+.markdown-body .task-list-item label {
+  font-weight: var(--base-text-weight-normal, 400);
+}
+
+.markdown-body .task-list-item.enabled label {
+  cursor: pointer;
+}
+
+.markdown-body .task-list-item+.task-list-item {
+  margin-top: 4px;
+}
+
+.markdown-body .task-list-item .handle {
+  display: none;
+}
+
+.markdown-body .task-list-item-checkbox {
+  margin: 0 .2em .25em -1.4em;
+  vertical-align: middle;
+}
+
+.markdown-body .contains-task-list:dir(rtl) .task-list-item-checkbox {
+  margin: 0 -1.6em .25em .2em;
+}
+
+.markdown-body .contains-task-list {
+  position: relative;
+}
+
+.markdown-body .contains-task-list:hover .task-list-item-convert-container,
+.markdown-body .contains-task-list:focus-within .task-list-item-convert-container {
+  display: block;
+  width: auto;
+  height: 24px;
+  overflow: visible;
+  clip: auto;
+}
+
+.markdown-body ::-webkit-calendar-picker-indicator {
+  filter: invert(50%);
+}
+
+.markdown-body .markdown-alert {
+  padding: var(--base-size-8, 8px) var(--base-size-16, 16px);
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid var(--color-border-default);
+}
+
+.markdown-body .markdown-alert>:first-child {
+  margin-top: 0;
+}
+
+.markdown-body .markdown-alert>:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body .markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: var(--base-text-weight-medium, 500);
+  align-items: center;
+  line-height: 1;
+}
+
+.markdown-body .markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-accent-emphasis);
+}
+
+.markdown-body .markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-accent-fg);
+}
+
+.markdown-body .markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-done-emphasis);
+}
+
+.markdown-body .markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-done-fg);
+}
+
+.markdown-body .markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-attention-emphasis);
+}
+
+.markdown-body .markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-attention-fg);
+}
+
+.markdown-body .markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-success-emphasis);
+}
+
+.markdown-body .markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-success-fg);
+}
+
+.markdown-body .markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-danger-emphasis);
+}
+
+.markdown-body .markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-danger-fg);
+}
+</style><title>README</title></head><body><article class="markdown-body"><div class="markdown-heading"><h1 class="heading-element">📋 <code>pt</code> – Clipboard to File Tool with Smart Version Management</h1><a id="user-content--pt--clipboard-to-file-tool-with-smart-version-management" class="anchor" aria-label="Permalink: 📋 pt – Clipboard to File Tool with Smart Version Management" href="#-pt--clipboard-to-file-tool-with-smart-version-management"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p><a href="https://golang.org" rel="nofollow"><img src="https://camo.githubusercontent.com/977e160e38ca8897094f8816bfb07e4bf703fe36304fd90b572224abeb4f53ca/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f476f2d312e31362b2d3030414444383f7374796c653d666c6174266c6f676f3d676f" alt="Go Version" data-canonical-src="https://img.shields.io/badge/Go-1.16+-00ADD8?style=flat&amp;logo=go" style="max-width: 100%;"></a>
+<a href="https://opensource.org/licenses/MIT" rel="nofollow"><img src="https://camo.githubusercontent.com/fdf2982b9f5d7489dcf44570e714e3a15fce6253e0cc6b5aa61a075aac2ff71b/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f4c6963656e73652d4d49542d79656c6c6f772e737667" alt="License" data-canonical-src="https://img.shields.io/badge/License-MIT-yellow.svg" style="max-width: 100%;"></a>
+<a href="https://github.com/cumulus13/pt-go"><img src="https://camo.githubusercontent.com/de65e0022ef5a4de0eb96ae76ba503625933a43ef5385c6cd7c8a041ff07b5e2/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f76657273696f6e2d312e302e34312d626c75652e737667" alt="Version" data-canonical-src="https://img.shields.io/badge/version-1.0.41-blue.svg" style="max-width: 100%;"></a></p>
+<blockquote>
+<p><strong><code>pt</code></strong> is a powerful CLI tool that writes your clipboard content directly to a file – with automatic timestamped backups, <strong>backup comments</strong>, <strong>recursive file search</strong>, <strong>delta diff comparison (default), support many diff tool</strong>, directory tree visualization, and safe file deletion. <strong>It's not just a clipboard manager – it's a complete version control system for your files!</strong></p>
+</blockquote>
+<div class="markdown-heading"><h2 class="heading-element">🎦 Demo</h2><a id="user-content--demo" class="anchor" aria-label="Permalink: 🎦 Demo" href="#-demo"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div align="center">
+  <a href="https://youtu.be/1BrUiQWi47Y" rel="nofollow">
+    <img src="https://camo.githubusercontent.com/cdcac2bc88ffc3ff0cc5814473e116db9e39f5ac8441878a32f6d18e2de301b5/68747470733a2f2f692e7974696d672e636f6d2f616e5f776562702f31427255695157693437592f6d7164656661756c745f36732e776562703f64753d33303030267371703d434c7a592d736b472672733d414f6e34434c4166635a6a626b5a5f315a7731596e2d6641464a7561554b61383877" alt="How to use mks - tree2 -pt" data-canonical-src="https://i.ytimg.com/an_webp/1BrUiQWi47Y/mqdefault_6s.webp?du=3000&amp;sqp=CLzY-skG&amp;rs=AOn4CLAfcZjbkZ_1Zw1Yn-fAFJuaUKa88w" style="max-width: 100%;">
+  </a>
+  <br>
+  <a href="https://youtu.be/1BrUiQWi47Y" rel="nofollow">Demo</a>
+</div>
+<div class="markdown-heading"><h2 class="heading-element">✨ Features</h2><a id="user-content--features" class="anchor" aria-label="Permalink: ✨ Features" href="#-features"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Core Features</h3><a id="user-content-core-features" class="anchor" aria-label="Permalink: Core Features" href="#core-features"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>📝 <strong>Quick Save</strong> - Write clipboard content to file with one command</li>
+<li>📦 <strong>Auto Backup</strong> - Automatic timestamped backups stored in <code>./backup/</code> directory</li>
+<li>💬 <strong>Backup Comments</strong> - Add descriptive comments to track why changes were made ✨ NEW!</li>
+<li>➕ <strong>Append Mode</strong> - Add content without creating backups</li>
+<li>🔄 <strong>Restore</strong> - Interactive or quick restore from backups with comments</li>
+<li>📊 <strong>Beautiful Listings</strong> - Formatted table view of all backups with sizes and comments ✨ NEW!</li>
+<li>🔒 <strong>Production Hardened</strong> - Path validation, size limits, error handling</li>
+<li>🎨 <strong>Colorful Output</strong> - ANSI colors for better readability</li>
+<li>📈 <strong>Audit Logging</strong> - All operations logged for tracking</li>
+<li>✅ <strong>Check Mode</strong> - Skip writes if content unchanged (saves disk space) ✨ NEW!</li>
+</ul>
+<hr>
+<div class="markdown-heading"><h3 class="heading-element">Optional diff tool</h3><a id="user-content-optional-diff-tool" class="anchor" aria-label="Permalink: Optional diff tool" href="#optional-diff-tool"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>set <code>diff_tool</code> in config file pt.yml/pt.yaml</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th><strong>Alias (Config Value)</strong></th>
+<th>Platform</th>
+<th>Type</th>
+<th>License</th>
+<th>Home Page / Download</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Delta (git diff)</strong></td>
+<td><code>delta</code></td>
+<td>Linux, macOS</td>
+<td>CLI</td>
+<td>Open Source</td>
+<td><a href="https://dandavison.github.io/delta/" rel="nofollow">https://dandavison.github.io/delta/</a></td>
+</tr>
+<tr>
+<td><strong>GNU diff</strong></td>
+<td><code>diff</code></td>
+<td>Linux, macOS</td>
+<td>CLI</td>
+<td>Open Source</td>
+<td><a href="https://www.gnu.org/software/diffutils/" rel="nofollow">https://www.gnu.org/software/diffutils/</a></td>
+</tr>
+<tr>
+<td><strong>GNU sdiff</strong></td>
+<td><code>sdiff</code></td>
+<td>Linux, macOS</td>
+<td>CLI</td>
+<td>Open Source</td>
+<td><a href="https://www.gnu.org/software/diffutils/" rel="nofollow">https://www.gnu.org/software/diffutils/</a></td>
+</tr>
+<tr>
+<td><strong>vimdiff</strong></td>
+<td><code>vimdiff</code></td>
+<td>Linux, macOS</td>
+<td>CLI (TUI)</td>
+<td>Open Source</td>
+<td><a href="https://www.vim.org/" rel="nofollow">https://www.vim.org/</a></td>
+</tr>
+<tr>
+<td>
+<strong>Meld</strong> ⭐</td>
+<td><code>meld</code></td>
+<td>Linux, macOS, Windows</td>
+<td>GUI</td>
+<td>Open Source</td>
+<td><a href="https://meldmerge.org" rel="nofollow">https://meldmerge.org</a></td>
+</tr>
+<tr>
+<td><strong>KDiff3</strong></td>
+<td><code>kdiff3</code></td>
+<td>Linux, macOS, Windows</td>
+<td>GUI</td>
+<td>Open Source</td>
+<td><a href="https://invent.kde.org/sdk/kdiff3" rel="nofollow">https://invent.kde.org/sdk/kdiff3</a></td>
+</tr>
+<tr>
+<td><strong>DiffMerge</strong></td>
+<td><code>diffmerge</code></td>
+<td>Linux, macOS, Windows</td>
+<td>GUI</td>
+<td>Freeware</td>
+<td><a href="https://sourcegear.com/diffmerge/" rel="nofollow">https://sourcegear.com/diffmerge/</a></td>
+</tr>
+<tr>
+<td><strong>Kompare</strong></td>
+<td><code>kompare</code></td>
+<td>Linux</td>
+<td>GUI</td>
+<td>Open Source</td>
+<td><a href="https://apps.kde.org/kompare/" rel="nofollow">https://apps.kde.org/kompare/</a></td>
+</tr>
+<tr>
+<td><strong>TkDiff</strong></td>
+<td><code>tkdiff</code></td>
+<td>Linux, macOS, Windows</td>
+<td>GUI</td>
+<td>Open Source</td>
+<td><a href="https://sourceforge.net/projects/tkdiff/" rel="nofollow">https://sourceforge.net/projects/tkdiff/</a></td>
+</tr>
+<tr>
+<td>
+<strong>Beyond Compare</strong> ⭐</td>
+<td><code>bcompare</code></td>
+<td>Linux, macOS, Windows</td>
+<td>GUI + CLI</td>
+<td>Commercial</td>
+<td><a href="https://www.scootersoftware.com/" rel="nofollow">https://www.scootersoftware.com/</a></td>
+</tr>
+<tr>
+<td><strong>FileMerge (Xcode)</strong></td>
+<td><code>filemerge</code></td>
+<td>macOS</td>
+<td>GUI</td>
+<td>Free (Xcode)</td>
+<td><a href="https://developer.apple.com/xcode/" rel="nofollow">https://developer.apple.com/xcode/</a></td>
+</tr>
+<tr>
+<td><strong>Kaleidoscope</strong></td>
+<td><code>kaleidoscope</code></td>
+<td>macOS</td>
+<td>GUI</td>
+<td>Commercial</td>
+<td><a href="https://kaleidoscope.app/" rel="nofollow">https://kaleidoscope.app/</a></td>
+</tr>
+<tr>
+<td><strong>WinMerge</strong></td>
+<td><code>winmerge</code></td>
+<td>Windows</td>
+<td>GUI</td>
+<td>Open Source</td>
+<td><a href="https://winmerge.org" rel="nofollow">https://winmerge.org</a></td>
+</tr>
+<tr>
+<td><strong>Araxis Merge</strong></td>
+<td><code>amerge</code></td>
+<td>Windows, macOS</td>
+<td>GUI</td>
+<td>Commercial</td>
+<td><a href="https://www.araxis.com/merge" rel="nofollow">https://www.araxis.com/merge</a></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<div class="markdown-heading"><h3 class="heading-element">Advanced Features</h3><a id="user-content-advanced-features" class="anchor" aria-label="Permalink: Advanced Features" href="#advanced-features"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>🔍 <strong>Recursive File Search</strong> - Automatically finds files in subdirectories up to 10 levels deep</li>
+<li>📊 <strong>Delta Diff Integration</strong> - Beautiful side-by-side diff comparison with backups</li>
+<li>🌳 <strong>Directory Tree View</strong> - Visual file structure with sizes (like <code>tree</code> command)</li>
+<li>📁 <strong>GitIgnore Support</strong> - Respects <code>.gitignore</code> patterns in tree view</li>
+<li>🗑️ <strong>Safe Delete</strong> - Backup before deletion, create empty placeholder</li>
+<li>⚙️ <strong>Exception Filtering</strong> - Exclude specific files/folders from tree view</li>
+<li>🎯 <strong>Multi-File Selection</strong> - Interactive prompt when multiple files found</li>
+<li>🚀 <strong>Smart Path Resolution</strong> - Finds files anywhere in your project</li>
+<li>⚙️ <strong>Configurable</strong> - Customize behavior via <code>pt.yml</code> config file ✨ NEW!</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">Version Management Capabilities with Comments ✨ NEW!</h3><a id="user-content-version-management-capabilities-with-comments--new" class="anchor" aria-label="Permalink: Version Management Capabilities with Comments ✨ NEW!" href="#version-management-capabilities-with-comments--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p><strong>PT acts as a lightweight version control system with descriptive comments:</strong></p>
+<ul>
+<li>📜 <strong>Complete Version History</strong> - Every file change is preserved with optional comments</li>
+<li>💬 <strong>Comment System</strong> - Track why changes were made, not just when</li>
+<li>📝 <strong>Contextual Notes</strong> - Add meaningful descriptions to each backup</li>
+<li>🔙 <strong>Easy Rollback</strong> - Restore any previous version instantly, see why it was saved</li>
+<li>📊 <strong>Version Comparison</strong> - Diff any two versions visually with delta (default) and support many diff tool</li>
+<li>🎯 <strong>Zero Data Loss</strong> - Never lose work, automatic backup before every write</li>
+<li>💾 <strong>Space Efficient</strong> - Only changed files are backed up</li>
+<li>🏷️ <strong>Timestamped Versions</strong> - Microsecond precision timestamps + human-readable comments</li>
+</ul>
+<div class="markdown-heading"><h2 class="heading-element">🚀 Installation</h2><a id="user-content--installation" class="anchor" aria-label="Permalink: 🚀 Installation" href="#-installation"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Prerequisites</h3><a id="user-content-prerequisites" class="anchor" aria-label="Permalink: Prerequisites" href="#prerequisites"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>Go 1.16 or higher</li>
+<li>Git (for installation)</li>
+<li>
+<strong>Delta</strong> (optional, for diff functionality) - <a href="https://github.com/dandavison/delta">Install from here</a>
+</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">Install from Source</h3><a id="user-content-install-from-source" class="anchor" aria-label="Permalink: Install from Source" href="#install-from-source"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>go install github.com/cumulus13/pt-go/pt@latest
+
+<span class="pl-c"><span class="pl-c">#</span> or Clone the repository</span>
+git clone https://github.com/cumulus13/pt-go.git
+<span class="pl-c1">cd</span> pt-go
+
+<span class="pl-c"><span class="pl-c">#</span> Build and install</span>
+go build -o pt pt/main.go
+
+<span class="pl-c"><span class="pl-c">#</span> Move to your PATH (Linux/macOS)</span>
+sudo mv pt /usr/local/bin/
+
+<span class="pl-c"><span class="pl-c">#</span> Or for Windows, add to your PATH manually</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Quick Install (Linux/macOS)</h3><a id="user-content-quick-install-linuxmacos" class="anchor" aria-label="Permalink: Quick Install (Linux/macOS)" href="#quick-install-linuxmacos"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> One-liner installation</span>
+curl -sSL https://raw.githubusercontent.com/cumulus13/pt-go/pt/main/install.sh <span class="pl-k">|</span> bash</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Install Delta (for diff feature)</h3><a id="user-content-install-delta-for-diff-feature" class="anchor" aria-label="Permalink: Install Delta (for diff feature)" href="#install-delta-for-diff-feature"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> macOS</span>
+brew install git-delta
+
+<span class="pl-c"><span class="pl-c">#</span> Ubuntu/Debian</span>
+sudo apt install git-delta
+
+<span class="pl-c"><span class="pl-c">#</span> Arch Linux</span>
+sudo pacman -S git-delta
+
+<span class="pl-c"><span class="pl-c">#</span> Fedora/RHEL</span>
+sudo dnf install git-delta
+
+<span class="pl-c"><span class="pl-c">#</span> Windows (with Chocolatey)</span>
+choco install delta
+
+<span class="pl-c"><span class="pl-c">#</span> Windows (with Scoop)</span>
+scoop install delta
+
+<span class="pl-c"><span class="pl-c">#</span> Or download from: https://github.com/dandavison/delta/releases</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Verify Installation</h3><a id="user-content-verify-installation" class="anchor" aria-label="Permalink: Verify Installation" href="#verify-installation"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>pt --version
+<span class="pl-c"><span class="pl-c">#</span> PT version 1.0.19</span>
+<span class="pl-c"><span class="pl-c">#</span> Production-hardened clipboard to file tool</span>
+<span class="pl-c"><span class="pl-c">#</span> Features: Recursive search, backup management, delta diff, tree view, safe delete, configurable, comments</span></pre></div>
+<p>[Documentation] (<a href="https://pt.readthedocs.io/en/latest" rel="nofollow">https://pt.readthedocs.io/en/latest</a>)</p>
+<div class="markdown-heading"><h2 class="heading-element">📖 Usage</h2><a id="user-content--usage" class="anchor" aria-label="Permalink: 📖 Usage" href="#-usage"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Basic Commands</h3><a id="user-content-basic-commands" class="anchor" aria-label="Permalink: Basic Commands" href="#basic-commands"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Write clipboard to file (creates backup if exists)</span>
+pt myfile.txt
+
+<span class="pl-c"><span class="pl-c">#</span> Write with comment ✨ NEW!</span>
+pt myfile.txt -m <span class="pl-s"><span class="pl-pds">"</span>Fixed bug in authentication logic<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Write with check mode (skip if unchanged) ✨ NEW!</span>
+pt myfile.txt -c
+
+<span class="pl-c"><span class="pl-c">#</span> Combine check mode with comment ✨ NEW!</span>
+pt myfile.txt -c -m <span class="pl-s"><span class="pl-pds">"</span>Updated configuration<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Append clipboard to file (no backup)</span>
+pt + myfile.txt
+
+<span class="pl-c"><span class="pl-c">#</span> Append with comment ✨ NEW!</span>
+pt + myfile.txt -m <span class="pl-s"><span class="pl-pds">"</span>Added new log entry<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> List all backups with sizes, timestamps, and comments ✨ NEW!</span>
+pt -l myfile.txt
+
+<span class="pl-c"><span class="pl-c">#</span> Restore backup (interactive selection)</span>
+pt -r myfile.txt
+
+<span class="pl-c"><span class="pl-c">#</span> Restore with comment ✨ NEW!</span>
+pt -r myfile.txt -m <span class="pl-s"><span class="pl-pds">"</span>Rolled back to stable version<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Restore last backup directly</span>
+pt -r myfile.txt --last
+
+<span class="pl-c"><span class="pl-c">#</span> Restore last backup with comment ✨ NEW!</span>
+pt -r myfile.txt --last -m <span class="pl-s"><span class="pl-pds">"</span>Emergency rollback<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Show help</span>
+pt --help
+
+<span class="pl-c"><span class="pl-c">#</span> Show version</span>
+pt --version</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Configuration Commands</h3><a id="user-content-configuration-commands" class="anchor" aria-label="Permalink: Configuration Commands" href="#configuration-commands"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Initialize configuration file</span>
+pt config init              <span class="pl-c"><span class="pl-c">#</span> Creates pt.yml in current directory</span>
+pt config init <span class="pl-k">~</span>/.pt.yml    <span class="pl-c"><span class="pl-c">#</span> Create in custom location</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Show current configuration</span>
+pt config show
+
+<span class="pl-c"><span class="pl-c">#</span> Show config file location</span>
+pt config path</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Advanced Commands</h3><a id="user-content-advanced-commands" class="anchor" aria-label="Permalink: Advanced Commands" href="#advanced-commands"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> 🔍 RECURSIVE SEARCH - Automatically finds files in subdirectories</span>
+pt config.json              <span class="pl-c"><span class="pl-c">#</span> Searches up to 10 levels deep</span>
+pt -l utils.go              <span class="pl-c"><span class="pl-c">#</span> List backups (searches recursively)</span>
+pt -r main.py               <span class="pl-c"><span class="pl-c">#</span> Restore (searches recursively)</span>
+
+<span class="pl-c"><span class="pl-c">#</span> 📊 DIFF OPERATIONS - Compare with backups using delta</span>
+pt -d myfile.txt            <span class="pl-c"><span class="pl-c">#</span> Interactive: choose which backup to compare</span>
+pt -d myfile.txt --last     <span class="pl-c"><span class="pl-c">#</span> Quick: compare with most recent backup</span>
+pt --diff script.py         <span class="pl-c"><span class="pl-c">#</span> Alternative syntax</span>
+
+<span class="pl-c"><span class="pl-c">#</span> 🌳 DIRECTORY TREE - Visualize file structure</span>
+pt -t                       <span class="pl-c"><span class="pl-c">#</span> Show tree of current directory</span>
+pt -t /path/to/dir          <span class="pl-c"><span class="pl-c">#</span> Show tree of specific directory</span>
+pt -t -e node_modules,.git  <span class="pl-c"><span class="pl-c">#</span> Tree with exceptions (exclude folders)</span>
+pt -t /path -e build,dist   <span class="pl-c"><span class="pl-c">#</span> Combine path and exceptions</span>
+
+<span class="pl-c"><span class="pl-c">#</span> 🗑️ SAFE DELETE - Backup before deletion</span>
+pt -rm old_file.txt         <span class="pl-c"><span class="pl-c">#</span> Backup, delete, create empty placeholder</span>
+pt -rm old_file.txt -m <span class="pl-s"><span class="pl-pds">"</span>Deprecated old implementation<span class="pl-pds">"</span></span>  <span class="pl-c"><span class="pl-c">#</span> With comment ✨ NEW!</span>
+pt --remove script.py       <span class="pl-c"><span class="pl-c">#</span> Alternative syntax</span></pre></div>
+<div class="markdown-heading"><h2 class="heading-element">📚 Examples</h2><a id="user-content--examples" class="anchor" aria-label="Permalink: 📚 Examples" href="#-examples"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">1. Quick Note Taking with Comments ✨ NEW!</h3><a id="user-content-1-quick-note-taking-with-comments--new" class="anchor" aria-label="Permalink: 1. Quick Note Taking with Comments ✨ NEW!" href="#1-quick-note-taking-with-comments--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Copy some text to clipboard, then:</span>
+pt notes.txt -m <span class="pl-s"><span class="pl-pds">"</span>Meeting notes from sprint planning<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> ✅ Successfully written to: notes.txt</span>
+<span class="pl-c"><span class="pl-c">#</span> 📄 Content size: 142 characters</span>
+<span class="pl-c"><span class="pl-c">#</span> 💬 Comment: "Meeting notes from sprint planning"</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">2. Version Control for Code Changes ✨ NEW!</h3><a id="user-content-2-version-control-for-code-changes--new" class="anchor" aria-label="Permalink: 2. Version Control for Code Changes ✨ NEW!" href="#2-version-control-for-code-changes--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Before making risky changes</span>
+pt main.go -m <span class="pl-s"><span class="pl-pds">"</span>Working version before refactoring<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> 📦 Backup created: main_go.20251118_141241...</span>
+<span class="pl-c"><span class="pl-c">#</span> 💬 Comment: "Working version before refactoring"</span>
+
+<span class="pl-c"><span class="pl-c">#</span> After changes (only saves if different)</span>
+pt main.go -c -m <span class="pl-s"><span class="pl-pds">"</span>Refactored authentication module<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> 🔍 Content differs, proceeding with backup and write</span>
+<span class="pl-c"><span class="pl-c">#</span> ✅ Successfully written to: main.go</span>
+
+<span class="pl-c"><span class="pl-c">#</span> View version history with comments</span>
+pt -l main.go
+<span class="pl-c"><span class="pl-c">#</span> Shows table with comments for each version</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">3. Configuration Management with Context ✨ NEW!</h3><a id="user-content-3-configuration-management-with-context--new" class="anchor" aria-label="Permalink: 3. Configuration Management with Context ✨ NEW!" href="#3-configuration-management-with-context--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Save production config</span>
+pt config.json -m <span class="pl-s"><span class="pl-pds">"</span>Production config for v2.1.0 release<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> Later, update for testing</span>
+pt config.json -m <span class="pl-s"><span class="pl-pds">"</span>Testing new cache settings<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> View all config versions with comments</span>
+pt -l config.json
+<span class="pl-c"><span class="pl-c">#</span> ┌────────────┬─────────────┬──────┬────────────────────────────┐</span>
+<span class="pl-c"><span class="pl-c">#</span> │ File Name  │ Modified    │ Size │ Comment                    │</span>
+<span class="pl-c"><span class="pl-c">#</span> ├────────────┼─────────────┼──────┼────────────────────────────┤</span>
+<span class="pl-c"><span class="pl-c">#</span> │ 1. config..│ 14:12:41    │ 2 KB │ Testing new cache settings │</span>
+<span class="pl-c"><span class="pl-c">#</span> │ 2. config..│ 10:30:15    │ 2 KB │ Production config v2.1.0   │</span>
+<span class="pl-c"><span class="pl-c">#</span> └────────────┴─────────────┴──────┴────────────────────────────┘</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Restore production config</span>
+pt -r config.json -m <span class="pl-s"><span class="pl-pds">"</span>Reverting to production config<span class="pl-pds">"</span></span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">4. Check Mode - Save Disk Space ✨ NEW!</h3><a id="user-content-4-check-mode---save-disk-space--new" class="anchor" aria-label="Permalink: 4. Check Mode - Save Disk Space ✨ NEW!" href="#4-check-mode---save-disk-space--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Only write if content actually changed</span>
+pt data.json -c
+<span class="pl-c"><span class="pl-c">#</span> ℹ️  Content identical to current file, no changes needed</span>
+<span class="pl-c"><span class="pl-c">#</span> 📄 File: data.json</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Or with comment if it does change</span>
+pt data.json -c -m <span class="pl-s"><span class="pl-pds">"</span>Updated user preferences<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> 🔍 Content differs, proceeding with backup and write</span>
+<span class="pl-c"><span class="pl-c">#</span> 📦 Backup created with comment</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">5. Safe Delete with Context ✨ NEW!</h3><a id="user-content-5-safe-delete-with-context--new" class="anchor" aria-label="Permalink: 5. Safe Delete with Context ✨ NEW!" href="#5-safe-delete-with-context--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Delete old implementation with explanation</span>
+pt -rm legacy_auth.py -m <span class="pl-s"><span class="pl-pds">"</span>Replaced by new OAuth2 implementation<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> 📦 Backup created: legacy_auth_py.20251118_141241...</span>
+<span class="pl-c"><span class="pl-c">#</span> 💬 Comment: "Replaced by new OAuth2 implementation"</span>
+<span class="pl-c"><span class="pl-c">#</span> 🗑️  File deleted: legacy_auth.py</span>
+<span class="pl-c"><span class="pl-c">#</span> 📄 Created empty placeholder: legacy_auth.py</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">6. Append Mode with Comments ✨ NEW!</h3><a id="user-content-6-append-mode-with-comments--new" class="anchor" aria-label="Permalink: 6. Append Mode with Comments ✨ NEW!" href="#6-append-mode-with-comments--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Append log entries with context</span>
+pt + errors.log -m <span class="pl-s"><span class="pl-pds">"</span>Error logs from production incident<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> ✅ Successfully appended to: errors.log</span>
+<span class="pl-c"><span class="pl-c">#</span> 📝 Content size: 87 characters</span>
+<span class="pl-c"><span class="pl-c">#</span> 💬 Comment: "Error logs from production incident"</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">7. Interactive Restore with Comment History ✨ NEW!</h3><a id="user-content-7-interactive-restore-with-comment-history--new" class="anchor" aria-label="Permalink: 7. Interactive Restore with Comment History ✨ NEW!" href="#7-interactive-restore-with-comment-history--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>pt -r main.go
+
+<span class="pl-c"><span class="pl-c">#</span> 📂 Backup files for 'main.go'</span>
+<span class="pl-c"><span class="pl-c">#</span> Total: 5 backup(s) (stored in ./backup/)</span>
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> ┌──────────────────────────┬─────────────────────┬──────────┬────────────────────────────────┐</span>
+<span class="pl-c"><span class="pl-c">#</span> │ File Name                │ Modified            │     Size │ Comment                        │</span>
+<span class="pl-c"><span class="pl-c">#</span> ├──────────────────────────┼─────────────────────┼──────────┼────────────────────────────────┤</span>
+<span class="pl-c"><span class="pl-c">#</span> │ 1. main_go.20251118...   │ 2025-11-18 14:12:41 │  50.5 KB │ Add comment system             │</span>
+<span class="pl-c"><span class="pl-c">#</span> │ 2. main_go.20251118...   │ 2025-11-18 14:11:24 │  57.0 KB │ Working version before refactor│</span>
+<span class="pl-c"><span class="pl-c">#</span> │ 3. main_go.20251118...   │ 2025-11-18 13:43:01 │  52.6 KB │ Fixed authentication bug       │</span>
+<span class="pl-c"><span class="pl-c">#</span> │ 4. main_go.20251113...   │ 2025-11-13 11:47:02 │  49.2 KB │ -                              │</span>
+<span class="pl-c"><span class="pl-c">#</span> │ 5. main_go.20251113...   │ 2025-11-13 11:39:49 │  49.2 KB │ -                              │</span>
+<span class="pl-c"><span class="pl-c">#</span> └──────────────────────────┴─────────────────────┴──────────┴────────────────────────────────┘</span>
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> Enter backup number to restore (1-5) or 0 to cancel: 2</span>
+<span class="pl-c"><span class="pl-c">#</span> ✅ Successfully restored: main.go</span>
+<span class="pl-c"><span class="pl-c">#</span> 📦 From backup: main_go.20251118_141124...</span>
+<span class="pl-c"><span class="pl-c">#</span> 💬 Restore comment: "Restored from backup"</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">8. Configuration File ✨ NEW!</h3><a id="user-content-8-configuration-file--new" class="anchor" aria-label="Permalink: 8. Configuration File ✨ NEW!" href="#8-configuration-file--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Create configuration file</span>
+pt config init
+
+<span class="pl-c"><span class="pl-c">#</span> Edit pt.yml</span>
+cat <span class="pl-k">&gt;</span> pt.yml <span class="pl-s"><span class="pl-k">&lt;&lt;</span> <span class="pl-k">EOF</span></span>
+<span class="pl-s"># PT Configuration File</span>
+<span class="pl-s">max_clipboard_size: 104857600    # 100MB</span>
+<span class="pl-s">max_backup_count: 100            # Keep 100 backups</span>
+<span class="pl-s">max_filename_length: 200         # Max filename length</span>
+<span class="pl-s">backup_dir_name: backup          # Backup directory name</span>
+<span class="pl-s">max_search_depth: 10             # Max recursive search depth</span>
+<span class="pl-s"><span class="pl-k">EOF</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> View current config</span>
+pt config show
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> Current PT Configuration:</span>
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> Max Clipboard Size: 104857600 bytes (100.0 MB)</span>
+<span class="pl-c"><span class="pl-c">#</span> Max Backup Count: 100</span>
+<span class="pl-c"><span class="pl-c">#</span> Max Filename Length: 200 characters</span>
+<span class="pl-c"><span class="pl-c">#</span> Backup Directory: backup/</span>
+<span class="pl-c"><span class="pl-c">#</span> Max Search Depth: 10 levels</span>
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> Config loaded from: ./pt.yml</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">9. Recursive File Search</h3><a id="user-content-9-recursive-file-search" class="anchor" aria-label="Permalink: 9. Recursive File Search" href="#9-recursive-file-search"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> File not in current directory? PT finds it automatically!</span>
+pt config.json
+<span class="pl-c"><span class="pl-c">#</span> 🔍 Searching for 'config.json' recursively...</span>
+<span class="pl-c"><span class="pl-c">#</span> ✓ Found at: /path/to/project/src/config.json</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Multiple files found? PT shows interactive selection</span>
+pt README.md
+<span class="pl-c"><span class="pl-c">#</span> 🔍 Found 3 matching file(s)</span>
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> ┌──────┬────────────────────────────┬─────────────────────┬──────────────┐</span>
+<span class="pl-c"><span class="pl-c">#</span> │   #  │ Path                       │ Modified            │ Size         │</span>
+<span class="pl-c"><span class="pl-c">#</span> ├──────┼────────────────────────────┼─────────────────────┼──────────────┤</span>
+<span class="pl-c"><span class="pl-c">#</span> │    1 │ ./README.md                │ 2025-11-15 10:30:00 │ 15.2 KB      │</span>
+<span class="pl-c"><span class="pl-c">#</span> │    2 │ ./docs/README.md           │ 2025-11-14 15:20:00 │ 8.5 KB       │</span>
+<span class="pl-c"><span class="pl-c">#</span> │    3 │ ./examples/README.md       │ 2025-11-13 09:15:00 │ 3.2 KB       │</span>
+<span class="pl-c"><span class="pl-c">#</span> └──────┴────────────────────────────┴─────────────────────┴──────────────┘</span>
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> Enter file number to use (1-3) or 0 to cancel: 1</span>
+<span class="pl-c"><span class="pl-c">#</span> ✓ Using: ./README.md</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">10. Visual Diff Comparison</h3><a id="user-content-10-visual-diff-comparison" class="anchor" aria-label="Permalink: 10. Visual Diff Comparison" href="#10-visual-diff-comparison"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Interactive diff - choose which backup to compare</span>
+pt -d main.go
+<span class="pl-c"><span class="pl-c">#</span> 📂 Backup files for 'main.go'</span>
+<span class="pl-c"><span class="pl-c">#</span> [Shows list of backups with comments]</span>
+<span class="pl-c"><span class="pl-c">#</span> Enter backup number to compare (1-5) or 0 to cancel: 1</span>
+<span class="pl-c"><span class="pl-c">#</span> 📊 Comparing with backup: main_go.20251115_120000...</span>
+<span class="pl-c"><span class="pl-c">#</span> [Beautiful side-by-side diff powered by delta]</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Quick diff with last backup</span>
+pt -d main.go --last
+<span class="pl-c"><span class="pl-c">#</span> 📊 Comparing with last backup: main_go.20251115_151804...</span>
+<span class="pl-c"><span class="pl-c">#</span> Current file: /path/to/main.go</span>
+<span class="pl-c"><span class="pl-c">#</span> Backup file:  /path/to/backup/main_go.20251115_151804...</span>
+<span class="pl-c"><span class="pl-c">#</span> [Beautiful colored diff output]</span></pre></div>
+<div class="markdown-heading"><h3 class="heading-element">11. Directory Tree Visualization</h3><a id="user-content-11-directory-tree-visualization" class="anchor" aria-label="Permalink: 11. Directory Tree Visualization" href="#11-directory-tree-visualization"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Show current directory tree</span>
+pt -t
+<span class="pl-c"><span class="pl-c">#</span> myproject/</span>
+<span class="pl-c"><span class="pl-c">#</span> ├── src/</span>
+<span class="pl-c"><span class="pl-c">#</span> │   ├── main.go (15.2 KB)</span>
+<span class="pl-c"><span class="pl-c">#</span> │   └── utils.go (3.4 KB)</span>
+<span class="pl-c"><span class="pl-c">#</span> ├── backup/</span>
+<span class="pl-c"><span class="pl-c">#</span> │   └── main_go.20251115_101530.12345 (8.1 KB)</span>
+<span class="pl-c"><span class="pl-c">#</span> ├── README.md (2.1 KB)</span>
+<span class="pl-c"><span class="pl-c">#</span> └── go.mod (456 B)</span>
+<span class="pl-c"><span class="pl-c">#</span> </span>
+<span class="pl-c"><span class="pl-c">#</span> 2 directories, 5 files, 29.2 KB total</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Exclude specific folders</span>
+pt -t -e node_modules,.git,dist</pre></div>
+<div class="markdown-heading"><h2 class="heading-element">🎨 Output Examples</h2><a id="user-content--output-examples" class="anchor" aria-label="Permalink: 🎨 Output Examples" href="#-output-examples"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Backup Listing with Comments ✨ NEW!</h3><a id="user-content-backup-listing-with-comments--new" class="anchor" aria-label="Permalink: Backup Listing with Comments ✨ NEW!" href="#backup-listing-with-comments--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<pre><code>📂 Backup files for 'myfile.txt'
+Total: 5 backup(s) (stored in ./backup/)
+
+┌──────────────────────────────────────┬─────────────────────┬──────────────┬──────────────────────────────────────┐
+│ File Name                            │ Modified            │         Size │ Comment                              │
+├──────────────────────────────────────┼─────────────────────┼──────────────┼──────────────────────────────────────┤
+│ 1. myfile_txt.20251118_141241...     │ 2025-11-18 14:12:41 │      2.45 KB │ Add comment system                   │
+│ 2. myfile_txt.20251118_140030...     │ 2025-11-18 14:00:30 │      2.40 KB │ Fixed bug in auth logic              │
+│ 3. myfile_txt.20251118_120000...     │ 2025-11-18 12:00:00 │      1.98 KB │ Updated configuration                │
+│ 4. myfile_txt.20251114_180000...     │ 2025-11-14 18:00:00 │      1.85 KB │ -                                    │
+│ 5. myfile_txt.20251114_100000...     │ 2025-11-14 10:00:00 │      1.52 KB │ -                                    │
+└──────────────────────────────────────┴─────────────────────┴──────────────┴──────────────────────────────────────┘
+</code></pre>
+<div class="markdown-heading"><h3 class="heading-element">Check Mode Output ✨ NEW!</h3><a id="user-content-check-mode-output--new" class="anchor" aria-label="Permalink: Check Mode Output ✨ NEW!" href="#check-mode-output--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> When content is identical</span>
+pt data.json -c
+<span class="pl-c"><span class="pl-c">#</span> ℹ️  Content identical to current file, no changes needed</span>
+<span class="pl-c"><span class="pl-c">#</span> 📄 File: data.json</span>
+
+<span class="pl-c"><span class="pl-c">#</span> When content differs</span>
+pt data.json -c -m <span class="pl-s"><span class="pl-pds">"</span>Updated schema<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> 🔍 Content differs, proceeding with backup and write</span>
+<span class="pl-c"><span class="pl-c">#</span> 📦 Backup created: data_json.20251118_141241...</span>
+<span class="pl-c"><span class="pl-c">#</span> 💬 Comment: "Updated schema"</span>
+<span class="pl-c"><span class="pl-c">#</span> ✅ Successfully written to: data.json</span></pre></div>
+<div class="markdown-heading"><h2 class="heading-element">🗂️ Project Structure</h2><a id="user-content-️-project-structure" class="anchor" aria-label="Permalink: 🗂️ Project Structure" href="#️-project-structure"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<pre><code>pt/
+├── backup/                         # Auto-created backup directory
+│   ├── main_go.20251115_163913... # Timestamped backups
+│   ├── main_go.20251115_163913.....meta.json # Metadata with comments ✨ NEW!
+│   └── main_go.20251115_151804...
+├── go.mod                          # Go module definition
+├── go.sum                          # Dependency checksums
+├── pt/
+│   └── main.go                     # Main application code
+├── pt.yml                          # Configuration file (optional) ✨ NEW!
+├── README.md                       # This file
+├── LICENSE                         # MIT License
+├── VERSION                         # Version file
+├── .gitignore                      # Git ignore rules
+└── install.sh                      # Installation script (optional)
+</code></pre>
+<div class="markdown-heading"><h3 class="heading-element">Backup Metadata Format ✨ NEW!</h3><a id="user-content-backup-metadata-format--new" class="anchor" aria-label="Permalink: Backup Metadata Format ✨ NEW!" href="#backup-metadata-format--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>All backups are stored in a <code>./backup/</code> subdirectory relative to the file location. Each backup now has an associated <code>.meta.json</code> file:</p>
+<pre><code>project/
+├── myfile.txt                      # Current version
+├── backup/                         # Backup directory (auto-created)
+│   ├── myfile_txt.20251115_151804... # Backup 1
+│   ├── myfile_txt.20251115_143022... # Backup 2
+│   └── myfile_txt.20251115_120000... # Backup 3
+├── src/
+│   ├── app.js                      # Current version
+│   └── backup/                     # Separate backup dir per location
+│       └── app_js.20251115_120000...
+└── other_files.txt
+</code></pre>
+<div class="highlight highlight-source-json"><pre>{
+  <span class="pl-ent">"comment"</span>: <span class="pl-s"><span class="pl-pds">"</span>Fixed authentication bug<span class="pl-pds">"</span></span>,
+  <span class="pl-ent">"timestamp"</span>: <span class="pl-s"><span class="pl-pds">"</span>2025-11-18T14:12:41.500000Z<span class="pl-pds">"</span></span>,
+  <span class="pl-ent">"size"</span>: <span class="pl-c1">51712</span>,
+  <span class="pl-ent">"original_file"</span>: <span class="pl-s"><span class="pl-pds">"</span>/path/to/main.go<span class="pl-pds">"</span></span>
+}</pre></div>
+<div class="markdown-heading"><h2 class="heading-element">🔧 Configuration</h2><a id="user-content--configuration" class="anchor" aria-label="Permalink: 🔧 Configuration" href="#-configuration"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Configuration File (pt.yml) ✨ NEW!</h3><a id="user-content-configuration-file-ptyml--new" class="anchor" aria-label="Permalink: Configuration File (pt.yml) ✨ NEW!" href="#configuration-file-ptyml--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>PT now supports configuration via <code>pt.yml</code> file. Search locations (in order):</p>
+<ol>
+<li>
+<code>./pt.yml</code> or <code>./pt.yaml</code> (current directory)</li>
+<li>
+<code>~/.config/pt/pt.yml</code> or <code>~/.config/pt/pt.yaml</code>
+</li>
+<li>
+<code>~/pt.yml</code> or <code>~/pt.yaml</code> (home directory)</li>
+</ol>
+<div class="markdown-heading"><h4 class="heading-element">Create Config File</h4><a id="user-content-create-config-file" class="anchor" aria-label="Permalink: Create Config File" href="#create-config-file"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Generate sample config</span>
+pt config init
+
+<span class="pl-c"><span class="pl-c">#</span> Or create manually</span>
+cat <span class="pl-k">&gt;</span> pt.yml <span class="pl-s"><span class="pl-k">&lt;&lt;</span> <span class="pl-k">EOF</span></span>
+<span class="pl-s"># PT Configuration File</span>
+<span class="pl-s">max_clipboard_size: 104857600    # 100MB (1-1GB)</span>
+<span class="pl-s">max_backup_count: 100            # 100 backups (1-10000)</span>
+<span class="pl-s">max_filename_length: 200         # 200 chars (1-1000)</span>
+<span class="pl-s">backup_dir_name: backup          # "backup" directory</span>
+<span class="pl-s">max_search_depth: 10             # 10 levels (1-100)</span>
+<span class="pl-s"><span class="pl-k">EOF</span></span></pre></div>
+<div class="markdown-heading"><h4 class="heading-element">Configuration Options</h4><a id="user-content-configuration-options" class="anchor" aria-label="Permalink: Configuration Options" href="#configuration-options"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>max_clipboard_size</strong></td>
+<td>104857600 (100MB)</td>
+<td>1 - 1073741824 (1GB)</td>
+<td>Maximum clipboard content size</td>
+</tr>
+<tr>
+<td><strong>max_backup_count</strong></td>
+<td>100</td>
+<td>1 - 10000</td>
+<td>Maximum backups kept per file</td>
+</tr>
+<tr>
+<td><strong>max_filename_length</strong></td>
+<td>200</td>
+<td>1 - 1000</td>
+<td>Maximum filename length</td>
+</tr>
+<tr>
+<td><strong>backup_dir_name</strong></td>
+<td>backup</td>
+<td>-</td>
+<td>Backup directory name</td>
+</tr>
+<tr>
+<td><strong>max_search_depth</strong></td>
+<td>10</td>
+<td>1 - 100</td>
+<td>Recursive search depth</td>
+</tr>
+</tbody>
+</table>
+<div class="markdown-heading"><h4 class="heading-element">View Configuration</h4><a id="user-content-view-configuration" class="anchor" aria-label="Permalink: View Configuration" href="#view-configuration"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Show current config</span>
+pt config show
+
+<span class="pl-c"><span class="pl-c">#</span> Show config file location</span>
+pt config path</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Backup Naming Format</h3><a id="user-content-backup-naming-format" class="anchor" aria-label="Permalink: Backup Naming Format" href="#backup-naming-format"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Backups use this format for zero-collision guarantee:</p>
+<pre><code>originalname_ext.YYYYMMDD_HHMMSS_MICROSECONDS.PID_RANDOMID
+</code></pre>
+<p>Example:</p>
+<pre><code>notes_txt.20251115_151804177132.12345_a1b2c3d4
+notes_txt.20251115_151804177132.12345_a1b2c3d4.meta.json  ✨ NEW!
+</code></pre>
+<p>Components:</p>
+<ul>
+<li>
+<code>notes_txt</code> - Original filename without extension</li>
+<li>
+<code>20251115_151804177132</code> - Timestamp with microsecond precision</li>
+<li>
+<code>12345</code> - Process ID</li>
+<li>
+<code>a1b2c3d4</code> - Random 8-character hex ID</li>
+<li>
+<code>.meta.json</code> - Metadata file with comment ✨ NEW!</li>
+</ul>
+<p>This ensures <strong>zero collision</strong> risk even with:</p>
+<ul>
+<li>Multiple concurrent PT instances</li>
+<li>Same-second operations</li>
+<li>Parallel processing</li>
+<li>Multiple files with same name in different directories</li>
+</ul>
+<div class="markdown-heading"><h2 class="heading-element">🔒 Security Features</h2><a id="user-content--security-features" class="anchor" aria-label="Permalink: 🔒 Security Features" href="#-security-features"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Path Validation</h3><a id="user-content-path-validation" class="anchor" aria-label="Permalink: Path Validation" href="#path-validation"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>✅ Prevents path traversal attacks (<code>../../../etc/passwd</code>)</li>
+<li>✅ Blocks writes to system directories (<code>/etc</code>, <code>/sys</code>, <code>C:\Windows</code>)</li>
+<li>✅ Validates filename length limits</li>
+<li>✅ Sanitizes all file paths</li>
+<li>✅ Validates recursive search depth</li>
+<li>✅ Validates configuration values ✨ NEW!</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">Size Limits</h3><a id="user-content-size-limits" class="anchor" aria-label="Permalink: Size Limits" href="#size-limits"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>✅ Maximum 100MB clipboard content (configurable) ✨ NEW!</li>
+<li>✅ Prevents disk exhaustion attacks</li>
+<li>✅ Validates disk space before writing</li>
+<li>✅ Checks write permissions</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">Input Validation</h3><a id="user-content-input-validation" class="anchor" aria-label="Permalink: Input Validation" href="#input-validation"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>✅ All user inputs sanitized</li>
+<li>✅ Numeric inputs validated for range</li>
+<li>✅ Graceful handling of malformed input</li>
+<li>✅ Protected against command injection</li>
+<li>✅ Safe file selection in multi-match scenarios</li>
+<li>✅ Configuration file validation ✨ NEW!</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">Safe Operations</h3><a id="user-content-safe-operations" class="anchor" aria-label="Permalink: Safe Operations" href="#safe-operations"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>✅ Atomic-like file operations</li>
+<li>✅ Verification of write completion</li>
+<li>✅ Automatic rollback on errors</li>
+<li>✅ Backup before destructive operations</li>
+<li>✅ Backup directory exclusion from search</li>
+<li>✅ Metadata integrity checks ✨ NEW!</li>
+</ul>
+<div class="markdown-heading"><h2 class="heading-element"><g-emoji class="g-emoji" alias="warning">⚠️</g-emoji> Limitations</h2><a id="user-content-️-limitations" class="anchor" aria-label="Permalink: ⚠️ Limitations" href="#️-limitations"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ol>
+<li>
+<strong>Text Only</strong> - Only supports text content (no binary clipboard data)</li>
+<li>
+<strong>Single File</strong> - Operates on one file at a time</li>
+<li>
+<strong>Local Only</strong> - No network or cloud storage support</li>
+<li>
+<strong>Platform Support</strong> - Requires clipboard access (may need X11 on Linux headless)</li>
+<li>
+<strong>Delta Required</strong> - Diff feature requires delta to be installed</li>
+<li>
+<strong>Search Depth</strong> - Recursive search limited to configurable depth (default 10)</li>
+<li>
+<strong>Backup Exclusion</strong> - Configured backup directories excluded from search</li>
+<li>
+<strong>Comment Length</strong> - No enforced limit on comment length ✨ NEW!</li>
+</ol>
+<div class="markdown-heading"><h2 class="heading-element">🛠 Troubleshooting</h2><a id="user-content--troubleshooting" class="anchor" aria-label="Permalink: 🛠 Troubleshooting" href="#-troubleshooting"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Clipboard Empty Error</h3><a id="user-content-clipboard-empty-error" class="anchor" aria-label="Permalink: Clipboard Empty Error" href="#clipboard-empty-error"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>⚠️  Warning: Clipboard is empty</pre></div>
+<p><strong>Solution</strong>: Copy some text to clipboard before running PT</p>
+<div class="markdown-heading"><h3 class="heading-element">No Write Permission</h3><a id="user-content-no-write-permission" class="anchor" aria-label="Permalink: No Write Permission" href="#no-write-permission"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>❌ Error: no write permission <span class="pl-k">in</span> directory</pre></div>
+<p><strong>Solution</strong>: Check directory permissions or use a different location</p>
+<div class="markdown-heading"><h3 class="heading-element">File Too Large</h3><a id="user-content-file-too-large" class="anchor" aria-label="Permalink: File Too Large" href="#file-too-large"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>❌ Error: clipboard content too large (max 100MB)</pre></div>
+<p><strong>Solution</strong>: Content exceeds safety limit. Increase <code>max_clipboard_size</code> in config or save directly</p>
+<div class="markdown-heading"><h3 class="heading-element">File Not Found (NEW!)</h3><a id="user-content-file-not-found-new" class="anchor" aria-label="Permalink: File Not Found (NEW!)" href="#file-not-found-new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>❌ Error: file not found: config.json</pre></div>
+<p><strong>Solutions</strong>:</p>
+<ul>
+<li>Check filename spelling</li>
+<li>File might be deeper than 10 levels (increase MaxSearchDepth)</li>
+<li>Ensure file exists somewhere in the directory tree</li>
+<li>Use absolute path if outside search scope</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">Config File Issues ✨ NEW!</h3><a id="user-content-config-file-issues--new" class="anchor" aria-label="Permalink: Config File Issues ✨ NEW!" href="#config-file-issues--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>⚠️  Warning: invalid max_clipboard_size, using default</pre></div>
+<p><strong>Solution</strong>: Check config file syntax and value ranges. Use <code>pt config show</code> to verify</p>
+<div class="markdown-heading"><h3 class="heading-element">Content Unchanged (Check Mode) ✨ NEW!</h3><a id="user-content-content-unchanged-check-mode--new" class="anchor" aria-label="Permalink: Content Unchanged (Check Mode) ✨ NEW!" href="#content-unchanged-check-mode--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>ℹ️  Content identical to current file, no changes needed</pre></div>
+<p><strong>This is normal</strong>: Check mode (<code>-c</code>) prevents unnecessary writes when content hasn't changed
+<strong>Solution</strong>: Select the file number you want to work with, or press 0 to cancel</p>
+<div class="markdown-heading"><h3 class="heading-element">Linux Clipboard Issues</h3><a id="user-content-linux-clipboard-issues" class="anchor" aria-label="Permalink: Linux Clipboard Issues" href="#linux-clipboard-issues"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>❌ Error: failed to <span class="pl-c1">read</span> clipboard</pre></div>
+<p><strong>Solution</strong>: Install clipboard utilities:</p>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Ubuntu/Debian</span>
+sudo apt-get install xclip xsel
+
+<span class="pl-c"><span class="pl-c">#</span> Fedora/RHEL</span>
+sudo dnf install xclip xsel
+
+<span class="pl-c"><span class="pl-c">#</span> Arch</span>
+sudo pacman -S xclip xsel</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Delta Not Found</h3><a id="user-content-delta-not-found" class="anchor" aria-label="Permalink: Delta Not Found" href="#delta-not-found"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>❌ Error: delta not installed. Install it from: https://github.com/dandavison/delta</pre></div>
+<p><strong>Solution</strong>: Install delta for diff functionality:</p>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> macOS</span>
+brew install git-delta
+
+<span class="pl-c"><span class="pl-c">#</span> Ubuntu/Debian</span>
+sudo apt install git-delta
+
+<span class="pl-c"><span class="pl-c">#</span> Arch Linux</span>
+sudo pacman -S git-delta
+
+<span class="pl-c"><span class="pl-c">#</span> Windows</span>
+scoop install delta</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Recursive Search Issues (NEW!)</h3><a id="user-content-recursive-search-issues-new" class="anchor" aria-label="Permalink: Recursive Search Issues (NEW!)" href="#recursive-search-issues-new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>🔍 Searching <span class="pl-k">for</span> <span class="pl-s"><span class="pl-pds">'</span>file.txt<span class="pl-pds">'</span></span> recursively...
+❌ Error: file not found: file.txt</pre></div>
+<p><strong>Possible causes</strong>:</p>
+<ul>
+<li>File is deeper than 10 directory levels</li>
+<li>File is in a <code>backup</code> subdirectory (automatically excluded)</li>
+<li>Permission issues reading some directories</li>
+<li>Typo in filename</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ul>
+<li>Use absolute path: <code>pt /full/path/to/file.txt</code>
+</li>
+<li>Increase MaxSearchDepth in code</li>
+<li>Check file permissions</li>
+<li>Verify filename spelling</li>
+</ul>
+<div class="markdown-heading"><h2 class="heading-element">🧪 Testing</h2><a id="user-content--testing" class="anchor" aria-label="Permalink: 🧪 Testing" href="#-testing"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">Manual Testing</h3><a id="user-content-manual-testing" class="anchor" aria-label="Permalink: Manual Testing" href="#manual-testing"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Test basic write</span>
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>Hello World<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy  <span class="pl-c"><span class="pl-c">#</span> macOS (or xclip -selection clipboard on Linux)</span>
+pt test.txt
+
+<span class="pl-c"><span class="pl-c">#</span> Test append</span>
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>Line 2<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy
+pt + test.txt
+
+<span class="pl-c"><span class="pl-c">#</span> Test backup listing</span>
+pt -l test.txt
+
+<span class="pl-c"><span class="pl-c">#</span> Test restore</span>
+pt -r test.txt --last
+
+<span class="pl-c"><span class="pl-c">#</span> Test diff</span>
+pt -d test.txt --last
+
+<span class="pl-c"><span class="pl-c">#</span> Test recursive search (NEW!)</span>
+mkdir -p deep/nested/path
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>test<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy
+pt deep/nested/path/file.txt
+<span class="pl-c1">cd</span> ../../..
+pt -l file.txt  <span class="pl-c"><span class="pl-c">#</span> Should find it automatically</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Test multiple file selection (NEW!)</span>
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>test1<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy
+pt test.txt
+mkdir subdir
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>test2<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy
+pt subdir/test.txt
+pt test.txt  <span class="pl-c"><span class="pl-c">#</span> Should show selection prompt</span>
+
+<span class="pl-c"><span class="pl-c">#</span> Test tree</span>
+pt -t
+
+<span class="pl-c"><span class="pl-c">#</span> Test safe delete</span>
+pt -rm test.txt</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Run Tests (if implemented)</h3><a id="user-content-run-tests-if-implemented" class="anchor" aria-label="Permalink: Run Tests (if implemented)" href="#run-tests-if-implemented"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre>go <span class="pl-c1">test</span> ./...</pre></div>
+<div class="markdown-heading"><h2 class="heading-element">📊 Performance</h2><a id="user-content--performance" class="anchor" aria-label="Permalink: 📊 Performance" href="#-performance"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Performance</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Startup Time</strong></td>
+<td>&lt; 50ms</td>
+<td>Very fast startup</td>
+</tr>
+<tr>
+<td><strong>Write Speed</strong></td>
+<td>Disk I/O limited</td>
+<td>Depends on storage</td>
+</tr>
+<tr>
+<td><strong>Memory Usage</strong></td>
+<td>~5MB + content</td>
+<td>Minimal footprint</td>
+</tr>
+<tr>
+<td><strong>Backup Creation</strong></td>
+<td>&lt; 100ms</td>
+<td>For typical files</td>
+</tr>
+<tr>
+<td><strong>Search Speed</strong></td>
+<td>&lt; 200ms</td>
+<td>For 1000+ files (NEW!)</td>
+</tr>
+<tr>
+<td><strong>Multi-file Search</strong></td>
+<td>&lt; 500ms</td>
+<td>Up to 10 levels deep (NEW!)</td>
+</tr>
+<tr>
+<td><strong>Tree Generation</strong></td>
+<td>&lt; 500ms</td>
+<td>For 5000+ files/folders</td>
+</tr>
+<tr>
+<td><strong>Diff Rendering</strong></td>
+<td>Depends on delta</td>
+<td>Powered by delta</td>
+</tr>
+</tbody>
+</table>
+<div class="markdown-heading"><h2 class="heading-element">🎯 Use Cases</h2><a id="user-content--use-cases" class="anchor" aria-label="Permalink: 🎯 Use Cases" href="#-use-cases"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">1. Version Control System with Context ✨ NEW!</h3><a id="user-content-1-version-control-system-with-context--new" class="anchor" aria-label="Permalink: 1. Version Control System with Context ✨ NEW!" href="#1-version-control-system-with-context--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Use PT as a lightweight version control with meaningful comments:</p>
+<ul>
+<li>Track every change with why it was made</li>
+<li>Compare versions visually with delta</li>
+<li>Restore any previous version instantly</li>
+<li>
+<strong>See the context</strong> of each change through comments</li>
+<li>No git repository needed</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">2. Configuration Management with Audit Trail ✨ NEW!</h3><a id="user-content-2-configuration-management-with-audit-trail--new" class="anchor" aria-label="Permalink: 2. Configuration Management with Audit Trail ✨ NEW!" href="#2-configuration-management-with-audit-trail--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Perfect for tracking config changes:</p>
+<ul>
+<li>Document why each config change was made</li>
+<li>Check mode prevents duplicate backups</li>
+<li>Compare configurations visually</li>
+<li>Easy rollback with context</li>
+<li>Complete audit trail with comments</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">3. Code Snippet Library with Notes ✨ NEW!</h3><a id="user-content-3-code-snippet-library-with-notes--new" class="anchor" aria-label="Permalink: 3. Code Snippet Library with Notes ✨ NEW!" href="#3-code-snippet-library-with-notes--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Build your snippet collection with context:</p>
+<ul>
+<li>Save snippets with descriptive comments</li>
+<li>Version history with reasons for changes</li>
+<li>Compare different versions</li>
+<li>Organize with meaningful metadata</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">4. Documentation Workflow with Tracking ✨ NEW!</h3><a id="user-content-4-documentation-workflow-with-tracking--new" class="anchor" aria-label="Permalink: 4. Documentation Workflow with Tracking ✨ NEW!" href="#4-documentation-workflow-with-tracking--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Better documentation management:</p>
+<ul>
+<li>Track all changes with explanations</li>
+<li>Visual diff of updates</li>
+<li>Restore previous versions</li>
+<li><strong>Know why changes were made</strong></li>
+<li>Organized backup history with comments</li>
+</ul>
+<div class="markdown-heading"><h3 class="heading-element">5. Emergency Rollback with Context ✨ NEW!</h3><a id="user-content-5-emergency-rollback-with-context--new" class="anchor" aria-label="Permalink: 5. Emergency Rollback with Context ✨ NEW!" href="#5-emergency-rollback-with-context--new"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Quick recovery with understanding:</p>
+<ul>
+<li>Instant rollback to any version</li>
+<li>See why each version was saved</li>
+<li>Compare what changed</li>
+<li>Document the rollback reason</li>
+<li>Complete incident tracking</li>
+</ul>
+<div class="markdown-heading"><h2 class="heading-element">🤝 Contributing</h2><a id="user-content--contributing" class="anchor" aria-label="Permalink: 🤝 Contributing" href="#-contributing"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Contributions are welcome! Please follow these steps:</p>
+<ol>
+<li>Fork the repository</li>
+<li>Create a feature branch (<code>git checkout -b feature/amazing-feature</code>)</li>
+<li>Commit your changes (<code>git commit -m 'Add amazing feature'</code>)</li>
+<li>Push to the branch (<code>git push origin feature/amazing-feature</code>)</li>
+<li>Open a Pull Request</li>
+</ol>
+<div class="markdown-heading"><h3 class="heading-element">Development Setup</h3><a id="user-content-development-setup" class="anchor" aria-label="Permalink: Development Setup" href="#development-setup"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> Clone your fork</span>
+git clone https://github.com/cumulus13/pt-go.git
+<span class="pl-c1">cd</span> pt-go
+
+<span class="pl-c"><span class="pl-c">#</span> Install dependencies</span>
+go mod download
+
+<span class="pl-c"><span class="pl-c">#</span> Run in development</span>
+go run pt/main.go --help
+
+<span class="pl-c"><span class="pl-c">#</span> Build</span>
+go build -o pt pt/main.go
+
+<span class="pl-c"><span class="pl-c">#</span> Format code</span>
+go fmt ./...
+
+<span class="pl-c"><span class="pl-c">#</span> Run linters (optional)</span>
+golangci-lint run</pre></div>
+<div class="markdown-heading"><h3 class="heading-element">Feature Ideas</h3><a id="user-content-feature-ideas" class="anchor" aria-label="Permalink: Feature Ideas" href="#feature-ideas"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>Want to contribute? Here are some ideas:</p>
+<ul>
+<li>[x] Config file support (<code>.ptrc</code>) (✅ DONE in v1.0.19)</li>
+<li>[x] Backup comments/metadata (✅ DONE in v1.0.19)</li>
+<li>[x] Check mode to skip identical content (✅ DONE in v1.0.19)</li>
+<li>[ ] Custom backup directory location (absolute path)</li>
+<li>[ ] Backup compression (gzip)</li>
+<li>[ ] Backup to cloud storage (S3, GCS)</li>
+<li>[ ] Web UI for backup management</li>
+<li>[ ] Backup cleanup strategies (by age, size)</li>
+<li>[ ] File watching mode (auto-backup on change)</li>
+<li>[ ] Backup tags (additional metadata)</li>
+<li>[ ] Multi-file operations</li>
+<li>[ ] Backup encryption</li>
+<li>[x] Recursive file search (✅ DONE in v1.0.25)</li>
+<li>[x] Delta diff integration (✅ DONE in v1.0.25)</li>
+<li>[x] Interactive file selection (✅ DONE in v1.0.25)</li>
+</ul>
+<div class="markdown-heading"><h2 class="heading-element">📄 License</h2><a id="user-content--license" class="anchor" aria-label="Permalink: 📄 License" href="#-license"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p>This project is licensed under the MIT License - see the <a href="/C:/PROJECTS/pt-go/LICENSE">LICENSE</a> file for details.</p>
+<pre><code>MIT License
+
+Copyright (c) 2025 Hadi Cahyadi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</code></pre>
+<div class="markdown-heading"><h2 class="heading-element">💻 Author</h2><a id="user-content--author" class="anchor" aria-label="Permalink: 💻 Author" href="#-author"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<p><a href="mailto:cumulus13@gmail.com"><strong>Hadi Cahyadi</strong></a></p>
+<ul>
+<li>GitHub: <a href="https://github.com/cumulus13">@cumulus13</a>
+</li>
+<li>Email: <a href="mailto:cumulus13@gmail.com">cumulus13@gmail.com</a>
+</li>
+</ul>
+<div class="markdown-heading"><h2 class="heading-element">💖 Support</h2><a id="user-content--support" class="anchor" aria-label="Permalink: 💖 Support" href="#-support"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>🐛 <strong>Bug Reports</strong>: <a href="https://github.com/cumulus13/pt-go/issues">GitHub Issues</a>
+</li>
+<li>💡 <strong>Feature Requests</strong>: <a href="https://github.com/cumulus13/pt-go/discussions">GitHub Discussions</a>
+</li>
+<li>📧 <strong>Email</strong>: <a href="mailto:cumulus13@gmail.com">cumulus13@gmail.com</a>
+</li>
+</ul>
+<p><strong>Made with ❤️ by Hadi Cahyadi</strong></p>
+<p><em>Your complete file version management system with contextual history in a single command.</em> ⚡</p>
+<p>If you find PT useful, consider supporting its development and please consider giving it a star on GitHub! ⭐:</p>
+<p><a href="https://www.buymeacoffee.com/cumulus13" rel="nofollow"><img src="https://camo.githubusercontent.com/9f44ce2dc3b3eecdd02598900866ffc518801df1932849703dae1e5ce5031070/68747470733a2f2f7777772e6275796d6561636f666665652e636f6d2f6173736574732f696d672f637573746f6d5f696d616765732f6f72616e67655f696d672e706e67" alt="Buy Me a Coffee" data-canonical-src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" style="max-width: 100%;"></a></p>
+<p><a href="https://ko-fi.com/cumulus13" rel="nofollow"><img src="https://camo.githubusercontent.com/201ef269611db7eb6b5d08e9f756ab8980df3014b64492770bdf13a6ed924641/68747470733a2f2f6b6f2d66692e636f6d2f696d672f676974687562627574746f6e5f736d2e737667" alt="Donate via Ko-fi" data-canonical-src="https://ko-fi.com/img/githubbutton_sm.svg" style="max-width: 100%;"></a></p>
+<p><a href="https://www.patreon.com/cumulus13" rel="nofollow">Support me on Patreon</a></p>
+<div class="markdown-heading"><h2 class="heading-element">🙏 Acknowledgments</h2><a id="user-content--acknowledgments" class="anchor" aria-label="Permalink: 🙏 Acknowledgments" href="#-acknowledgments"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<ul>
+<li>
+<a href="https://github.com/atotto/clipboard">atotto/clipboard</a> - Cross-platform clipboard library</li>
+<li>
+<a href="https://github.com/dandavison/delta">dandavison/delta</a> - Beautiful diff viewer</li>
+<li>
+<a href="https://gopkg.in/yaml.v3" rel="nofollow">gopkg.in/yaml.v3</a> - YAML parser for Go</li>
+<li>Go community for excellent tooling and documentation</li>
+<li>All contributors and users</li>
+</ul>
+<blockquote>
+<p>🌟 <strong>PT: More than a clipboard tool – it's your file version manager with context!</strong></p>
+<p>Save, compare, restore, diff, and manage all your file versions effortlessly with meaningful comments. Never lose work again, and always know why changes were made!</p>
+</blockquote>
+<div class="markdown-heading"><h2 class="heading-element">🎓 Quick Start Tutorial</h2><a id="user-content--quick-start-tutorial" class="anchor" aria-label="Permalink: 🎓 Quick Start Tutorial" href="#-quick-start-tutorial"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="markdown-heading"><h3 class="heading-element">5-Minute Guide to Master PT</h3><a id="user-content-5-minute-guide-to-master-pt" class="anchor" aria-label="Permalink: 5-Minute Guide to Master PT" href="#5-minute-guide-to-master-pt"><span aria-hidden="true" class="octicon octicon-link"></span></a></div>
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"><span class="pl-c">#</span> 1. Install PT</span>
+go install github.com/cumulus13/pt-go/pt@latest
+
+<span class="pl-c"><span class="pl-c">#</span> 2. Save your first file with a comment ✨ NEW!</span>
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>Hello PT<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy
+pt notes.txt -m <span class="pl-s"><span class="pl-pds">"</span>Initial version<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> 3. Make changes with context ✨ NEW!</span>
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>Hello PT v2<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy
+pt notes.txt -m <span class="pl-s"><span class="pl-pds">"</span>Added version number<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> 4. See your versions with comments ✨ NEW!</span>
+pt -l notes.txt
+<span class="pl-c"><span class="pl-c">#</span> Shows table with all versions and their comments</span>
+
+<span class="pl-c"><span class="pl-c">#</span> 5. Use check mode to save space ✨ NEW!</span>
+<span class="pl-c1">echo</span> <span class="pl-s"><span class="pl-pds">"</span>Hello PT v2<span class="pl-pds">"</span></span> <span class="pl-k">|</span> pbcopy  <span class="pl-c"><span class="pl-c">#</span> Same content</span>
+pt notes.txt -c -m <span class="pl-s"><span class="pl-pds">"</span>Attempted update<span class="pl-pds">"</span></span>
+<span class="pl-c"><span class="pl-c">#</span> ℹ️  Content identical, no backup created</span>
+
+<span class="pl-c"><span class="pl-c">#</span> 6. Compare versions</span>
+pt -d notes.txt --last
+
+<span class="pl-c"><span class="pl-c">#</span> 7. Restore if needed with context ✨ NEW!</span>
+pt -r notes.txt --last -m <span class="pl-s"><span class="pl-pds">"</span>Rollback for testing<span class="pl-pds">"</span></span>
+
+<span class="pl-c"><span class="pl-c">#</span> 8. Set up your preferences ✨ NEW!</span>
+pt config init
+pt config show
+
+<span class="pl-c"><span class="pl-c">#</span> Congratulations! You're now a PT expert with version context! 🎉</span></pre></div>
+<hr>
+<p><strong>🔥 Start managing your file versions with meaningful context like a pro today!</strong></p>
+</article></body></html>

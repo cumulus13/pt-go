@@ -1,0 +1,4 @@
+sphinx>=4.0
+sphinx-material
+# Tambahkan dependensi lain jika ada, misalnya:
+# sphinx-argparse # Jika Anda memutuskan untuk menggunakannya nanti

@@ -1,0 +1,130 @@
+/* === rxvt 256-bit terminal style === */
+/* Background */
+body {
+    background-color: #000000 !important;
+    color: #00ff00 !important; /* Green text */
+    font-family: 'Courier New', Courier, monospace !important;
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6 {
+    color: #00ff88 !important; /* Bright green */
+    border-bottom: 1px solid #005500 !important;
+}
+
+/* Links */
+a {
+    color: #00aaff !important; /* Cyan */
+    text-decoration: none;
+}
+a:hover {
+    color: #00ffff !important;
+    text-decoration: underline;
+}
+
+/* Code blocks and inline code */
+code, pre {
+    background-color: #000000 !important;
+    color: #00ff00 !important;
+    border: 1px solid #005500 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    padding: 0.2em 0.4em !important;
+}
+
+pre {
+    border-radius: 0 !important;
+    margin: 1em 0 !important;
+    overflow-x: auto !important;
+}
+
+/* Table */
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+table th, table td {
+    border: 1px solid #005500 !important;
+    color: #00ff00 !important;
+    padding: 0.3em 0.5em !important;
+}
+
+/* Button / toggle */
+button {
+    background-color: #002200 !important;
+    color: #00ff00 !important;
+    border: 1px solid #005500 !important;
+}
+
+/* Highlighted text (e.g., warnings) */
+.highlight .err {
+    color: #ff0000 !important; /* Red for errors */
+}
+
+/* Custom for sphinx-material */
+.material-container {
+    background-color: #000000 !important;
+    color: #00ff00 !important;
+}
+
+.material-container a {
+    color: #00aaff !important;
+}
+
+.material-container h1,
+.material-container h2,
+.material-container h3,
+.material-container h4,
+.material-container h5,
+.material-container h6 {
+    color: #00ff88 !important;
+}
+
+.material-container code,
+.material-container pre {
+    background-color: #000000 !important;
+    color: #00ff00 !important;
+}
+
+/* Sidebar */
+.md-sidebar__scrollwrap {
+    background-color: #000000 !important;
+}
+
+.md-sidebar__inner {
+    color: #00ff00 !important;
+}
+
+.md-sidebar__inner a {
+    color: #00aaff !important;
+}
+
+/* Footer */
+.md-footer {
+    background-color: #000000 !important;
+    color: #00ff00 !important;
+    border-top: 1px solid #005500 !important;
+}
+
+/* Search */
+.md-search__input {
+    background-color: #000000 !important;
+    color: #00ff00 !important;
+    border-color: #005500 !important;
+}
+
+.md-search__input::placeholder {
+    color: #007700 !important;
+}
+
+/* Icons */
+.md-icon {
+    color: #00ff00 !important;
+}
+
+/* Table of contents */
+.md-nav__item a {
+    color: #00aaff !important;
+}
+.md-nav__item a:hover {
+    color: #00ffff !important;
+}

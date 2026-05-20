@@ -1,0 +1,87 @@
+name: Build and Release Multi-Platform Binaries
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # --- Target untuk Alpine Linux (musl) ---
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+            # Untuk Alpine, binary harus statis (tidak bergantung libc)
+            env: 'CGO_ENABLED=0'
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+            env: 'CGO_ENABLED=0'
+          # --- Target untuk Linux Standar (glibc) ---
+          - goos: linux
+            goarch: amd64
+            suffix: linux-glibc-amd64
+            env: ''
+          - goos: linux
+            goarch: arm64
+            suffix: linux-glibc-arm64
+            env: ''
+          # --- Target untuk Windows ---
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64.exe
+            env: ''
+          # --- Target untuk macOS (Intel & Apple Silicon) ---
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+            env: ''
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+            env: ''
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: 'go.sum'
+
+      - name: Build Binary
+        # Variabel lingkungan dikirim ke runner
+        env:
+          BUILD_ENV: ${{ matrix.env }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          # Evaluasi variabel lingkungan untuk build (misal: CGO_ENABLED=0)
+          eval $BUILD_ENV
+          echo "Building for $GOOS/$GOARCH with flags: $BUILD_ENV"
+          
+          # Tentukan nama output
+          OUTPUT_NAME="pt-${{ github.event.release.tag_name }}-${{ matrix.suffix }}"
+          
+          # Lokasi file utama Anda (sesuaikan jika perlu)
+          go build -v -o "$OUTPUT_NAME" ./pt/main.go
+          
+          # Beri tahu lokasi file yang dibuat untuk step berikutnya
+          echo "ASSET_PATH=$(pwd)/$OUTPUT_NAME" >> $GITHUB_ENV
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ASSET_PATH }}
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

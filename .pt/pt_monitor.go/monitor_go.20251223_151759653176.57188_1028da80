@@ -1,0 +1,693 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/getlantern/systray"
+	"github.com/mattn/go-gntp"
+)
+
+var (
+	debounceTimers = make(map[string]*time.Timer)
+	watchedDirs    = make(map[string]bool)
+	watchedFiles   = make(map[string]bool)
+	monitorMu      sync.Mutex
+	
+	monitorPaused  = false
+	monitorRunning = false
+	stopMonitorCh  = make(chan bool)
+	
+	menuStart      *systray.MenuItem
+	menuStop       *systray.MenuItem
+	menuPause      *systray.MenuItem
+	menuResume     *systray.MenuItem
+	menuTextNotif  *systray.MenuItem
+	menuQuit       *systray.MenuItem
+	
+	savedArgs      []string
+)
+
+// handleMonitorCommand handles file monitoring for multiple files/folders
+func handleMonitorCommand(args []string) error {
+	savedArgs = args
+
+	if len(args) == 0 {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+		args = []string{cwd}
+		fmt.Printf("%sℹ️  No files specified, monitoring current directory%s\n", ColorYellow, ColorReset)
+	}
+
+	// Expand wildcards
+	var expandedPaths []string
+	for _, pattern := range args {
+		if strings.ContainsAny(pattern, "*?[]") {
+			// Try glob expansion
+			matches, err := filepath.Glob(pattern)
+			if err == nil && len(matches) > 0 {
+				expandedPaths = append(expandedPaths, matches...)
+				fmt.Printf("%sℹ️  Pattern '%s' matched %d file(s)%s\n", ColorCyan, pattern, len(matches), ColorReset)
+			} else {
+				// If no matches, try parent directory
+				dir := filepath.Dir(pattern)
+				if dir != "." && dir != "" {
+					absDir, err := filepath.Abs(dir)
+					if err == nil {
+						if info, err := os.Stat(absDir); err == nil && info.IsDir() {
+							expandedPaths = append(expandedPaths, absDir)
+							fmt.Printf("%sℹ️  Pattern '%s' → monitoring directory: %s%s\n", ColorCyan, pattern, absDir, ColorReset)
+							continue
+						}
+					}
+				}
+				// Last resort: try current directory
+				cwd, err := os.Getwd()
+				if err == nil {
+					expandedPaths = append(expandedPaths, cwd)
+					fmt.Printf("%sℹ️  Pattern '%s' → monitoring current directory%s\n", ColorCyan, pattern, ColorReset)
+				}
+			}
+		} else {
+			expandedPaths = append(expandedPaths, pattern)
+		}
+	}
+
+	if len(expandedPaths) == 0 {
+		return fmt.Errorf("no valid paths to monitor")
+	}
+
+	fmt.Printf("\n🔍 Starting monitor...\n")
+	fmt.Printf("📁 Monitoring %d path(s):\n", len(expandedPaths))
+	for i, path := range expandedPaths {
+		absPath, _ := filepath.Abs(path)
+		fmt.Printf("   %d. %s\n", i+1, absPath)
+	}
+
+	// Start system tray in background
+	go systray.Run(onReady, onExit)
+
+	return startMonitorMultiple(expandedPaths)
+}
+
+func handleMonitorWithInfo(info *CommandInfo) error {
+	return handleMonitorCommand(info.Files)
+}
+
+func startMonitorMultiple(paths []string) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create watcher: %w", err)
+	}
+	defer watcher.Close()
+
+	monitorRunning = true
+	defer func() { monitorRunning = false }()
+
+	for _, path := range paths {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			fmt.Printf("%s⚠️  Warning: failed to resolve %s: %v%s\n", ColorYellow, path, err, ColorReset)
+			continue
+		}
+
+		info, err := os.Stat(absPath)
+		if err != nil {
+			fmt.Printf("%s⚠️  Warning: path not found %s%s\n", ColorYellow, absPath, ColorReset)
+			continue
+		}
+
+		baseName := filepath.Base(absPath)
+		if baseName == ".git" || baseName == ".pt" {
+			fmt.Printf("%s⚠️  Skipping excluded directory: %s%s\n", ColorYellow, absPath, ColorReset)
+			continue
+		}
+
+		if info.IsDir() {
+			err = addWatchRecursive(watcher, absPath)
+			if err != nil {
+				fmt.Printf("%s⚠️  Warning: failed to watch directory %s: %v%s\n", ColorYellow, absPath, err, ColorReset)
+			}
+		} else {
+			parentDir := filepath.Dir(absPath)
+			err = watcher.Add(parentDir)
+			if err != nil {
+				fmt.Printf("%s⚠️  Warning: failed to watch file %s: %v%s\n", ColorYellow, absPath, err, ColorReset)
+			} else {
+				monitorMu.Lock()
+				watchedDirs[parentDir] = true
+				watchedFiles[absPath] = true
+				monitorMu.Unlock()
+				if logger != nil {
+					logger.Printf("Watching file: %s", absPath)
+				}
+			}
+		}
+	}
+
+	if logger != nil {
+		logger.Printf(">>> MONITORING: %d dirs, %d files", len(watchedDirs), len(watchedFiles))
+	}
+	fmt.Printf("\n✅ Monitoring %d directories and %d specific files\n", len(watchedDirs), len(watchedFiles))
+	fmt.Printf("⌨️  Press Ctrl+C to stop or use system tray menu\n\n")
+
+	for {
+		select {
+		case <-stopMonitorCh:
+			fmt.Println("🛑 Monitoring stopped by system tray")
+			return nil
+
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return nil
+			}
+			if !monitorPaused {
+				handleMonitorEventMultiple(watcher, event, paths)
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+			if logger != nil {
+				logger.Printf("Monitor error: %v", err)
+			}
+			fmt.Printf("%s⚠️  Warning: %v%s\n", ColorYellow, err, ColorReset)
+		}
+	}
+}
+
+func addWatchRecursive(watcher *fsnotify.Watcher, root string) error {
+	monitorMu.Lock()
+	defer monitorMu.Unlock()
+
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			if logger != nil {
+				logger.Printf("Walk error at %s: %v", path, err)
+			}
+			return nil
+		}
+
+		if info.IsDir() {
+			name := info.Name()
+
+			if name == ".git" || name == ".pt" {
+				if logger != nil {
+					logger.Printf("Skipping critical directory: %s", path)
+				}
+				return filepath.SkipDir
+			}
+
+			if name == "Diagnostics" || name == "node_modules" ||
+				name == "__pycache__" || name == ".vscode" || name == ".idea" ||
+				name == "vendor" || name == "dist" || name == "build" ||
+				name == ".backups" || name == "target" || name == "bin" || name == "obj" {
+				if logger != nil {
+					logger.Printf("Skipping directory: %s", path)
+				}
+				return filepath.SkipDir
+			}
+
+			if watchedDirs[path] {
+				return nil
+			}
+
+			err := watcher.Add(path)
+			if err != nil {
+				if logger != nil {
+					logger.Printf("Failed to watch %s: %v", path, err)
+				}
+				return nil
+			}
+
+			watchedDirs[path] = true
+			if logger != nil {
+				logger.Printf("Watching: %s", path)
+			}
+		}
+		return nil
+	})
+}
+
+func handleMonitorEventMultiple(watcher *fsnotify.Watcher, event fsnotify.Event, monitoredPaths []string) {
+	eventDir := filepath.Base(filepath.Dir(event.Name))
+	eventBase := filepath.Base(event.Name)
+
+	if eventBase == ".git" || eventBase == ".pt" || eventDir == ".git" || eventDir == ".pt" {
+		return
+	}
+
+	if containsExcludedDir(event.Name) {
+		return
+	}
+
+	absEvent, _ := filepath.Abs(event.Name)
+	isMonitored := false
+
+	monitorMu.Lock()
+	if watchedFiles[absEvent] {
+		isMonitored = true
+	} else {
+		for _, path := range monitoredPaths {
+			absPath, _ := filepath.Abs(path)
+			
+			if strings.HasPrefix(absEvent, absPath) {
+				isMonitored = true
+				break
+			}
+			
+			if absEvent == absPath {
+				isMonitored = true
+				break
+			}
+		}
+	}
+	monitorMu.Unlock()
+
+	if !isMonitored {
+		return
+	}
+
+	if event.Has(fsnotify.Create) {
+		info, err := os.Stat(event.Name)
+		if err == nil && info.IsDir() {
+			dirName := info.Name()
+
+			if dirName == ".git" || dirName == ".pt" {
+				if logger != nil {
+					logger.Printf("Ignoring excluded directory creation: %s", event.Name)
+				}
+				return
+			}
+
+			monitorMu.Lock()
+
+			if !watchedDirs[event.Name] {
+				err := watcher.Add(event.Name)
+				if err != nil {
+					if logger != nil {
+						logger.Printf("Failed to watch new dir %s: %v", event.Name, err)
+					}
+					monitorMu.Unlock()
+					return
+				}
+				watchedDirs[event.Name] = true
+				if logger != nil {
+					logger.Printf("New directory watched: %s", event.Name)
+				}
+				fmt.Printf("📁 New directory: %s\n", event.Name)
+
+				filepath.Walk(event.Name, func(path string, info os.FileInfo, err error) error {
+					if err != nil || path == event.Name {
+						return nil
+					}
+
+					if info.IsDir() {
+						subDirName := info.Name()
+
+						if subDirName == ".git" || subDirName == ".pt" {
+							return filepath.SkipDir
+						}
+
+						if !watchedDirs[path] {
+							err := watcher.Add(path)
+							if err != nil {
+								if logger != nil {
+									logger.Printf("Failed to watch subdirectory %s: %v", path, err)
+								}
+							} else {
+								watchedDirs[path] = true
+								if logger != nil {
+									logger.Printf("Subdirectory watched: %s", path)
+								}
+							}
+						}
+					}
+					return nil
+				})
+			}
+
+			monitorMu.Unlock()
+		}
+	}
+
+	if event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
+		monitorMu.Lock()
+		if watchedDirs[event.Name] {
+			delete(watchedDirs, event.Name)
+			watcher.Remove(event.Name)
+			if logger != nil {
+				logger.Printf("Directory removed from watch: %s", event.Name)
+			}
+			fmt.Printf("📁 Directory removed: %s\n", event.Name)
+		}
+		if watchedFiles[event.Name] {
+			delete(watchedFiles, event.Name)
+			if logger != nil {
+				logger.Printf("File removed from watch: %s", event.Name)
+			}
+		}
+		monitorMu.Unlock()
+	}
+
+	if event.Has(fsnotify.Write) {
+		triggerFileAction(event.Name, "modified")
+	} else if event.Has(fsnotify.Create) {
+		info, err := os.Stat(event.Name)
+		if err == nil && !info.IsDir() {
+			triggerFileAction(event.Name, "created")
+		}
+	} else if event.Has(fsnotify.Remove) {
+		info, _ := os.Stat(event.Name)
+		if info == nil || !info.IsDir() {
+			fmt.Printf("🗑️  File deleted: %s\n", event.Name)
+			if logger != nil {
+				logger.Printf("File deleted: %s", event.Name)
+			}
+		}
+	}
+}
+
+func containsExcludedDir(path string) bool {
+	normalizedPath := filepath.ToSlash(path)
+	
+	if strings.Contains(normalizedPath, "/.git/") || 
+	   strings.Contains(normalizedPath, "/.pt/") {
+		return true
+	}
+	
+	if strings.HasSuffix(normalizedPath, "/.git") || 
+	   strings.HasSuffix(normalizedPath, "/.pt") {
+		return true
+	}
+	
+	if strings.Contains(path, string(filepath.Separator)+".git"+string(filepath.Separator)) ||
+	   strings.Contains(path, string(filepath.Separator)+".pt"+string(filepath.Separator)) {
+		return true
+	}
+	
+	return false
+}
+
+func triggerFileAction(path string, action string) {
+	monitorMu.Lock()
+	defer monitorMu.Unlock()
+
+	if timer, ok := debounceTimers[path]; ok {
+		timer.Stop()
+	}
+
+	debounceTimers[path] = time.AfterFunc(300*time.Millisecond, func() {
+		absPath, _ := filepath.Abs(path)
+		timestamp := time.Now().Format("15:04:05")
+
+		actionEmoji := "📝"
+		if action == "created" {
+			actionEmoji = "✨"
+		}
+		fmt.Printf("%s [%s] File %s: %s\n", actionEmoji, timestamp, action, absPath)
+		if logger != nil {
+			logger.Printf("File %s: %s", action, absPath)
+		}
+
+		sendFileNotification(path, action, timestamp)
+
+		if appConfig.AutoBackup == nil || *appConfig.AutoBackup {
+			comment := ""
+			err := autoBackupFile(absPath, comment)
+			if err != nil {
+				if logger != nil {
+					logger.Printf("Auto-backup failed: %v", err)
+				}
+			} else {
+				fmt.Printf("💾 Auto-backup created: %s\n", filepath.Base(absPath))
+			}
+		}
+	})
+}
+
+func autoBackupFile(filePath string, comment string) error {
+	backups, err := listBackups(filePath)
+    if err != nil {
+    	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+        sendFileNotification(filePath, "error", time.Now().Format("15:04:05"), err)
+        return err
+    }
+
+    text, err := os.ReadFile(filePath)
+    if err != nil {
+    	fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+		sendFileNotification(filePath, "error", time.Now().Format("15:04:05"), err)
+		return err
+	}
+
+    if len(backups) == 0 {
+        fmt.Printf("No backups found for: %s (check %s/ directory)\n", filePath, appConfig.BackupDirName)
+        _, err = autoRenameIfExists(filePath, comment)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			return err
+		}
+    } else {
+	    var selectedBackup BackupInfo
+	    selectedBackup = backups[0]
+        fmt.Printf("%s📊 Comparing with last backup: %s%s\n\n", ColorCyan, selectedBackup.Name, ColorReset)
+	    
+		if !checkIfDifferent(selectedBackup.Path, text) {
+			fmt.Printf("⚠ %sLast backup:%s %s%s%s%s %sand clipboard is identical%s\n", 
+				ColorYellow, ColorReset, ColorWhite, ColorBlue, selectedBackup.Name, 
+				ColorReset, ColorYellow, ColorReset)
+			return nil
+		}
+
+		_, err = autoRenameIfExists(filePath, comment)
+		if err != nil {
+			fmt.Printf("%s❌ Error: %v%s\n", ColorRed, err, ColorReset)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func sendFileNotification(path string, action string, timestamp string, optionalErr ...error) {
+	absPath, _ := filepath.Abs(path)
+	title := "File Monitor - pt"
+	message := fmt.Sprintf("[%s] File %s\n%s", timestamp, action, absPath)
+
+	icon := findNotificationIcon()
+
+	client := gntp.NewClient()
+	client.AppName = "pt"
+
+	events := []gntp.Notification{
+		{Event: "file_changed", Enabled: true},
+		{Event: "file_created", Enabled: true},
+		{Event: "error", Enabled: true},
+	}
+
+	err := client.Register(events)
+	if err != nil {
+		if logger != nil {
+			logger.Printf("Failed to register notifications: %v", err)
+		}
+		return
+	}
+
+	eventType := "file_changed"
+	if action == "created" {
+		eventType = "file_created"
+	}
+
+	msg := &gntp.Message{
+		Event:  eventType,
+		Title:  title,
+		Text:   message,
+		Sticky: false,
+	}
+
+	if icon != "" {
+		if _, err := os.Stat(icon); err == nil {
+			msg.Icon = icon
+		}
+	}
+
+	err = client.Notify(msg)
+	if err != nil {
+		if logger != nil {
+			logger.Printf("Failed to send notification: %v", err)
+		}
+	}
+
+	if len(optionalErr) > 0 && optionalErr[0] != nil {
+		client.Notify(&gntp.Message{
+			Event:  "error",
+			Title:  title,
+			Text:   fmt.Sprintf("pt monitoring Error: %v", optionalErr[0]),
+			Sticky: true,
+		})
+	}
+}
+
+func findNotificationIcon() string {
+	iconNames := []string{"filemonitor.png", "pt.png", "icon.png"}
+
+	cwd, err := os.Getwd()
+	if err == nil {
+		for _, iconName := range iconNames {
+			candidate := filepath.Join(cwd, iconName)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate
+			}
+		}
+	}
+
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		for _, iconName := range iconNames {
+			candidate := filepath.Join(exeDir, iconName)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate
+			}
+		}
+	}
+
+	return ""
+}
+
+func onReady() {
+	// Don't set icon to avoid systray error - will use default
+	systray.SetTitle("📁 pt")
+	systray.SetTooltip("File Monitor - Running")
+
+	menuStart = systray.AddMenuItem("▶️  Start", "Start monitoring")
+	menuStop = systray.AddMenuItem("⏹️  Stop", "Stop monitoring")
+	menuPause = systray.AddMenuItem("⏸️  Pause", "Pause monitoring")
+	menuResume = systray.AddMenuItem("⏯️  Resume", "Resume monitoring")
+	systray.AddSeparator()
+	menuTextNotif = systray.AddMenuItemCheckbox("🔔 Text Notifications", "Toggle text notifications", true)
+	systray.AddSeparator()
+	menuQuit = systray.AddMenuItem("🚪 Exit", "Exit the application")
+
+	menuStart.Disable()
+	menuStop.Enable()
+	menuPause.Enable()
+	menuResume.Hide()
+
+	go func() {
+		for {
+			select {
+			case <-menuStart.ClickedCh:
+				handleTrayStart()
+			case <-menuStop.ClickedCh:
+				handleTrayStop()
+			case <-menuPause.ClickedCh:
+				handleTrayPause()
+			case <-menuResume.ClickedCh:
+				handleTrayResume()
+			case <-menuTextNotif.ClickedCh:
+				if menuTextNotif.Checked() {
+					menuTextNotif.Uncheck()
+					fmt.Println("🔕 Text notifications disabled")
+				} else {
+					menuTextNotif.Check()
+					fmt.Println("🔔 Text notifications enabled")
+				}
+			case <-menuQuit.ClickedCh:
+				fmt.Println("👋 Exiting file monitor...")
+				systray.Quit()
+				os.Exit(0)
+			}
+		}
+	}()
+}
+
+func handleTrayStart() {
+	if monitorRunning {
+		fmt.Println("⚠️  Monitor already running")
+		return
+	}
+
+	if len(savedArgs) == 0 {
+		fmt.Println("❌ No saved configuration. Please restart the program.")
+		return
+	}
+
+	fmt.Println("▶️  Starting monitor from tray...")
+	menuStart.Disable()
+	menuStop.Enable()
+	menuPause.Enable()
+	menuResume.Hide()
+	menuPause.Show()
+	systray.SetTooltip("File Monitor - Running")
+
+	go func() {
+		monitorMu.Lock()
+		watchedDirs = make(map[string]bool)
+		watchedFiles = make(map[string]bool)
+		monitorMu.Unlock()
+
+		err := startMonitorMultiple(savedArgs)
+		if err != nil {
+			fmt.Printf("❌ Monitor error: %v\n", err)
+			menuStart.Enable()
+			menuStop.Disable()
+			menuPause.Disable()
+		}
+	}()
+}
+
+func handleTrayStop() {
+	if !monitorRunning {
+		fmt.Println("⚠️  Monitor not running")
+		return
+	}
+
+	fmt.Println("⏹️  Stopping monitor...")
+	stopMonitorCh <- true
+	monitorRunning = false
+	monitorPaused = false
+
+	menuStart.Enable()
+	menuStop.Disable()
+	menuPause.Disable()
+	menuResume.Hide()
+	menuPause.Show()
+	systray.SetTooltip("File Monitor - Stopped")
+}
+
+func handleTrayPause() {
+	if !monitorRunning {
+		fmt.Println("⚠️  Monitor not running")
+		return
+	}
+
+	fmt.Println("⏸️  Pausing monitor...")
+	monitorPaused = true
+	menuPause.Hide()
+	menuResume.Show()
+	menuResume.Enable()
+	systray.SetTooltip("File Monitor - Paused")
+}
+
+func handleTrayResume() {
+	fmt.Println("⏯️  Resuming monitor...")
+	monitorPaused = false
+	menuResume.Hide()
+	menuPause.Show()
+	menuPause.Enable()
+	systray.SetTooltip("File Monitor - Running")
+}
+
+func onExit() {
+	fmt.Println("System tray exited")
+}

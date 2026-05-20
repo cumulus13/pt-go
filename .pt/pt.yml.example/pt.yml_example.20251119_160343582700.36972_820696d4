@@ -1,0 +1,25 @@
+# PT Configuration File
+# This file configures the behavior of the PT tool
+# All values are optional - if not specified, defaults will be used
+
+# Maximum clipboard content size in bytes (default: 104857600 = 100MB)
+# Range: 1 - 1073741824 (1GB)
+max_clipboard_size: 104857600
+
+# Maximum number of backup files to keep per file (default: 100)
+# Range: 1 - 10000
+# Older backups are automatically removed when limit is reached
+max_backup_count: 100
+
+# Maximum filename length in characters (default: 200)
+# Range: 1 - 1000
+max_filename_length: 200
+
+# Name of the backup directory (default: "backup")
+# Backups will be stored in ./{backup_dir_name}/ relative to the file location
+backup_dir_name: backup
+
+# Maximum directory depth for recursive file search (default: 10)
+# Range: 1 - 100
+# When a file is not found in current directory, PT searches subdirectories up to this depth
+max_search_depth: 10

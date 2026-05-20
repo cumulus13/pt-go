@@ -1,0 +1,86 @@
+.. _usage:
+
+Usage
+=====
+
+Basic Operation
+---------------
+
+The primary function of ``pt`` is to write clipboard content to a file. The general syntax is:
+
+.. code-block:: bash
+
+   pt [options] <filename>
+
+Examples:
+
+* ``pt notes.txt``: Writes clipboard content to ``notes.txt``.
+* ``pt report.md -m "Initial draft"``: Writes content to ``report.md`` with a backup comment.
+* ``pt + log.txt``: Appends clipboard content to ``log.txt``.
+
+Git-like Workflow
+-----------------
+
+``pt`` also supports a Git-like workflow for managing changes to multiple files:
+
+1. **Check Status**: ``pt check`` - Lists files showing their status (modified, new, unchanged, deleted).
+2. **Commit Changes**: ``pt commit -m "message"`` - Backs up all modified and new files found by ``pt check``.
+3. **List Backups**: ``pt -l <filename>`` - Shows all available backups for a specific file.
+4. **Restore Backup**: ``pt -r <filename>`` - Interactively restores a previous backup.
+5. **Diff**: ``pt -d <filename>`` - Compares the current file with a backup using ``delta``.
+
+.. note::
+   The ``.pt`` directory stores all backups. It searches parent directories like Git does.
+
+.. _command_reference:
+
+Command Reference
+-----------------
+
+.. argparse::
+   :module: main
+   :func: main
+   :prog: pt
+   :nodescription:
+   :noepilog:
+
+.. note::
+   The ``.. argparse::`` directive is used here as a placeholder. Sphinx's ``sphinxarg.ext`` can parse Python argparse definitions, but it won't work directly with a Go binary's command-line interface. For Go, you would typically document the commands manually in reStructuredText, similar to how the help output is structured in the Go code itself. This documentation will detail the commands found in the ``printHelp()`` function within the Go code.
+
+   **Basic Write:**
+   ``pt <filename> [options]``
+       Writes clipboard content to the specified file.
+
+   **Options:**
+   * ``-m, --message <msg>``: Add a comment to the backup.
+   * ``-c, --check``: Only write if the content differs from the current file.
+
+   **Append:**
+   ``pt + <filename> [options]``
+       Appends clipboard content to the specified file.
+
+   **Status/Commit:**
+   ``pt check [filename]``
+       Shows status of all files (like ``git status``) or a specific file.
+   ``pt commit -m <message>``
+       Backs up all changed files (like ``git commit``).
+
+   **Backup Management:**
+   ``pt -l, --list <filename>``
+       Lists all backups for the file.
+   ``pt -r, --restore <filename> [options]``
+       Restores a backup for the file.
+   ``pt -rm, --remove <filename> [options]``
+       Safely deletes a file (creates a backup first).
+   ``pt -d, --diff <filename> [options]``
+       Compares the file with a backup using ``delta``.
+
+   **Utilities:**
+   ``pt -t, --tree [path] [options]``
+       Shows a directory tree.
+   ``pt config [init|show|path]``
+       Manages configuration.
+   ``pt -h, --help``
+       Shows the help message.
+   ``pt -v, --version``
+       Shows the version information.

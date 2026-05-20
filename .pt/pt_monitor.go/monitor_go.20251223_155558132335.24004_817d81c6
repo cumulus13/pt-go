@@ -1,0 +1,20 @@
+C:\PROJECTS\dotnet\WindowSwitcher>pt -mt *.cs *.xaml
+ℹ️  Pattern '*.cs' matched 2 file(s)
+ℹ️  Pattern '*.xaml' matched 2 file(s)
+
+🔍 Starting monitor...
+📁 Monitoring 4 path(s):
+   1. C:\PROJECTS\dotnet\WindowSwitcher\App.xaml.cs
+   2. C:\PROJECTS\dotnet\WindowSwitcher\MainWindow.xaml.cs
+   3. C:\PROJECTS\dotnet\WindowSwitcher\App.xaml
+   4. C:\PROJECTS\dotnet\WindowSwitcher\MainWindow.xaml
+
+✅ Monitoring 1 directories and 4 specific files
+⌨️  Press Ctrl+C to stop or use system tray menu
+
+ERROR systray: systray_windows.go:845 Unable to set icon: The operation completed successfully. [error=Unable to set icon: %v error_location=github.com/getlantern/systray.SetIcon (systray_windows.go:845) error_op= error_text=Unable to set icon: The operation completed successfully. error_type=errors.Error]
+ERROR systray: systray_windows.go:845   at github.com/getlantern/systray.SetIcon (systray_windows.go:845)
+ERROR systray: systray_windows.go:845   at main.onReady (monitor.go:572)
+ERROR systray: systray_windows.go:845   at github.com/getlantern/systray.Register.func2 (systray.go:94)
+ERROR systray: systray_windows.go:845   at runtime.goexit (asm_amd64.s:1693)
+ERROR systray: systray_windows.go:845 Caused by: The operation completed successfully.

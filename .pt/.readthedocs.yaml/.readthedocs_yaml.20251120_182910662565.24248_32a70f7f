@@ -1,0 +1,34 @@
+# Read the Docs configuration file for Sphinx projects
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+
+# Required: Specify the version of the configuration file
+version: 2
+
+# Build configuration
+build:
+  os: ubuntu-22.04  # Operating system for the build environment
+  tools:
+    python: "3.13"  # Python version to use
+  # Optional: Specify the number of jobs for building (default is 1)
+  # jobs:
+  #   post_checkout: echo "Running post checkout steps..."
+
+# Sphinx-specific settings
+sphinx:
+  # Path to the Sphinx source directory (relative to the root of the repository)
+  configuration: docs/conf.py
+  # The name of the main HTML file (usually 'index')
+  # master_doc: index # This is usually inferred from conf.py's master_doc setting
+  # Fail the build if there are Sphinx warnings (optional, can be useful for catching issues)
+  # fail_on_warning: true
+
+# Python requirements required to build the documentation
+python:
+  install:
+    - requirements: docs/requirements.txt # Install dependencies from this file
+
+# Optional: Specify formats for the built documentation (e.g., pdf, epub)
+# formats:
+#   - htmlzip
+#   - pdf
+#   - epub

@@ -1,0 +1,852 @@
+// smart_move.go  –  drop into pt/ and delete handleMoveCommand from main.go
+//
+// STRICT VALIDATION ORDER (no side-effects until everything is confirmed)
+// ─────────────────────────────────────────────────────────────────────────────
+// For every source file the per-file loop does:
+//
+//   PHASE 1 – validate source  (stat, must be a regular file, hard stop if not)
+//   PHASE 2 – resolve dest     (search dest tree for matching file name)
+//   PHASE 3 – validate dest    (path checks, overwrite guard – NO writes yet)
+//   PHASE 4 – negotiate PT     (discover roots, NO .pt creation yet)
+//   PHASE 5 – commit           (all checks passed; now:)
+//                                 5a. create dest parent dirs
+//                                 5b. ensure dest .pt exists
+//                                 5c. backup source (pre-move)
+//                                 5d. backup dest   (pre-receive)
+//                                 5e. relocate backup subdir
+//                                 5f. os.Rename
+//                                 5g. rollback pre-receive if rename failed
+//
+// Nothing is written to disk before Phase 5.
+//
+// SOURCE EXPANSION
+//   Wildcard / regex patterns are resolved with smartExpandGlobs.
+//   A literal that does not exist as a real file on disk is rejected
+//   immediately with a clear error – it is NEVER added to the work list.
+//
+// SMART DESTINATION
+//   For each source file we walk the dest tree looking for a file with the
+//   same base name.  That existing file's location becomes the real dest.
+//     0 matches → flat drop at dest root (original behaviour)
+//     1 match   → use that exact path; prompt if -o not given
+//    >1 matches → selection table; user picks one
+//
+// PT-ROOT NEGOTIATION
+//   Source .pt only  → relocate backup subdir to dest after move
+//   Dest   .pt only  → register backup there; pre-receive backup of dest file
+//   Both active      → both sides backed up; subdir merged into dest .pt
+//   Shared root      → one backup pass; subdir renamed in place
+//   Neither          → .pt created at dest (original behaviour)
+
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 1 helper – smartExpandGlobs
+//
+// Resolves source patterns to VERIFIED absolute paths of real regular files.
+// A path is only added to the result when os.Stat confirms it is a file.
+// Non-existent literals → immediate error message, skipped, NOT added.
+// ═════════════════════════════════════════════════════════════════════════════
+func smartExpandGlobs(patterns []string) ([]string, error) {
+	var out []string
+	seen := make(map[string]bool)
+
+	// addFile adds p only if it is a real regular file not yet in the list.
+	addFile := func(p string) bool {
+		info, err := os.Stat(p)
+		if err != nil || info.IsDir() {
+			return false
+		}
+		abs, _ := filepath.Abs(p)
+		if !seen[abs] {
+			seen[abs] = true
+			out = append(out, abs)
+		}
+		return true
+	}
+
+	for _, pat := range patterns {
+		logger.Printf("smartExpandGlobs: pat=%q", pat)
+
+		// ── regex: prefix ─────────────────────────────────────────────────────
+		if strings.HasPrefix(pat, "regex:") || strings.HasPrefix(pat, "r:") {
+			rp := strings.TrimPrefix(strings.TrimPrefix(pat, "regex:"), "r:")
+			matches, err := findFilesWithRegex(rp)
+			if err != nil {
+				return nil, fmt.Errorf("regex %q: %w", pat, err)
+			}
+			added := 0
+			for _, m := range matches {
+				if addFile(m) {
+					added++
+				}
+			}
+			if added == 0 {
+				fmt.Printf("%s⚠️  regex '%s' matched no files%s\n", ColorYellow, pat, ColorReset)
+			}
+			continue
+		}
+
+		// ── wildcard ──────────────────────────────────────────────────────────
+		if strings.ContainsAny(pat, "*?[") {
+			// 1. Try cwd first
+			cwdHits, err := filepath.Glob(pat)
+			if err != nil {
+				return nil, fmt.Errorf("invalid glob %q: %w", pat, err)
+			}
+			added := 0
+			for _, m := range cwdHits {
+				if addFile(m) {
+					added++
+				}
+			}
+			if added > 0 {
+				continue
+			}
+
+			// 2. Nothing in cwd → walk project tree
+			fmt.Printf("%s🔍 '%s' not matched in cwd – searching project tree…%s\n",
+				ColorBlue, pat, ColorReset)
+			deep, err := smartDeepGlob(pat)
+			if err != nil {
+				return nil, fmt.Errorf("deep glob %q: %w", pat, err)
+			}
+			if len(deep) == 0 {
+				fmt.Printf("%s⚠️  No files match '%s' anywhere – skipping%s\n",
+					ColorYellow, pat, ColorReset)
+				continue
+			}
+
+			resolved, err := resolveSmartMatches(deep, pat)
+			if err != nil {
+				return nil, err
+			}
+			for _, m := range resolved {
+				addFile(m)
+			}
+			continue
+		}
+
+		// ── literal path ──────────────────────────────────────────────────────
+		// Check exactly as given first (absolute or relative).
+		if addFile(pat) {
+			continue
+		}
+
+		// Not found at the given path.  Try searching by base name.
+		base := filepath.Base(pat)
+		// Guard: if pat has path separators and still didn't stat, the user
+		// specified an explicit path that doesn't exist – don't fall back to
+		// a name search, just reject it clearly.
+		if strings.ContainsAny(pat, "/\\") || filepath.IsAbs(pat) {
+			fmt.Printf("%s❌ Source not found: %s%s\n", ColorRed, pat, ColorReset)
+			continue // skipped – not added
+		}
+
+		// Plain base-name: search the project tree
+		cwd, _ := os.Getwd()
+		hits, _ := findFilesRecursive(base, cwd)
+
+		switch len(hits) {
+		case 0:
+			// Not a file anywhere on disk – reject clearly, add nothing.
+			fmt.Printf("%s❌ Source not found: '%s' – not a file, not in project tree%s\n",
+				ColorRed, pat, ColorReset)
+			// do NOT add to out
+
+		case 1:
+			fmt.Printf("%s✅ Found '%s': %s%s%s\n",
+				ColorYellow, base, ColorCyan, hits[0], ColorReset)
+			addFile(hits[0])
+
+		default:
+			fmt.Printf("\n%s⚠️  Multiple sources named '%s':%s\n",
+				ColorYellow, base, ColorReset)
+			chosen, err := promptSmartSelection(hits, base)
+			if err != nil {
+				return nil, err
+			}
+			if chosen != "" {
+				addFile(chosen)
+			}
+		}
+	}
+	return out, nil
+}
+
+func smartDeepGlob(pattern string) ([]string, error) {
+	basePat := filepath.Base(pattern)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	gi, _ := loadGitIgnoreAndPtIgnore(cwd)
+	maxDepth := appConfig.MaxSearchDepth
+	var hits []string
+	_ = filepath.Walk(cwd, func(path string, info os.FileInfo, werr error) error {
+		if werr != nil {
+			return nil
+		}
+		rel, _ := filepath.Rel(cwd, path)
+		depth := len(strings.Split(rel, string(os.PathSeparator))) - 1
+		if info.IsDir() {
+			if depth >= maxDepth || (gi != nil && gi.shouldIgnore(path, true)) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if gi != nil && gi.shouldIgnore(path, false) {
+			return nil
+		}
+		if ok, _ := filepath.Match(basePat, info.Name()); ok {
+			hits = append(hits, path)
+		}
+		return nil
+	})
+	return hits, nil
+}
+
+func resolveSmartMatches(matches []string, pattern string) ([]string, error) {
+	byName := make(map[string][]string)
+	var order []string
+	for _, m := range matches {
+		bn := filepath.Base(m)
+		if _, ok := byName[bn]; !ok {
+			order = append(order, bn)
+		}
+		byName[bn] = append(byName[bn], m)
+	}
+	var resolved []string
+	for _, name := range order {
+		paths := byName[name]
+		if len(paths) == 1 {
+			fmt.Printf("%s✅ Found '%s': %s%s%s\n",
+				ColorYellow, name, ColorCyan, paths[0], ColorReset)
+			resolved = append(resolved, paths[0])
+			continue
+		}
+		fmt.Printf("\n%s⚠️  Multiple sources named '%s':%s\n", ColorYellow, name, ColorReset)
+		chosen, err := promptSmartSelection(paths, name)
+		if err != nil {
+			return nil, err
+		}
+		if chosen != "" {
+			resolved = append(resolved, chosen)
+		}
+	}
+	return resolved, nil
+}
+
+func promptSmartSelection(paths []string, label string) (string, error) {
+	results := make([]FileSearchResult, 0, len(paths))
+	for _, p := range paths {
+		if info, err := os.Stat(p); err == nil {
+			results = append(results, FileSearchResult{
+				Path: p, Dir: filepath.Dir(p),
+				Size: info.Size(), ModTime: info.ModTime(),
+			})
+		}
+	}
+	printFileSearchResults(results)
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("Select for '%s' (1-%d, 0=skip): ", label, len(paths))
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("read error: %w", err)
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil || n < 0 || n > len(paths) {
+		return "", fmt.Errorf("enter 0-%d", len(paths))
+	}
+	if n == 0 {
+		fmt.Printf("%s⏭️  Skipping '%s'%s\n", ColorGray, label, ColorReset)
+		return "", nil
+	}
+	return paths[n-1], nil
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 2 helper – findInDestTree / resolveDestPath
+// ═════════════════════════════════════════════════════════════════════════════
+
+// findInDestTree walks destRoot and returns every regular file whose base name
+// matches targetName (case-insensitive comparison, works on Windows too).
+func findInDestTree(destRoot, targetName string) ([]string, error) {
+	targetLower := strings.ToLower(targetName)
+	var found []string
+	err := filepath.Walk(destRoot, func(path string, info os.FileInfo, werr error) error {
+		if werr != nil {
+			return nil
+		}
+		if info.IsDir() {
+			n := info.Name()
+			if n == appConfig.BackupDirName || n == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.ToLower(info.Name()) == targetLower {
+			found = append(found, path)
+		}
+		return nil
+	})
+	return found, err
+}
+
+// resolveDestPath returns the true destination path for one source file.
+// Returns ("", false, nil) when the user chose to skip (selection prompt → 0).
+// Pure read-only: does NOT create any files or directories.
+func resolveDestPath(destRoot string, destIsDir bool, sourcePath string) (finalDest string, existsInDest bool, err error) {
+	if !destIsDir {
+		return destRoot, false, nil
+	}
+
+	baseName := filepath.Base(sourcePath)
+	matches, err := findInDestTree(destRoot, baseName)
+	if err != nil {
+		return "", false, fmt.Errorf("search dest tree: %w", err)
+	}
+
+	switch len(matches) {
+	case 0:
+		return filepath.Join(destRoot, baseName), false, nil
+	case 1:
+		rel, _ := filepath.Rel(destRoot, matches[0])
+		fmt.Printf("  %s🎯 Matched in dest tree:%s %s\n", ColorCyan, ColorReset, rel)
+		return matches[0], true, nil
+	default:
+		fmt.Printf("  %s⚠️  '%s' found in %d locations inside dest tree:%s\n",
+			ColorYellow, baseName, len(matches), ColorReset)
+		chosen, err := promptSmartSelection(matches, baseName)
+		if err != nil {
+			return "", false, err
+		}
+		if chosen == "" {
+			return "", false, nil // user skipped
+		}
+		rel, _ := filepath.Rel(destRoot, chosen)
+		fmt.Printf("  %s🎯 Using:%s %s\n", ColorCyan, ColorReset, rel)
+		return chosen, true, nil
+	}
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 4 helper – PT-root negotiation (READ-ONLY, no .pt creation here)
+// ═════════════════════════════════════════════════════════════════════════════
+
+type ptRootCtx struct {
+	srcPTRoot  string // abs path to source .pt dir; "" if none
+	dstPTRoot  string // abs path to dest   .pt dir; "" if none found yet
+	hasSrcPT   bool   // source side has an existing .pt
+	hasDstPT   bool   // dest side has an existing .pt
+	sharedRoot bool   // both sides use the same .pt
+}
+
+// normPTRoot converts a raw findPTRoot result to the actual .pt directory
+// path, or "" if none exists on disk.
+func normPTRoot(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	// findPTRoot returns either the .pt path itself or a project directory.
+	if filepath.Base(raw) == appConfig.BackupDirName {
+		if info, err := os.Stat(raw); err == nil && info.IsDir() {
+			return raw
+		}
+		return ""
+	}
+	candidate := filepath.Join(raw, appConfig.BackupDirName)
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		return candidate
+	}
+	return ""
+}
+
+func isAncestorOf(ancestor, child string) bool {
+	a := filepath.Clean(ancestor)
+	c := filepath.Clean(child)
+	return a == c || strings.HasPrefix(c, a+string(os.PathSeparator))
+}
+
+// discoverPTRoots looks up existing .pt roots on both sides.
+// It does NOT call ensurePTDir – that happens in Phase 5 only.
+func discoverPTRoots(sourcePath, finalDest string) ptRootCtx {
+	ctx := ptRootCtx{}
+
+	rawSrc, _ := findPTRoot(filepath.Dir(sourcePath))
+	if sr := normPTRoot(rawSrc); sr != "" {
+		ctx.hasSrcPT = true
+		ctx.srcPTRoot = sr
+	}
+
+	rawDst, _ := findPTRoot(filepath.Dir(finalDest))
+	if dr := normPTRoot(rawDst); dr != "" {
+		ctx.hasDstPT = true
+		ctx.dstPTRoot = dr
+	}
+
+	// Shared-root check
+	if ctx.hasSrcPT && ctx.hasDstPT {
+		if filepath.Clean(ctx.srcPTRoot) == filepath.Clean(ctx.dstPTRoot) {
+			ctx.sharedRoot = true
+		}
+	}
+
+	// If source .pt covers the dest directory, treat as shared even if no
+	// explicit .pt was found there yet.
+	if ctx.hasSrcPT && !ctx.hasDstPT {
+		srcPTParent := filepath.Dir(ctx.srcPTRoot)
+		if isAncestorOf(srcPTParent, filepath.Dir(finalDest)) {
+			ctx.dstPTRoot = ctx.srcPTRoot
+			ctx.hasDstPT = true
+			ctx.sharedRoot = true
+		}
+	}
+
+	return ctx
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 5 – commit: all side-effects happen here and only here
+// ═════════════════════════════════════════════════════════════════════════════
+
+// commitMove performs the actual backup + rename sequence.
+// Called only after ALL validation has passed.
+// Returns (backupsRelocated, error).
+// On rename failure the pre-receive backup is rolled back automatically.
+func commitMove(sourcePath, finalDest, comment string,
+	ctx ptRootCtx, destFileExists bool) (int, error) {
+
+	// 5b. Ensure dest .pt exists (create only now, after all checks passed).
+	activeDstPT := ctx.dstPTRoot
+	if activeDstPT == "" {
+		created, err := ensurePTDir(finalDest)
+		if err != nil {
+			return 0, fmt.Errorf("ensurePTDir: %w", err)
+		}
+		activeDstPT = created
+	}
+	// Resolve: if src .pt now covers dest, prefer it (src side takes priority
+	// when dest .pt was just created empty and src .pt already covers the dir).
+	if ctx.hasSrcPT && !ctx.hasDstPT {
+		srcPTParent := filepath.Dir(ctx.srcPTRoot)
+		if isAncestorOf(srcPTParent, filepath.Dir(finalDest)) {
+			os.Remove(activeDstPT) // remove the empty one we just made
+			activeDstPT = ctx.srcPTRoot
+		}
+	}
+
+	preMoveCmt := "pre-move"
+	if comment != "" {
+		preMoveCmt = "pre-move: " + comment
+	}
+
+	// 5c. Pre-move backup of SOURCE (if any .pt covers it).
+	if ctx.hasSrcPT {
+		if _, err := autoRenameIfExists(sourcePath, preMoveCmt, false); err != nil {
+			logger.Printf("pre-move backup warning %s: %v", sourcePath, err)
+		} else {
+			tag := "[src .pt]"
+			if ctx.sharedRoot {
+				tag = "[shared .pt]"
+			}
+			fmt.Printf("  📦 %s pre-move backup created\n", tag)
+		}
+	}
+
+	// 5d. Pre-receive backup of DEST (if dest file exists and we have a .pt).
+	// We record the backup path so we can roll it back if rename fails.
+	var preReceiveBackup string
+	if destFileExists && activeDstPT != "" {
+		bkPath, err := autoRenameIfExists(finalDest, "pre-receive: overwritten by pt move", false)
+		if err != nil {
+			logger.Printf("pre-receive backup warning %s: %v", finalDest, err)
+		} else if bkPath != finalDest {
+			// autoRenameIfExists returns the original path on success, so check
+			// whether a backup was actually created by looking for a new file.
+			// We capture it for rollback.
+			preReceiveBackup = bkPath
+			tag := "[dst .pt]"
+			if ctx.sharedRoot {
+				tag = "[shared .pt]"
+			}
+			fmt.Printf("  📦 %s pre-receive backup of existing dest created\n", tag)
+		}
+	}
+
+	// 5e. Relocate source backup subdir into dest .pt.
+	relocated := 0
+	if ctx.hasSrcPT && ctx.srcPTRoot != "" {
+		srcBkDir, err := getBackupDir(ctx.srcPTRoot, sourcePath)
+		if err == nil {
+			if info, serr := os.Stat(srcBkDir); serr == nil && info.IsDir() {
+				entries, _ := os.ReadDir(srcBkDir)
+				if len(entries) > 0 {
+					dstBkDir, derr := getBackupDir(activeDstPT, finalDest)
+					if derr == nil {
+						os.MkdirAll(filepath.Dir(dstBkDir), 0755)
+						if renErr := os.Rename(srcBkDir, dstBkDir); renErr == nil {
+							relocated = updateBackupMetadata(dstBkDir, finalDest)
+							label := "dst .pt"
+							if ctx.sharedRoot {
+								label = "shared .pt (renamed in place)"
+							}
+							fmt.Printf("  ✅ Backup subdir → %s (%d meta updated)\n", label, relocated)
+						} else {
+							// Cross-device fallback: copy then delete
+							if cnt, cpErr := copyBackupDir(srcBkDir, dstBkDir, finalDest); cpErr == nil {
+								os.RemoveAll(srcBkDir)
+								relocated = cnt
+								fmt.Printf("  ✅ Backup subdir copied to dst .pt (%d meta updated)\n", relocated)
+							} else {
+								fmt.Printf("  %s⚠️  Backup relocation failed: %v%s\n",
+									ColorYellow, cpErr, ColorReset)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 5f. The actual file move.
+	if renErr := os.Rename(sourcePath, finalDest); renErr != nil {
+		// 5g. Rollback pre-receive backup: restore dest file from backup.
+		if preReceiveBackup != "" && preReceiveBackup != finalDest {
+			if rbErr := os.Rename(preReceiveBackup, finalDest); rbErr != nil {
+				fmt.Printf("  %s⚠️  ROLLBACK FAILED: pre-receive backup left at %s%s\n",
+					ColorRed, preReceiveBackup, ColorReset)
+			} else {
+				fmt.Printf("  %s⚠️  Move failed; dest file restored from pre-receive backup%s\n",
+					ColorYellow, ColorReset)
+			}
+		}
+		return relocated, fmt.Errorf("rename: %w", renErr)
+	}
+
+	return relocated, nil
+}
+
+// updateBackupMetadata rewrites the Original field in every *.meta.json in dir.
+func updateBackupMetadata(dir, newOriginal string) int {
+	entries, _ := os.ReadDir(dir)
+	updated := 0
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".meta.json") {
+			continue
+		}
+		mp := filepath.Join(dir, e.Name())
+		data, err := os.ReadFile(mp)
+		if err != nil {
+			continue
+		}
+		var md BackupMetadata
+		if err := json.Unmarshal(data, &md); err != nil {
+			continue
+		}
+		md.Original = newOriginal
+		nd, err := json.MarshalIndent(md, "", "  ")
+		if err != nil {
+			continue
+		}
+		if os.WriteFile(mp, nd, 0644) == nil {
+			updated++
+		}
+	}
+	return updated
+}
+
+// copyBackupDir copies all files from src to dst, rewriting metadata.
+// Used as cross-device fallback when os.Rename fails.
+func copyBackupDir(src, dst, newOriginal string) (int, error) {
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return 0, err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return 0, err
+	}
+	updated := 0
+	for _, e := range entries {
+		data, rerr := os.ReadFile(filepath.Join(src, e.Name()))
+		if rerr != nil {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".meta.json") {
+			var md BackupMetadata
+			if json.Unmarshal(data, &md) == nil {
+				md.Original = newOriginal
+				if nd, merr := json.MarshalIndent(md, "", "  "); merr == nil {
+					data = nd
+					updated++
+				}
+			}
+		}
+		os.WriteFile(filepath.Join(dst, e.Name()), data, 0644)
+	}
+	return updated, nil
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// handleMoveCommand  (DELETE the same-named function from main.go)
+// ═════════════════════════════════════════════════════════════════════════════
+func handleMoveCommand(args []string, overwrite bool) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: pt move <source…> <destination>")
+	}
+
+	comment := ""
+	var patterns []string
+	recursive := false
+
+	i := 0
+	for i < len(args) {
+		switch args[i] {
+		case "-m", "--message":
+			if i+1 >= len(args) {
+				return fmt.Errorf("-m requires a value")
+			}
+			i++
+			comment = args[i]
+		case "-r", "--recursive":
+			recursive = true
+		default:
+			patterns = append(patterns, args[i])
+		}
+		i++
+	}
+	if len(patterns) < 2 {
+		return fmt.Errorf("need at least source and destination")
+	}
+
+	destPath := patterns[len(patterns)-1]
+	sourcePatterns := patterns[:len(patterns)-1]
+
+	// Directory recursive move (unchanged from original)
+	if len(sourcePatterns) == 1 &&
+		!strings.ContainsAny(sourcePatterns[0], "*?[") &&
+		!strings.HasPrefix(sourcePatterns[0], "regex:") &&
+		!strings.HasPrefix(sourcePatterns[0], "r:") {
+		if info, err := os.Stat(sourcePatterns[0]); err == nil && info.IsDir() {
+			if recursive {
+				return moveDirectoryWithBackups(sourcePatterns[0], destPath, comment)
+			}
+			return fmt.Errorf("use -r to move directories: pt move -r %s %s",
+				sourcePatterns[0], destPath)
+		}
+	}
+
+	// ── PHASE 1: expand and verify source patterns ────────────────────────────
+	// smartExpandGlobs only adds a path when os.Stat confirms it is a real file.
+	sourceFiles, err := smartExpandGlobs(sourcePatterns)
+	if err != nil {
+		return fmt.Errorf("source expansion: %w", err)
+	}
+	if len(sourceFiles) == 0 {
+		return fmt.Errorf("no valid source files found for: %v", sourcePatterns)
+	}
+
+	// ── Resolve destination root ──────────────────────────────────────────────
+	destResolved, err := filepath.Abs(destPath)
+	if err != nil {
+		return fmt.Errorf("invalid destination: %w", err)
+	}
+
+	destIsDir := false
+	if dInfo, statErr := os.Stat(destResolved); statErr == nil {
+		if dInfo.IsDir() {
+			destIsDir = true
+		} else {
+			if len(sourceFiles) > 1 {
+				return fmt.Errorf("destination must be a directory when moving multiple files")
+			}
+			if !overwrite {
+				return fmt.Errorf("destination file exists: %s — add -o to overwrite", destResolved)
+			}
+			fmt.Printf("%s⚠️  Destination exists and will be overwritten: %s%s\n",
+				ColorYellow, destResolved, ColorReset)
+		}
+	} else {
+		if len(sourceFiles) > 1 {
+			// Do NOT create the directory yet – that is a write operation.
+			// We create it in Phase 5 per-file.
+			destIsDir = true
+		}
+	}
+
+	if len(sourceFiles) > 1 {
+		fmt.Printf("🎯 %d file(s) selected\n", len(sourceFiles))
+	}
+	fmt.Printf("\n🚚 Moving %d file(s)…\n", len(sourceFiles))
+	fmt.Printf("  Destination root: %s\n", destResolved)
+	if destIsDir {
+		fmt.Println("  Mode: smart-place into dest tree")
+	}
+	fmt.Println()
+
+	successCount, failCount, movedBackups := 0, 0, 0
+
+	for idx, sourcePath := range sourceFiles {
+		fmt.Printf("[%d/%d] %s\n", idx+1, len(sourceFiles), sourcePath)
+
+		// ── PHASE 1 (already done by smartExpandGlobs, but double-check) ─────
+		srcInfo, statErr := os.Stat(sourcePath)
+		if statErr != nil {
+			fmt.Printf("  %s❌ Source vanished or not a file: %v%s\n",
+				ColorRed, statErr, ColorReset)
+			failCount++
+			continue
+		}
+		if srcInfo.IsDir() {
+			fmt.Printf("  %s❌ Source is a directory, not a file (use -r)%s\n",
+				ColorRed, ColorReset)
+			failCount++
+			continue
+		}
+
+		// ── PHASE 2: resolve true destination path ────────────────────────────
+		finalDest, destFileExists, resolveErr := resolveDestPath(
+			destResolved, destIsDir, sourcePath)
+		if resolveErr != nil {
+			fmt.Printf("  %s❌ Dest resolve: %v%s\n", ColorRed, resolveErr, ColorReset)
+			failCount++
+			continue
+		}
+		if finalDest == "" {
+			// user pressed 0 in selection prompt
+			fmt.Printf("  %s⏭️  Skipped by user%s\n", ColorGray, ColorReset)
+			failCount++
+			continue
+		}
+
+		// Also stat finalDest directly (handles flat-drop path that happens to exist)
+		if !destFileExists {
+			if _, e := os.Stat(finalDest); e == nil {
+				destFileExists = true
+			}
+		}
+
+		// ── PHASE 3: validation – NO writes ──────────────────────────────────
+		if destFileExists && !overwrite {
+			fmt.Printf("  %s⚠️  Will overwrite: %s%s\n", ColorYellow, finalDest, ColorReset)
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("  Confirm overwrite? (y/N): ")
+			ans, _ := reader.ReadString('\n')
+			if strings.TrimSpace(strings.ToLower(ans)) != "y" {
+				fmt.Printf("  %s⏭️  Skipped%s\n", ColorGray, ColorReset)
+				failCount++
+				continue
+			}
+		}
+
+		if valErr := validatePath(finalDest); valErr != nil {
+			fmt.Printf("  %s❌ Invalid destination path: %v%s\n", ColorRed, valErr, ColorReset)
+			failCount++
+			continue
+		}
+
+		// ── PHASE 4: discover PT roots – NO writes ────────────────────────────
+		ctx := discoverPTRoots(sourcePath, finalDest)
+
+		// Print strategy (informational only)
+		cwd, _ := os.Getwd()
+		ptLabel := func(root string) string {
+			if root == "" {
+				return ColorGray + "(none)" + ColorReset
+			}
+			if rel, e := filepath.Rel(cwd, root); e == nil && rel != "" {
+				return ColorCyan + rel + ColorReset
+			}
+			return ColorCyan + root + ColorReset
+		}
+		switch {
+		case ctx.sharedRoot:
+			fmt.Printf("  %s📂 PT strategy: shared root %s%s\n",
+				ColorGray, ptLabel(ctx.srcPTRoot), ColorReset)
+		case ctx.hasSrcPT && ctx.hasDstPT:
+			fmt.Printf("  %s📂 PT strategy: src=%s dst=%s%s\n",
+				ColorGray, ptLabel(ctx.srcPTRoot), ptLabel(ctx.dstPTRoot), ColorReset)
+		case ctx.hasSrcPT:
+			fmt.Printf("  %s📂 PT strategy: src only %s → relocate to dst%s\n",
+				ColorGray, ptLabel(ctx.srcPTRoot), ColorReset)
+		case ctx.hasDstPT:
+			fmt.Printf("  %s📂 PT strategy: dst only %s%s\n",
+				ColorGray, ptLabel(ctx.dstPTRoot), ColorReset)
+		default:
+			fmt.Printf("  %s📂 PT strategy: create new .pt at dst%s\n",
+				ColorGray, ColorReset)
+		}
+
+		// ── PHASE 5: commit – all writes happen here ──────────────────────────
+		// 5a. Create destination directory if needed (multi-file case).
+		if destIsDir {
+			if mkErr := os.MkdirAll(destResolved, 0755); mkErr != nil {
+				fmt.Printf("  %s❌ Cannot create dest root dir: %v%s\n",
+					ColorRed, mkErr, ColorReset)
+				failCount++
+				continue
+			}
+			// Also ensure the immediate parent of finalDest exists
+			// (it might be a sub-path inside the dest tree).
+			if mkErr := os.MkdirAll(filepath.Dir(finalDest), 0755); mkErr != nil {
+				fmt.Printf("  %s❌ Cannot create dest parent dir: %v%s\n",
+					ColorRed, mkErr, ColorReset)
+				failCount++
+				continue
+			}
+		} else {
+			if mkErr := os.MkdirAll(filepath.Dir(finalDest), 0755); mkErr != nil {
+				fmt.Printf("  %s❌ Cannot create dest parent dir: %v%s\n",
+					ColorRed, mkErr, ColorReset)
+				failCount++
+				continue
+			}
+		}
+
+		n, moveErr := commitMove(sourcePath, finalDest, comment, ctx, destFileExists)
+		if moveErr != nil {
+			fmt.Printf("  %s❌ Move failed: %v%s\n", ColorRed, moveErr, ColorReset)
+			failCount++
+			continue
+		}
+		movedBackups += n
+
+		rel, _ := filepath.Rel(destResolved, finalDest)
+		if rel == "" || rel == "." {
+			rel = finalDest
+		}
+		if filepath.Base(sourcePath) == filepath.Base(finalDest) {
+			fmt.Printf("  %s✅ Moved → %s%s\n", ColorGreen, rel, ColorReset)
+		} else {
+			fmt.Printf("  %s✅ Renamed & moved → %s%s\n", ColorGreen, rel, ColorReset)
+		}
+		successCount++
+	}
+
+	fmt.Println()
+	fmt.Printf("%s📊 Move summary:%s\n", ColorBold, ColorReset)
+	fmt.Printf("  %s✅ %d moved%s\n", ColorGreen, successCount, ColorReset)
+	if failCount > 0 {
+		fmt.Printf("  %s❌ %d skipped/failed%s\n", ColorRed, failCount, ColorReset)
+	}
+	if movedBackups > 0 {
+		fmt.Printf("  📦 %d backup(s) relocated\n", movedBackups)
+	}
+	if comment != "" {
+		fmt.Printf("  💬 Comment: \"%s\"\n", comment)
+	}
+	if failCount > 0 && successCount == 0 {
+		return fmt.Errorf("%d file(s) failed to move", failCount)
+	}
+	return nil
+}

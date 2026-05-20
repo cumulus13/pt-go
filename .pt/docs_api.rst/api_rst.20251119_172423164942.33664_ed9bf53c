@@ -1,0 +1,131 @@
+.. _api:
+
+API Documentation (Go Source)
+=============================
+
+This section outlines the structure and key components of the Go source code for |project_name|.
+
+.. note::
+   Sphinx's standard autodoc is designed for Python. Documenting Go code directly with Sphinx requires external tools or manual documentation. This section reflects the structure inferred from the provided ``main.go`` file.
+
+Main Package
+------------
+
+.. go:package:: main
+
+Configuration
+^^^^^^^^^^^^^
+
+.. go:type:: Config
+   :members:
+
+   Holds the application configuration loaded from ``pt.yml``.
+
+.. go:var:: appConfig
+   :type: *Config
+
+   Global instance of the application configuration.
+
+Constants
+^^^^^^^^^
+
+.. go:var:: Version
+   :type: string
+
+   The version string loaded from the ``VERSION`` file.
+
+.. go:const:: DefaultMaxClipboardSize
+.. go:const:: DefaultMaxBackupCount
+.. go:const:: DefaultMaxFilenameLen
+.. go:const:: DefaultBackupDirName
+.. go:const:: DefaultMaxSearchDepth
+
+   Default configuration constants.
+
+Logging
+^^^^^^^
+
+.. go:var:: logger
+   :type: *log.Logger
+
+   Global logger instance for audit trails.
+
+Initialization
+^^^^^^^^^^^^^^
+
+.. go:function:: init()
+   :noindex:
+
+   Initializes the global logger, version, and configuration.
+
+Core Functions
+^^^^^^^^^^^^^^
+
+.. go:function:: main()
+   :noindex:
+
+   Entry point of the application. Parses command-line arguments and dispatches to appropriate handlers.
+
+.. go:function:: handleCheckCommand(args []string) error
+.. go:function:: handleCommitCommand(args []string) error
+.. go:function:: handleTreeCommand(args []string) error
+.. go:function:: handleConfigCommand(args []string) error
+.. go:function:: handleRemoveCommand(args []string) error
+.. go:function:: handleDiffCommand(args []string) error
+
+   Command handlers for the various ``pt`` subcommands.
+
+File Operations
+^^^^^^^^^^^^^^^
+
+.. go:function:: writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) error
+.. go:function:: autoRenameIfExists(filePath, comment string) (string, error)
+.. go:function:: listBackups(filePath string) ([]BackupInfo, error)
+.. go:function:: restoreBackup(backupPath, originalPath, comment string) error
+
+   Functions for writing, backing up, listing, and restoring files.
+
+File Status and Tree Building
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. go:type:: FileStatusInfo
+   :members:
+
+   Holds status information for a file/directory node.
+
+.. go:type:: TreeNode
+   :members:
+
+   Represents a node in the directory tree.
+
+.. go:function:: buildStatusTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*FileStatusInfo, error)
+.. go:function:: buildTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*TreeNode, error)
+
+   Functions to recursively build status and directory trees.
+
+Ignore Patterns
+^^^^^^^^^^^^^^^
+
+.. go:type:: GitIgnore
+   :members:
+
+   Holds ignore patterns and provides matching logic.
+
+.. go:function:: loadGitIgnore(rootPath string) (*GitIgnore, error)
+.. go:function:: (gi *GitIgnore) shouldIgnore(path string, isDir bool) bool
+
+   Functions for loading and applying ``.gitignore`` patterns.
+
+Utility Functions
+^^^^^^^^^^^^^^^^^
+
+.. go:function:: loadVersion() string
+.. go:function:: loadConfig() *Config
+.. go:function:: findPTRoot(startPath string) (string, error)
+.. go:function:: ensurePTDir(filePath string) (string, error)
+.. go:function:: resolveFilePath(filename string) (string, error)
+.. go:function:: formatSize(size int64) string
+.. go:function:: printHelp()
+.. go:function:: printVersion()
+
+   Various utility functions for loading, path finding, formatting, and printing help/version.
