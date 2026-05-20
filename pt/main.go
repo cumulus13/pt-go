@@ -1835,136 +1835,136 @@ func collectChangedFiles(node *FileStatusInfo, changedFiles *[]string) {
 }
 
 // handleCommitCommand handles the commit command (backup all changed files)
-func handleCommitCommand(args []string) error {
-	// Parse commit message
-	commitMessage := ""
-	for i := range args {
-		if args[i] == "-m" || args[i] == "--message" {
-			if i+1 < len(args) {
-				commitMessage = args[i+1]
-				break
-			}
-		}
-	}
+// func handleCommitCommand(args []string) error {
+// 	// Parse commit message
+// 	commitMessage := ""
+// 	for i := range args {
+// 		if args[i] == "-m" || args[i] == "--message" {
+// 			if i+1 < len(args) {
+// 				commitMessage = args[i+1]
+// 				break
+// 			}
+// 		}
+// 	}
 
-	if commitMessage == "" {
-		return fmt.Errorf("commit message required. Use: pt commit -m \"your message\"")
-	}
+// 	if commitMessage == "" {
+// 		return fmt.Errorf("commit message required. Use: pt commit -m \"your message\"")
+// 	}
 
-	// Add "commit: " prefix to message
-	commitMessage = "commit: " + commitMessage
+// 	// Add "commit: " prefix to message
+// 	commitMessage = "commit: " + commitMessage
 
-	fmt.Printf("\n%s📦 Committing changes...%s\n\n", ColorBold+ColorCyan, ColorReset)
+// 	fmt.Printf("\n%s📦 Committing changes...%s\n\n", ColorBold+ColorCyan, ColorReset)
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
+// 	cwd, err := os.Getwd()
+// 	if err != nil {
+// 		return fmt.Errorf("failed to get current directory: %w", err)
+// 	}
 
-	// Try to find project root (where .git or .pt is)
-	projectRoot := cwd
-	ptRoot, err := findPTRoot(cwd)
-	if err == nil && ptRoot != "" {
-		// If .pt found, use its parent as project root
-		if filepath.Base(ptRoot) == appConfig.BackupDirName {
-			projectRoot = filepath.Dir(ptRoot)
-		} else {
-			projectRoot = ptRoot
-		}
-		logger.Printf("Using project root: %s", projectRoot)
-	} else {
-		// Try to find .git
-		gitRoot := findGitRoot(cwd)
-		if gitRoot != "" {
-			projectRoot = gitRoot
-			logger.Printf("Using git root: %s", projectRoot)
-		}
-	}
+// 	// Try to find project root (where .git or .pt is)
+// 	projectRoot := cwd
+// 	ptRoot, err := findPTRoot(cwd)
+// 	if err == nil && ptRoot != "" {
+// 		// If .pt found, use its parent as project root
+// 		if filepath.Base(ptRoot) == appConfig.BackupDirName {
+// 			projectRoot = filepath.Dir(ptRoot)
+// 		} else {
+// 			projectRoot = ptRoot
+// 		}
+// 		logger.Printf("Using project root: %s", projectRoot)
+// 	} else {
+// 		// Try to find .git
+// 		gitRoot := findGitRoot(cwd)
+// 		if gitRoot != "" {
+// 			projectRoot = gitRoot
+// 			logger.Printf("Using git root: %s", projectRoot)
+// 		}
+// 	}
 
-	// Show which directory we're scanning
-	relRoot, _ := filepath.Rel(cwd, projectRoot)
-	if relRoot != "" && relRoot != "." {
-		fmt.Printf("%sCommitting from project root:%s %s\n\n", ColorGray, ColorReset, projectRoot)
-	}
+// 	// Show which directory we're scanning
+// 	relRoot, _ := filepath.Rel(cwd, projectRoot)
+// 	if relRoot != "" && relRoot != "." {
+// 		fmt.Printf("%sCommitting from project root:%s %s\n\n", ColorGray, ColorReset, projectRoot)
+// 	}
 
-	// Load gitignore
-	gitignore, err := loadGitIgnoreAndPtIgnore(projectRoot)
-	if err != nil {
-		logger.Printf("Warning: failed to load .gitignore: %v", err)
-	}
+// 	// Load gitignore
+// 	gitignore, err := loadGitIgnoreAndPtIgnore(projectRoot)
+// 	if err != nil {
+// 		logger.Printf("Warning: failed to load .gitignore: %v", err)
+// 	}
 
-	exceptions := make(map[string]bool)
-	exceptions[appConfig.BackupDirName] = true
+// 	exceptions := make(map[string]bool)
+// 	exceptions[appConfig.BackupDirName] = true
 
-	// Build status tree to find changed files
-	tree, err := buildStatusTree(projectRoot, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
-	if err != nil {
-		return fmt.Errorf("failed to build status tree: %w", err)
-	}
+// 	// Build status tree to find changed files
+// 	tree, err := buildStatusTree(projectRoot, gitignore, exceptions, 0, appConfig.MaxSearchDepth)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to build status tree: %w", err)
+// 	}
 
-	if tree == nil {
-		return fmt.Errorf("no files found")
-	}
+// 	if tree == nil {
+// 		return fmt.Errorf("no files found")
+// 	}
 
-	// Collect all changed files
-	var changedFiles []string
-	collectChangedFiles(tree, &changedFiles)
+// 	// Collect all changed files
+// 	var changedFiles []string
+// 	collectChangedFiles(tree, &changedFiles)
 
-	if len(changedFiles) == 0 {
-		fmt.Printf("%s✓ No changes to commit. All files are up to date.%s\n", ColorGreen, ColorReset)
-		return nil
-	}
+// 	if len(changedFiles) == 0 {
+// 		fmt.Printf("%s✓ No changes to commit. All files are up to date.%s\n", ColorGreen, ColorReset)
+// 		return nil
+// 	}
 
-	fmt.Printf("Files to backup:\n")
-	for i, file := range changedFiles {
-		relPath, _ := filepath.Rel(projectRoot, file)
-		status, _ := compareFileWithBackup(file)
-		statusColor := status.Color()
-		fmt.Printf("  %d. %s%s%s %s[%s]%s\n",
-			i+1, ColorGreen, relPath, ColorReset,
-			statusColor, status.String(), ColorReset)
-	}
-	fmt.Println()
+// 	fmt.Printf("Files to backup:\n")
+// 	for i, file := range changedFiles {
+// 		relPath, _ := filepath.Rel(projectRoot, file)
+// 		status, _ := compareFileWithBackup(file)
+// 		statusColor := status.Color()
+// 		fmt.Printf("  %d. %s%s%s %s[%s]%s\n",
+// 			i+1, ColorGreen, relPath, ColorReset,
+// 			statusColor, status.String(), ColorReset)
+// 	}
+// 	fmt.Println()
 
-	// Ask for confirmation
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("Commit %d file(s) with message \"%s\"? (y/N): ", len(changedFiles), strings.TrimPrefix(commitMessage, "commit: "))
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(strings.ToLower(input))
+// 	// Ask for confirmation
+// 	reader := bufio.NewReader(os.Stdin)
+// 	fmt.Printf("Commit %d file(s) with message \"%s\"? (y/N): ", len(changedFiles), strings.TrimPrefix(commitMessage, "commit: "))
+// 	input, _ := reader.ReadString('\n')
+// 	input = strings.TrimSpace(strings.ToLower(input))
 
-	if input != "y" && input != "yes" {
-		fmt.Println("❌ Commit cancelled")
-		return nil
-	}
+// 	if input != "y" && input != "yes" {
+// 		fmt.Println("❌ Commit cancelled")
+// 		return nil
+// 	}
 
-	// Backup all changed files
-	successCount := 0
-	failCount := 0
+// 	// Backup all changed files
+// 	successCount := 0
+// 	failCount := 0
 
-	for _, file := range changedFiles {
-		relPath, _ := filepath.Rel(projectRoot, file)
+// 	for _, file := range changedFiles {
+// 		relPath, _ := filepath.Rel(projectRoot, file)
 
-		// Create backup
-		_, err := autoRenameIfExists(file, commitMessage, false)
-		if err != nil {
-			fmt.Printf("%s✗%s %s: %v\n", ColorRed, ColorReset, relPath, err)
-			failCount++
-		} else {
-			fmt.Printf("%s✓%s %s\n", ColorGreen, ColorReset, relPath)
-			successCount++
-		}
-	}
+// 		// Create backup
+// 		_, err := autoRenameIfExists(file, commitMessage, false)
+// 		if err != nil {
+// 			fmt.Printf("%s✗%s %s: %v\n", ColorRed, ColorReset, relPath, err)
+// 			failCount++
+// 		} else {
+// 			fmt.Printf("%s✓%s %s\n", ColorGreen, ColorReset, relPath)
+// 			successCount++
+// 		}
+// 	}
 
-	fmt.Println()
-	fmt.Printf("%s📦 Commit Summary:%s\n", ColorBold, ColorReset)
-	fmt.Printf("  %s✓ %d files backed up%s\n", ColorGreen, successCount, ColorReset)
-	if failCount > 0 {
-		fmt.Printf("  %s✗ %d files failed%s\n", ColorRed, failCount, ColorReset)
-	}
-	fmt.Printf("  💬 Message: \"%s\"\n", strings.TrimPrefix(commitMessage, "commit: "))
+// 	fmt.Println()
+// 	fmt.Printf("%s📦 Commit Summary:%s\n", ColorBold, ColorReset)
+// 	fmt.Printf("  %s✓ %d files backed up%s\n", ColorGreen, successCount, ColorReset)
+// 	if failCount > 0 {
+// 		fmt.Printf("  %s✗ %d files failed%s\n", ColorRed, failCount, ColorReset)
+// 	}
+// 	fmt.Printf("  💬 Message: \"%s\"\n", strings.TrimPrefix(commitMessage, "commit: "))
 
-	return nil
-}
+// 	return nil
+// }
 
 // ============================================================================
 // TREE COMMAND - Display directory tree
@@ -2464,348 +2464,348 @@ func cleanOrphanedBackups(orphaned []OrphanedBackup) error {
 // MOVE COMMAND - Move file(s) and adjust all backups
 // ============================================================================
 
-func handleMoveCommand(args []string, overwrite bool) error {
-	if len(args) < 2 {
-		return fmt.Errorf("move requires at least source and destination: pt move <source...> <destination>")
-	}
+// func handleMoveCommand(args []string, overwrite bool) error {
+// 	if len(args) < 2 {
+// 		return fmt.Errorf("move requires at least source and destination: pt move <source...> <destination>")
+// 	}
 
-	comment := ""
-	patterns := []string{}
-	recursive := false
+// 	comment := ""
+// 	patterns := []string{}
+// 	recursive := false
 	
-	// Parse arguments - last non-flag arg is destination
-	i := 0
-	for i < len(args) {
-		if args[i] == "-m" || args[i] == "--message" {
-			if i+1 >= len(args) {
-				return fmt.Errorf("-m/--message requires a value")
-			}
-			i++
-			comment = args[i]
-			i++
-			continue
-		}
-		if args[i] == "-r" || args[i] == "--recursive" {
-			recursive = true
-			i++
-			continue
-		}
-		patterns = append(patterns, args[i])
-		i++
-	}
+// 	// Parse arguments - last non-flag arg is destination
+// 	i := 0
+// 	for i < len(args) {
+// 		if args[i] == "-m" || args[i] == "--message" {
+// 			if i+1 >= len(args) {
+// 				return fmt.Errorf("-m/--message requires a value")
+// 			}
+// 			i++
+// 			comment = args[i]
+// 			i++
+// 			continue
+// 		}
+// 		if args[i] == "-r" || args[i] == "--recursive" {
+// 			recursive = true
+// 			i++
+// 			continue
+// 		}
+// 		patterns = append(patterns, args[i])
+// 		i++
+// 	}
 
-	if len(patterns) < 2 {
-		return fmt.Errorf("need at least source and destination")
-	}
+// 	if len(patterns) < 2 {
+// 		return fmt.Errorf("need at least source and destination")
+// 	}
 
-	// Last pattern is destination
-	destPath := patterns[len(patterns)-1]
-	sourcePatterns := patterns[:len(patterns)-1]
+// 	// Last pattern is destination
+// 	destPath := patterns[len(patterns)-1]
+// 	sourcePatterns := patterns[:len(patterns)-1]
 	
-	// Check if we're moving a directory (single source, no wildcards)
-	if len(sourcePatterns) == 1 && !strings.Contains(sourcePatterns[0], "*") && !strings.HasPrefix(sourcePatterns[0], "regex:") && !strings.HasPrefix(sourcePatterns[0], "r:") {
-		if info, err := os.Stat(sourcePatterns[0]); err == nil && info.IsDir() {
-			if recursive {
-				return moveDirectoryWithBackups(sourcePatterns[0], destPath, comment)
-			} else {
-				return fmt.Errorf("use -r flag to move directories: pt move -r %s %s", sourcePatterns[0], destPath)
-			}
-		}
-	}
+// 	// Check if we're moving a directory (single source, no wildcards)
+// 	if len(sourcePatterns) == 1 && !strings.Contains(sourcePatterns[0], "*") && !strings.HasPrefix(sourcePatterns[0], "regex:") && !strings.HasPrefix(sourcePatterns[0], "r:") {
+// 		if info, err := os.Stat(sourcePatterns[0]); err == nil && info.IsDir() {
+// 			if recursive {
+// 				return moveDirectoryWithBackups(sourcePatterns[0], destPath, comment)
+// 			} else {
+// 				return fmt.Errorf("use -r flag to move directories: pt move -r %s %s", sourcePatterns[0], destPath)
+// 			}
+// 		}
+// 	}
 	
-	// Expand wildcards and regex patterns
-	logger.Printf("Source patterns before expansion: %v", sourcePatterns)
-	sourceFiles, err := expandGlobs(sourcePatterns)
-	logger.Printf("Source files after expansion: %v", sourceFiles)
+// 	// Expand wildcards and regex patterns
+// 	logger.Printf("Source patterns before expansion: %v", sourcePatterns)
+// 	sourceFiles, err := expandGlobs(sourcePatterns)
+// 	logger.Printf("Source files after expansion: %v", sourceFiles)
 	
-	if err != nil {
-		return fmt.Errorf("pattern expansion failed: %w", err)
-	}
+// 	if err != nil {
+// 		return fmt.Errorf("pattern expansion failed: %w", err)
+// 	}
 	
-	if len(sourceFiles) == 0 {
-		return fmt.Errorf("no files matched the patterns: %v", sourcePatterns)
-	}
+// 	if len(sourceFiles) == 0 {
+// 		return fmt.Errorf("no files matched the patterns: %v", sourcePatterns)
+// 	}
 	
-	// Additional check: if we got back the exact same patterns (no expansion happened),
-	// and they contain wildcards, it means no files matched
-	if len(sourceFiles) == len(sourcePatterns) {
-		allUnexpanded := true
-		for i, f := range sourceFiles {
-			if f != sourcePatterns[i] {
-				allUnexpanded = false
-				break
-			}
-		}
-		if allUnexpanded {
-			// Check if any pattern contains wildcards
-			for _, pattern := range sourcePatterns {
-				if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
-					return fmt.Errorf("no files matched pattern: %s", pattern)
-				}
-			}
-		}
-	}
+// 	// Additional check: if we got back the exact same patterns (no expansion happened),
+// 	// and they contain wildcards, it means no files matched
+// 	if len(sourceFiles) == len(sourcePatterns) {
+// 		allUnexpanded := true
+// 		for i, f := range sourceFiles {
+// 			if f != sourcePatterns[i] {
+// 				allUnexpanded = false
+// 				break
+// 			}
+// 		}
+// 		if allUnexpanded {
+// 			// Check if any pattern contains wildcards
+// 			for _, pattern := range sourcePatterns {
+// 				if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
+// 					return fmt.Errorf("no files matched pattern: %s", pattern)
+// 				}
+// 			}
+// 		}
+// 	}
 	
-	if len(sourceFiles) > 1 {
-		fmt.Printf("🎯 Matched %d file(s) from patterns\n", len(sourceFiles))
-	}
+// 	if len(sourceFiles) > 1 {
+// 		fmt.Printf("🎯 Matched %d file(s) from patterns\n", len(sourceFiles))
+// 	}
 
-	// Resolve destination
-	destResolved, err := filepath.Abs(destPath)
-	if err != nil {
-		return fmt.Errorf("invalid destination path: %w", err)
-	}
+// 	// Resolve destination
+// 	destResolved, err := filepath.Abs(destPath)
+// 	if err != nil {
+// 		return fmt.Errorf("invalid destination path: %w", err)
+// 	}
 
-	// Check if destination exists and is a directory
-	destIsDir := false
-	if destInfo, err := os.Stat(destResolved); err == nil {
-		if !destInfo.IsDir() {
-			// Destination exists but is not a directory
-			// Single file to existing file - not allowed without -o (overwrite)
-			if len(sourceFiles) > 1 {
-				return fmt.Errorf("destination must be a directory when moving multiple files")
-			} else if !overwrite {
-				return fmt.Errorf("destination already exists: %s", destResolved)	
-			} else {
-				fmt.Printf("destination already exists and will be overwrite: %s !", destResolved)
+// 	// Check if destination exists and is a directory
+// 	destIsDir := false
+// 	if destInfo, err := os.Stat(destResolved); err == nil {
+// 		if !destInfo.IsDir() {
+// 			// Destination exists but is not a directory
+// 			// Single file to existing file - not allowed without -o (overwrite)
+// 			if len(sourceFiles) > 1 {
+// 				return fmt.Errorf("destination must be a directory when moving multiple files")
+// 			} else if !overwrite {
+// 				return fmt.Errorf("destination already exists: %s", destResolved)	
+// 			} else {
+// 				fmt.Printf("destination already exists and will be overwrite: %s !", destResolved)
 
-			}
+// 			}
 			
-		} else {
-			destIsDir = true
-		}
-	} else {
-		// Destination doesn't exist
-		if len(sourceFiles) > 1 {
-			// Multiple files - destination must be a directory, create it
-			if err := os.MkdirAll(destResolved, 0755); err != nil {
-				return fmt.Errorf("failed to create destination directory: %w", err)
-			}
-			destIsDir = true
-			fmt.Printf("📁 Created destination directory: %s\n", destResolved)
-		}
-		// Single file - destination will be the new filename
-	}
+// 		} else {
+// 			destIsDir = true
+// 		}
+// 	} else {
+// 		// Destination doesn't exist
+// 		if len(sourceFiles) > 1 {
+// 			// Multiple files - destination must be a directory, create it
+// 			if err := os.MkdirAll(destResolved, 0755); err != nil {
+// 				return fmt.Errorf("failed to create destination directory: %w", err)
+// 			}
+// 			destIsDir = true
+// 			fmt.Printf("📁 Created destination directory: %s\n", destResolved)
+// 		}
+// 		// Single file - destination will be the new filename
+// 	}
 
-	fmt.Printf("\n🚚 Moving %d file(s) with backup adjustment...\n", len(sourceFiles))
-	fmt.Printf("  Destination: %s\n", destResolved)
-	if destIsDir {
-		fmt.Printf("  Type: Directory\n")
-	}
-	fmt.Println()
+// 	fmt.Printf("\n🚚 Moving %d file(s) with backup adjustment...\n", len(sourceFiles))
+// 	fmt.Printf("  Destination: %s\n", destResolved)
+// 	if destIsDir {
+// 		fmt.Printf("  Type: Directory\n")
+// 	}
+// 	fmt.Println()
 
-	// Track results
-	successCount := 0
-	failCount := 0
-	movedBackups := 0
+// 	// Track results
+// 	successCount := 0
+// 	failCount := 0
+// 	movedBackups := 0
 
-	// Process each source file
-	for idx, sourcePath := range sourceFiles {
-		fileNum := idx + 1
-		fmt.Printf("[%d/%d] Processing: %s\n", fileNum, len(sourceFiles), sourcePath)
+// 	// Process each source file
+// 	for idx, sourcePath := range sourceFiles {
+// 		fileNum := idx + 1
+// 		fmt.Printf("[%d/%d] Processing: %s\n", fileNum, len(sourceFiles), sourcePath)
 
-		// Resolve source file
-		sourceResolved, err := resolveFilePath(sourcePath)
-		if err != nil {
-			fmt.Printf("  %s❌ Source not found: %v%s\n", ColorRed, err, ColorReset)
-			failCount++
-			continue
-		}
+// 		// Resolve source file
+// 		sourceResolved, err := resolveFilePath(sourcePath)
+// 		if err != nil {
+// 			fmt.Printf("  %s❌ Source not found: %v%s\n", ColorRed, err, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		// Check if source exists and is a file
-		sourceInfo, err := os.Stat(sourceResolved)
-		if err != nil {
-			fmt.Printf("  %s❌ Cannot stat: %v%s\n", ColorRed, err, ColorReset)
-			failCount++
-			continue
-		}
+// 		// Check if source exists and is a file
+// 		sourceInfo, err := os.Stat(sourceResolved)
+// 		if err != nil {
+// 			fmt.Printf("  %s❌ Cannot stat: %v%s\n", ColorRed, err, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		if sourceInfo.IsDir() {
-			fmt.Printf("  %s❌ Cannot move directories%s\n", ColorRed, ColorReset)
-			failCount++
-			continue
-		}
+// 		if sourceInfo.IsDir() {
+// 			fmt.Printf("  %s❌ Cannot move directories%s\n", ColorRed, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		// Determine final destination path
-		var finalDestPath string
-		if destIsDir {
-			finalDestPath = filepath.Join(destResolved, filepath.Base(sourceResolved))
-		} else {
-			finalDestPath = destResolved
-		}
+// 		// Determine final destination path
+// 		var finalDestPath string
+// 		if destIsDir {
+// 			finalDestPath = filepath.Join(destResolved, filepath.Base(sourceResolved))
+// 		} else {
+// 			finalDestPath = destResolved
+// 		}
 
-		// Check if destination already exists
-		if _, err := os.Stat(finalDestPath); err == nil {
-			if !overwrite {
-				fmt.Printf("  %s❌ Destination exists: %s%s\n", ColorRed, finalDestPath, ColorReset)
-				failCount++
-				continue
-			}
-		}
+// 		// Check if destination already exists
+// 		if _, err := os.Stat(finalDestPath); err == nil {
+// 			if !overwrite {
+// 				fmt.Printf("  %s❌ Destination exists: %s%s\n", ColorRed, finalDestPath, ColorReset)
+// 				failCount++
+// 				continue
+// 			}
+// 		}
 
-		// Validate destination path
-		if err := validatePath(finalDestPath); err != nil {
-			fmt.Printf("  %s❌ Invalid destination: %v%s\n", ColorRed, err, ColorReset)
-			failCount++
-			continue
-		}
+// 		// Validate destination path
+// 		if err := validatePath(finalDestPath); err != nil {
+// 			fmt.Printf("  %s❌ Invalid destination: %v%s\n", ColorRed, err, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		// Find PT root for source
-		sourcePTRoot, err := findPTRoot(filepath.Dir(sourceResolved))
-		if err != nil {
-			fmt.Printf("  %s⚠️  No PT root for source%s\n", ColorYellow, ColorReset)
-		}
+// 		// Find PT root for source
+// 		sourcePTRoot, err := findPTRoot(filepath.Dir(sourceResolved))
+// 		if err != nil {
+// 			fmt.Printf("  %s⚠️  No PT root for source%s\n", ColorYellow, ColorReset)
+// 		}
 
-		// Get source backup directory
-		var sourceBackupDir string
-		hasBackups := false
-		if sourcePTRoot != "" {
-			sourceBackupDir, err = getBackupDir(sourcePTRoot, sourceResolved)
-			if err == nil {
-				if info, err := os.Stat(sourceBackupDir); err == nil && info.IsDir() {
-					entries, _ := os.ReadDir(sourceBackupDir)
-					if len(entries) > 0 {
-						hasBackups = true
-						fmt.Printf("  📦 Found %d backup(s)\n", len(entries)/2)
-					}
-				}
-			}
-		}
+// 		// Get source backup directory
+// 		var sourceBackupDir string
+// 		hasBackups := false
+// 		if sourcePTRoot != "" {
+// 			sourceBackupDir, err = getBackupDir(sourcePTRoot, sourceResolved)
+// 			if err == nil {
+// 				if info, err := os.Stat(sourceBackupDir); err == nil && info.IsDir() {
+// 					entries, _ := os.ReadDir(sourceBackupDir)
+// 					if len(entries) > 0 {
+// 						hasBackups = true
+// 						fmt.Printf("  📦 Found %d backup(s)\n", len(entries)/2)
+// 					}
+// 				}
+// 			}
+// 		}
 
-		// Ensure destination parent directory exists
-		destDir := filepath.Dir(finalDestPath)
-		if err := os.MkdirAll(destDir, 0755); err != nil {
-			fmt.Printf("  %s❌ Cannot create dest dir: %v%s\n", ColorRed, err, ColorReset)
-			failCount++
-			continue
-		}
+// 		// Ensure destination parent directory exists
+// 		destDir := filepath.Dir(finalDestPath)
+// 		if err := os.MkdirAll(destDir, 0755); err != nil {
+// 			fmt.Printf("  %s❌ Cannot create dest dir: %v%s\n", ColorRed, err, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		// Find or create PT root for destination
-		destPTRoot, err := ensurePTDir(finalDestPath)
-		if err != nil {
-			fmt.Printf("  %s❌ Cannot ensure PT dir: %v%s\n", ColorRed, err, ColorReset)
-			failCount++
-			continue
-		}
+// 		// Find or create PT root for destination
+// 		destPTRoot, err := ensurePTDir(finalDestPath)
+// 		if err != nil {
+// 			fmt.Printf("  %s❌ Cannot ensure PT dir: %v%s\n", ColorRed, err, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		// Get destination backup directory
-		destBackupDir, err := getBackupDir(destPTRoot, finalDestPath)
-		if err != nil {
-			fmt.Printf("  %s❌ Cannot get dest backup dir: %v%s\n", ColorRed, err, ColorReset)
-			failCount++
-			continue
-		}
+// 		// Get destination backup directory
+// 		destBackupDir, err := getBackupDir(destPTRoot, finalDestPath)
+// 		if err != nil {
+// 			fmt.Printf("  %s❌ Cannot get dest backup dir: %v%s\n", ColorRed, err, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		// Move backups first (if they exist)
-		if hasBackups {
-			// Ensure destination backup parent directory exists
-			if err := os.MkdirAll(filepath.Dir(destBackupDir), 0755); err != nil {
-				fmt.Printf("  %s⚠️  Cannot create backup parent: %v%s\n", ColorYellow, err, ColorReset)
-			} else {
-				// Move the entire backup directory
-				err = os.Rename(sourceBackupDir, destBackupDir)
-				if err != nil {
-					fmt.Printf("  %s⚠️  Failed to move backups: %v%s\n", ColorYellow, err, ColorReset)
-				} else {
-					// Update metadata in all backup files
-					entries, err := os.ReadDir(destBackupDir)
-					if err == nil {
-						updatedCount := 0
-						for _, entry := range entries {
-							if strings.HasSuffix(entry.Name(), ".meta.json") {
-								metaPath := filepath.Join(destBackupDir, entry.Name())
-								data, err := os.ReadFile(metaPath)
-								if err != nil {
-									continue
-								}
+// 		// Move backups first (if they exist)
+// 		if hasBackups {
+// 			// Ensure destination backup parent directory exists
+// 			if err := os.MkdirAll(filepath.Dir(destBackupDir), 0755); err != nil {
+// 				fmt.Printf("  %s⚠️  Cannot create backup parent: %v%s\n", ColorYellow, err, ColorReset)
+// 			} else {
+// 				// Move the entire backup directory
+// 				err = os.Rename(sourceBackupDir, destBackupDir)
+// 				if err != nil {
+// 					fmt.Printf("  %s⚠️  Failed to move backups: %v%s\n", ColorYellow, err, ColorReset)
+// 				} else {
+// 					// Update metadata in all backup files
+// 					entries, err := os.ReadDir(destBackupDir)
+// 					if err == nil {
+// 						updatedCount := 0
+// 						for _, entry := range entries {
+// 							if strings.HasSuffix(entry.Name(), ".meta.json") {
+// 								metaPath := filepath.Join(destBackupDir, entry.Name())
+// 								data, err := os.ReadFile(metaPath)
+// 								if err != nil {
+// 									continue
+// 								}
 
-								var metadata BackupMetadata
-								if err := json.Unmarshal(data, &metadata); err != nil {
-									continue
-								}
+// 								var metadata BackupMetadata
+// 								if err := json.Unmarshal(data, &metadata); err != nil {
+// 									continue
+// 								}
 
-								// Update original file path
-								metadata.Original = finalDestPath
+// 								// Update original file path
+// 								metadata.Original = finalDestPath
 
-								newData, err := json.MarshalIndent(metadata, "", "  ")
-								if err != nil {
-									continue
-								}
+// 								newData, err := json.MarshalIndent(metadata, "", "  ")
+// 								if err != nil {
+// 									continue
+// 								}
 
-								if err := os.WriteFile(metaPath, newData, 0644); err == nil {
-									updatedCount++
-								}
-							}
-						}
-						fmt.Printf("  ✅ Moved backups (%d metadata updated)\n", updatedCount)
-						movedBackups += len(entries) / 2
-					}
-				}
-			}
-		}
+// 								if err := os.WriteFile(metaPath, newData, 0644); err == nil {
+// 									updatedCount++
+// 								}
+// 							}
+// 						}
+// 						fmt.Printf("  ✅ Moved backups (%d metadata updated)\n", updatedCount)
+// 						movedBackups += len(entries) / 2
+// 					}
+// 				}
+// 			}
+// 		}
 
-		// Move the actual file
-		err = os.Rename(sourceResolved, finalDestPath)
-		if err != nil {
-			// If move fails, try to restore backups
-			if hasBackups {
-				os.Rename(destBackupDir, sourceBackupDir)
-			}
-			fmt.Printf("  %s❌ Failed to move file: %v%s\n", ColorRed, err, ColorReset)
-			failCount++
-			continue
-		}
+// 		// Move the actual file
+// 		err = os.Rename(sourceResolved, finalDestPath)
+// 		if err != nil {
+// 			// If move fails, try to restore backups
+// 			if hasBackups {
+// 				os.Rename(destBackupDir, sourceBackupDir)
+// 			}
+// 			fmt.Printf("  %s❌ Failed to move file: %v%s\n", ColorRed, err, ColorReset)
+// 			failCount++
+// 			continue
+// 		}
 
-		// Create backup of the move operation if comment provided
-		if comment != "" {
-			_, err = autoRenameIfExists(finalDestPath, "move: "+comment, false)
-			if err != nil {
-				logger.Printf("Warning: failed to create move backup for %s: %v", finalDestPath, err)
-			}
-		}
+// 		// Create backup of the move operation if comment provided
+// 		if comment != "" {
+// 			_, err = autoRenameIfExists(finalDestPath, "move: "+comment, false)
+// 			if err != nil {
+// 				logger.Printf("Warning: failed to create move backup for %s: %v", finalDestPath, err)
+// 			}
+// 		}
 
-		// Show both source and destination names
-		srcName := filepath.Base(sourceResolved)
-		destName := filepath.Base(finalDestPath)
+// 		// Show both source and destination names
+// 		srcName := filepath.Base(sourceResolved)
+// 		destName := filepath.Base(finalDestPath)
 		
-		// Show relative path or just filename if in same dir
-		var displayPath string
-		if rel, err := filepath.Rel(".", finalDestPath); err == nil && rel != "" {
-			displayPath = rel
-		} else {
-			displayPath = finalDestPath
-		}
+// 		// Show relative path or just filename if in same dir
+// 		var displayPath string
+// 		if rel, err := filepath.Rel(".", finalDestPath); err == nil && rel != "" {
+// 			displayPath = rel
+// 		} else {
+// 			displayPath = finalDestPath
+// 		}
 		
-		if srcName == destName {
-			// Same filename, different directory
-			fmt.Printf("  %s✅ Moved to: %s%s\n", ColorGreen, displayPath, ColorReset)
-		} else {
-			// Renamed
-			fmt.Printf("  %s✅ Renamed and moved to: %s%s\n", ColorGreen, displayPath, ColorReset)
-		}
-		successCount++
-	}
+// 		if srcName == destName {
+// 			// Same filename, different directory
+// 			fmt.Printf("  %s✅ Moved to: %s%s\n", ColorGreen, displayPath, ColorReset)
+// 		} else {
+// 			// Renamed
+// 			fmt.Printf("  %s✅ Renamed and moved to: %s%s\n", ColorGreen, displayPath, ColorReset)
+// 		}
+// 		successCount++
+// 	}
 
-	// Summary
-	fmt.Println()
-	fmt.Printf("%s📊 Move Summary:%s\n", ColorBold, ColorReset)
-	fmt.Printf("  %s✅ %d file(s) moved successfully%s\n", ColorGreen, successCount, ColorReset)
-	if failCount > 0 {
-		fmt.Printf("  %s❌ %d file(s) failed%s\n", ColorRed, failCount, ColorReset)
-	}
-	if movedBackups > 0 {
-		fmt.Printf("  📦 %d backup(s) adjusted\n", movedBackups)
-	}
-	if comment != "" {
-		fmt.Printf("  💬 Comment: \"%s\"\n", comment)
-	}
+// 	// Summary
+// 	fmt.Println()
+// 	fmt.Printf("%s📊 Move Summary:%s\n", ColorBold, ColorReset)
+// 	fmt.Printf("  %s✅ %d file(s) moved successfully%s\n", ColorGreen, successCount, ColorReset)
+// 	if failCount > 0 {
+// 		fmt.Printf("  %s❌ %d file(s) failed%s\n", ColorRed, failCount, ColorReset)
+// 	}
+// 	if movedBackups > 0 {
+// 		fmt.Printf("  📦 %d backup(s) adjusted\n", movedBackups)
+// 	}
+// 	if comment != "" {
+// 		fmt.Printf("  💬 Comment: \"%s\"\n", comment)
+// 	}
 
-	if failCount > 0 {
-		return fmt.Errorf("%d file(s) failed to move", failCount)
-	}
+// 	if failCount > 0 {
+// 		return fmt.Errorf("%d file(s) failed to move", failCount)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 
 // moveDirectoryWithBackups moves entire directory and adjusts all backups
@@ -5202,6 +5202,12 @@ func printHelp() {
 	fmt.Printf("  3. %spt -l <file>%s               - View commit history\n", ColorYellow, ColorReset)
 	fmt.Printf("  4. %spt -d <file> --last/-lt%s    - See what changed\n", ColorYellow, ColorReset)
 	fmt.Printf("  5. %spt -r <file> --last/-lt%s    - Rollback if needed\n", ColorYellow, ColorReset)
+	fmt.Printf("  %spt log%s                          Show commit history\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt log <id>%s                     Show files in a specific commit\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt reset --last%s                 Restore most recent commit (all files)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt reset --last -n 2%s            Restore 2nd most recent commit\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt reset <id>%s                   Restore a specific commit by ID\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt reset <id> --dry-run%s         Preview restore without touching disk\n", ColorGreen, ColorReset)
 
 	fmt.Printf("\n%s🎨 THEMES & LEXERS:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %sPopular Themes:%s monokai (default), dracula, solarized-dark, solarized-light,\n", ColorBold, ColorReset)
@@ -5778,6 +5784,7 @@ func parseArguments(args []string) *CommandInfo {
 		"-l": true, "--list": true, "-d": true, "--diff": true,
 		"-r": true, "--restore": true, "+": true,
 		"-mt": true, "--monitor": true, "-dd": true, "--diff2": true,
+		"log": true, "reset": true,
 	}
 
 	// Value flags that take an argument
@@ -5797,7 +5804,7 @@ func parseArguments(args []string) *CommandInfo {
 		"--pager": true, "-p": true, "-np": true, "--no-pager": true,
 		"--no-line-numbers": true, "--no-grid": true,
 		"-r": true, "--recursive": true,  // For move command
-		"-o": true, "--overwrite": true,
+		"-o": true, "--overwrite": true, "--dry-run": true,
 	}
 
 	// CRITICAL: Flags that are ALSO commands (need special handling)
@@ -6521,6 +6528,11 @@ func main() {
 		err = handleAppendWithInfo(info)
 	case "-mt", "--monitor":
 		err = handleMonitorWithInfo(info)
+	case "log":
+        err = handleLogCommand(info.Files)
+    case "reset":
+        dryRun := info.BoolFlags["--dry-run"]
+        err = handleResetCommand(info.Files, dryRun)
 	}
 
 	if err != nil {
