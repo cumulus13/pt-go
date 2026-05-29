@@ -5126,6 +5126,7 @@ func printHelp() {
 
 	fmt.Printf("\n%s🎯 GIT-LIKE WORKFLOW:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt check%s                              Show status of all files (like git status)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt status%s                            Same as check\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt check <filename>%s                   Check single file status\n", ColorGreen, ColorReset)
 	fmt.Printf("  %spt commit -m \"message\"%s                Backup all changed files (like git commit)\n", ColorGreen, ColorReset)
 
@@ -5778,7 +5779,7 @@ func parseArguments(args []string) *CommandInfo {
 	// Known commands - EXACT MATCH ONLY
 	commands := map[string]bool{
 		"show": true, "move": true, "mv": true, "-mv": true,
-		"fix": true, "check": true, "-c": true, "--check": true,
+		"fix": true, "check": true, "status": true, "-c": true, "--check": true,
 		"backup": true, "-b": true, "commit": true, "config": true,
 		"-t": true, "--tree": true, "-rm": true, "--remove": true,
 		"-l": true, "--list": true, "-d": true, "--diff": true,
@@ -6504,7 +6505,7 @@ func main() {
 		err = handleFixWithInfo(info)
 	case "-z":
 		err = handleTempWithInfo(info)
-	case "check", "-c", "--check":
+	case "check", "-c", "--check", "status":
 		err = handleCheckWithInfo(info)
 	case "backup", "-b":
 		err = handleBackupWithInfo(info)
