@@ -975,16 +975,43 @@ func handleDiffFile(args []string) error {
     filename1 := args[1]
     filename2 := args[0]
 
+    logger.Printf("filename1: %s", filename1)
+    logger.Printf("filename2: %s", filename2)
 
-    filePath2, err := resolveFilePath(filename2)
-    if err != nil {
-        return err
+    var filePath1 string
+    var filePath2 string
+	var err1 error
+	var err2 error
+
+	if !isFile(filename1) && isDir(afero.NewOsFs(), filename1) {
+		filePath1, err1 = resolveFilePath(filename2, filename1)
+		logger.Printf("filePath1 [1]: %s", filePath1)
+	} else {
+		filePath1, err1 = resolveFilePath(filename1)
+		logger.Printf("filePath2 [2]: %s", filePath1)
+	}
+
+    if err1 != nil {
+        return err1
     }
 
-    filePath1, err := resolveFilePath(filename1)
-    if err != nil {
-        return err
-    }
+	if !isFile(filename2) && isDir(afero.NewOsFs(), filename2) {
+		filePath2, err2 = resolveFilePath(filename1, filename2)
+		logger.Printf("filePath2 [1]: %s", filePath2)
+	} else {
+		filePath2, err2 = resolveFilePath(filename2)
+		logger.Printf("filePath2 [2]: %s", filePath2)
+	}
+
+	if err2 != nil {
+		return err2
+	}
+
+
+    
+
+    logger.Printf("filePath1: %s", filePath1)
+    logger.Printf("filePath2: %s", filePath2)
 
     if !checkIfDifferent(filePath1, filePath2) {
     	return nil
@@ -1026,7 +1053,7 @@ func handleDiffFile(args []string) error {
     }
     
     // Run diff
-    err = runDiff(toolName, filePath1, filePath2, true)
+    err := runDiff(toolName, filePath1, filePath2, true)
     if err != nil && toolName != "delta" {
         // Try fallback to delta if the main tool fails
         // if toolName != "delta" {
@@ -1049,6 +1076,7 @@ func handleDiffCommand(args []string) error {
     }
 
     filename := args[0]
+    logger.Printf("filename::handleDiffCommand: %s", filename)
     useLast := len(args) > 1 && (args[1] == "--last" || args[1] == "-lt")
 
     filePath, err := resolveFilePath(filename)
@@ -1564,20 +1592,31 @@ func compareFileWithBackup(filePath string) (FileStatus, error) {
 
 // buildStatusTree builds a tree with file status information
 func buildStatusTree(path string, gitignore *GitIgnore, exceptions map[string]bool, depth int, maxDepth int) (*FileStatusInfo, error) {
+	
+	logger.Printf("path: %s", path)
+	logger.Printf("depth: %d, maxDepth: %d", depth, maxDepth)
 	if depth > maxDepth {
 		return nil, nil
 	}
 
 	info, err := os.Stat(path)
+	logger.Printf("info.IsDir(): %v", info.IsDir())
+	
 	if err != nil {
 		return nil, err
 	}
 
 	baseName := filepath.Base(path)
 
+	logger.Printf("exceptions: %v", exceptions)
+	logger.Printf("baseName: %v", baseName)
+
 	if exceptions[baseName] {
 		return nil, nil
 	}
+
+	logger.Printf("gitignore: %v", gitignore)
+	logger.Printf("gitignore.shouldIgnore(path, info.IsDir()): %v", gitignore.shouldIgnore(path, info.IsDir()))
 
 	if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
 		return nil, nil
@@ -4305,11 +4344,100 @@ func getBackupDir(ptRoot, filePath string) (string, error) {
 	return backupDir, nil
 }
 
-func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, error) {
+// func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, error) {
+// 	results := make([]FileSearchResult, 0)
+// 	cwd, err := os.Getwd()
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get current directory: %w", err)
+// 	}
+
+// 	gitignore, err := loadGitIgnoreAndPtIgnore(cwd)
+// 	if err != nil {
+// 		logger.Printf("Warning: failed to load ignore patterns: %v", err)
+// 	}
+
+// 	currentPath := filepath.Join(cwd, filename)
+// 	if info, err := os.Stat(currentPath); err == nil && !info.IsDir() {
+// 		results = append(results, FileSearchResult{
+// 			Path:    currentPath,
+// 			Dir:     cwd,
+// 			Size:    info.Size(),
+// 			ModTime: info.ModTime(),
+// 			Depth:   0,
+// 		})
+// 	}
+
+// 	err = filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {
+// 		if err != nil {
+// 			return nil
+// 		}
+
+//         if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
+// 			if info.IsDir() {
+// 				return filepath.SkipDir
+// 			}
+// 			return nil
+// 		}
+
+// 		// Check ignore patterns
+// 		// if shouldIgnore(path, ignorePatterns) {
+// 		// 	if info.IsDir() {
+// 		// 		return filepath.SkipDir
+// 		// 	}
+// 		// 	return nil
+// 		// }
+
+// 		relPath, err := filepath.Rel(cwd, path)
+// 		if err != nil {
+// 			return nil
+// 		}
+// 		depth := len(strings.Split(relPath, string(os.PathSeparator))) - 1
+
+// 		if depth > maxDepth {
+// 			if info.IsDir() {
+// 				return filepath.SkipDir
+// 			}
+// 			return nil
+// 		}
+
+// 		if !info.IsDir() && info.Name() == filename {
+// 			if path == currentPath {
+// 				return nil
+// 			}
+
+// 			results = append(results, FileSearchResult{
+// 				Path:    path,
+// 				Dir:     filepath.Dir(path),
+// 				Size:    info.Size(),
+// 				ModTime: info.ModTime(),
+// 				Depth:   depth,
+// 			})
+// 		}
+
+// 		return nil
+// 	})
+
+// 	if err != nil {
+// 		return results, fmt.Errorf("error during search: %w", err)
+// 	}
+
+// 	return results, nil
+// }
+
+// Add `rootDir ...string` to the end of the parameters list
+func searchFileRecursive(filename string, maxDepth int, rootDir ...string) ([]FileSearchResult, error) {
 	results := make([]FileSearchResult, 0)
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	
+	// Determine the target directory: use provided root or default to os.Getwd()
+	var cwd string
+	if len(rootDir) > 0 && rootDir[0] != "" {
+		cwd = rootDir[0]
+	} else {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current directory: %w", err)
+		}
 	}
 
 	gitignore, err := loadGitIgnoreAndPtIgnore(cwd)
@@ -4333,7 +4461,7 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 			return nil
 		}
 
-        if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
+		if gitignore != nil && gitignore.shouldIgnore(path, info.IsDir()) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -4352,7 +4480,12 @@ func searchFileRecursive(filename string, maxDepth int) ([]FileSearchResult, err
 		if err != nil {
 			return nil
 		}
-		depth := len(strings.Split(relPath, string(os.PathSeparator))) - 1
+		
+		// Fix for root directory relative path calculation
+		depth := 0
+		if relPath != "." {
+			depth = len(strings.Split(relPath, string(os.PathSeparator))) - 1
+		}
 
 		if depth > maxDepth {
 			if info.IsDir() {
@@ -4451,22 +4584,95 @@ func printFileSearchResults(results []FileSearchResult) {
 		ColorReset)
 }
 
-func resolveFilePath(filename string) (string, error) {
-	if info, err := os.Stat(filename); err == nil && !info.IsDir() {
-		absPath, _ := filepath.Abs(filename)
-		return absPath, nil
+// func resolveFilePath(filename string, rootDir ...string) (string, error) {
+// 	if info, err := os.Stat(filename); err == nil && !info.IsDir() {
+// 		absPath, _ := filepath.Abs(filename)
+// 		return absPath, nil
+// 	}
+
+// 	logger.Printf("File not found in current directory, searching recursively...")
+// 	fmt.Printf("%s🔍 Searching for '%s' in subdirectories...%s\n", ColorBlue, filename, ColorReset)
+
+// 	results, err := searchFileRecursive(filename, appConfig.MaxSearchDepth, rootDir...)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	if len(results) == 0 {
+// 		return "", fmt.Errorf("file '%s' not found in current directory or subdirectories", filename)
+// 	}
+
+// 	if len(results) == 1 {
+// 		fmt.Printf("%s✅ Found:%s %s%s%s%s\n", ColorYellow, ColorReset, ColorWhite, ColorCyan, results[0].Path, ColorReset)
+// 		return results[0].Path, nil
+// 	}
+
+// 	printFileSearchResults(results)
+
+// 	reader := bufio.NewReader(os.Stdin)
+// 	fmt.Printf("Enter file number to use (1-%d) or 0 to cancel: ", len(results))
+
+// 	input, err := reader.ReadString('\n')
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to read input: %w", err)
+// 	}
+
+// 	input = strings.TrimSpace(input)
+// 	choice, err := strconv.Atoi(input)
+// 	if err != nil {
+// 		return "", fmt.Errorf("invalid input: please enter a number")
+// 	}
+
+// 	if choice < 0 || choice > len(results) {
+// 		return "", fmt.Errorf("invalid selection: must be between 0 and %d", len(results))
+// 	}
+
+// 	if choice == 0 {
+// 		return "", fmt.Errorf("operation cancelled")
+// 	}
+
+// 	return results[choice-1].Path, nil
+// }
+
+func resolveFilePath(filename string, rootDir ...string) (string, error) {
+	// Determine target root dir (default to empty string, which means current dir)
+	targetDir := ""
+	if len(rootDir) > 0 && rootDir[0] != "" {
+		targetDir = rootDir[0]
 	}
 
-	logger.Printf("File not found in current directory, searching recursively...")
+	logger.Printf("targetDir: %s", targetDir)
+
+	// 1. Build candidate path combining rootDir and filename
+	checkPath := filename
+	if targetDir != "" {
+		// e.g. "..\..\speedtest-rust\v3" + "build.yml"
+		checkPath = filepath.Join(targetDir, filename)
+	}
+
+	logger.Printf("checkPath: %s", checkPath)
+
+	// 2. Stat check the target path, NOT just filename
+	if info, err := os.Stat(checkPath); err == nil && !info.IsDir() {
+		absPath, err := filepath.Abs(checkPath)
+		logger.Printf("absPath: %s", absPath)
+		if err == nil {
+			return absPath, nil
+		}
+		return checkPath, nil
+	}
+
+	logger.Printf("File not found at '%s', searching recursively...", checkPath)
 	fmt.Printf("%s🔍 Searching for '%s' in subdirectories...%s\n", ColorBlue, filename, ColorReset)
 
-	results, err := searchFileRecursive(filename, appConfig.MaxSearchDepth)
+	// 3. Fallback to recursive search inside targetDir
+	results, err := searchFileRecursive(filename, appConfig.MaxSearchDepth, targetDir)
 	if err != nil {
 		return "", err
 	}
 
 	if len(results) == 0 {
-		return "", fmt.Errorf("file '%s' not found in current directory or subdirectories", filename)
+		return "", fmt.Errorf("file '%s' not found in %s or its subdirectories", filename, checkPath)
 	}
 
 	if len(results) == 1 {
@@ -4490,12 +4696,8 @@ func resolveFilePath(filename string) (string, error) {
 		return "", fmt.Errorf("invalid input: please enter a number")
 	}
 
-	if choice < 0 || choice > len(results) {
-		return "", fmt.Errorf("invalid selection: must be between 0 and %d", len(results))
-	}
-
-	if choice == 0 {
-		return "", fmt.Errorf("operation cancelled")
+	if choice < 1 || choice > len(results) {
+		return "", fmt.Errorf("operation cancelled or invalid selection")
 	}
 
 	return results[choice-1].Path, nil
@@ -4766,65 +4968,214 @@ func isFile(path string) bool {
     }
 }
 
-func checkIfDifferent(filePath string, data any) bool {
-    logger.Printf("checkIfDifferent %s and data", filePath)
-    
-    // Read the contents of the target file first
-    existingData, err := os.ReadFile(filePath)
-    if err != nil {
-        // The file doesn't exist yet, it must be different
-        logger.Printf("checkIfDifferent: target file doesn't exist or can't be read")
-        return true
-    }
-    existingContent := string(existingData)
-    
-    // Normalize input data to content string
-    inputContent, err := normalizeDataToString(data)
-    if err != nil {
-        logger.Printf("checkIfDifferent: failed to normalize data: %v", err)
-        return true
-    }
-    
-    // Compare normalized content
-    if existingContent == inputContent {
-        logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
-        fmt.Printf("ℹ️ %s%sContent identical to%s %s`%s`%s, %s%sno changes needed%s\n", 
-            ColorWhite, BgBlue, ColorReset, ColorCyan, filePath, ColorReset, ColorWhite, BgYellow, ColorReset)
-        fmt.Printf("📄 File: %s\n", filePath)
-        return false
-    }
-    
-    return true
+func isDir(fs afero.Fs, path string) bool {
+	if len(path) == 0 {
+		return false
+	}
+
+	if !utf8.ValidString(path) {
+		return false
+	}
+
+	cleanPath := filepath.Clean(path)
+
+	// Reject if it's too long
+	if len(cleanPath) > 32768 {
+		return false
+	}
+
+	// FILTERS ARE NOT PATH
+	lowerPath := strings.ToLower(cleanPath)
+
+	// Quickly disavow URLs
+	if strings.HasPrefix(lowerPath, "http://") ||
+		strings.HasPrefix(lowerPath, "https://") ||
+		strings.HasPrefix(lowerPath, "ftp://") ||
+		strings.HasPrefix(lowerPath, "file://") {
+		return false
+	}
+
+	// Reject if there is a newline
+	if strings.Contains(cleanPath, "\n") || strings.Contains(cleanPath, "\r") {
+		return false
+	}
+
+	// Reject JSON/XML looking text
+	trimmed := strings.TrimSpace(cleanPath)
+	if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) &&
+		len(cleanPath) > 500 {
+		return false
+	}
+
+	// CHECK WITH AFERO + TIMEOUT
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	resultChan := make(chan bool, 1)
+
+	go func() {
+		info, err := fs.Stat(cleanPath)
+		if err != nil {
+			resultChan <- false
+			return
+		}
+		// Return true if it IS a directory
+		resultChan <- info.IsDir()
+	}()
+
+	select {
+	case result := <-resultChan:
+		return result
+	case <-ctx.Done():
+		return false
+	}
 }
+
+// func checkIfDifferent(filePath string, data any) bool {
+//     logger.Printf("checkIfDifferent %s and data", filePath)
+    
+//     // Read the contents of the target file first
+//     existingData, err := os.ReadFile(filePath)
+//     if err != nil {
+//         // The file doesn't exist yet, it must be different
+//         logger.Printf("checkIfDifferent: target file doesn't exist or can't be read")
+//         return true
+//     }
+//     existingContent := string(existingData)
+    
+//     // Normalize input data to content string
+//     inputContent, err := normalizeDataToString(data)
+//     if err != nil {
+//         logger.Printf("checkIfDifferent: failed to normalize data: %v", err)
+//         return true
+//     }
+    
+//     // Compare normalized content
+//     if existingContent == inputContent {
+//         logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
+//         fmt.Printf("ℹ️ %s%sContent identical to%s %s`%s`%s, %s%sno changes needed%s\n", 
+//             ColorWhite, BgBlue, ColorReset, ColorCyan, filePath, ColorReset, ColorWhite, BgYellow, ColorReset)
+//         fmt.Printf("📄 File: %s\n", filePath)
+//         return false
+//     }
+    
+//     return true
+// }
 
 // Helper function untuk normalisasi semua tipe data menjadi string konten
-func normalizeDataToString(data any) (string, error) {
-    switch v := data.(type) {
-    case string:
-        logger.Printf("normalizeDataToString: input is string")
-        // Cek apakah string ini adalah path file yang valid
-        if isFile(v) {
-            logger.Printf("normalizeDataToString: string is a file path")
-            b, err := os.ReadFile(v)
-            if err != nil {
-                return "", fmt.Errorf("failed to read file %s: %w", v, err)
-            }
-            return string(b), nil
-        }
-        // Jika bukan file, anggap sebagai konten langsung
-        logger.Printf("normalizeDataToString: string is direct content")
-        return v, nil
+// func normalizeDataToString(data any) (string, error) {
+//     switch v := data.(type) {
+//     case string:
+//         logger.Printf("normalizeDataToString: input is string")
+//         // Cek apakah string ini adalah path file yang valid
+//         if isFile(v) {
+//             logger.Printf("normalizeDataToString: string is a file path")
+//             b, err := os.ReadFile(v)
+//             if err != nil {
+//                 return "", fmt.Errorf("failed to read file %s: %w", v, err)
+//             }
+//             return string(b), nil
+//         }
+//         // Jika bukan file, anggap sebagai konten langsung
+//         logger.Printf("normalizeDataToString: string is direct content")
+//         return v, nil
         
-    case []byte:
-        logger.Printf("normalizeDataToString: input is []byte")
-        return string(v), nil
+//     case []byte:
+//         logger.Printf("normalizeDataToString: input is []byte")
+//         return string(v), nil
         
-    default:
-        logger.Printf("normalizeDataToString: unsupported type %T", v)
-        return "", fmt.Errorf("unsupported data type: %T", v)
-    }
+//     default:
+//         logger.Printf("normalizeDataToString: unsupported type %T", v)
+//         return "", fmt.Errorf("unsupported data type: %T", v)
+//     }
+// }
+
+func checkIfDifferent(filePath string, data any) bool {
+	logger.Printf("checkIfDifferent %s and data", filePath)
+
+	// Read the contents of the target file first
+	existingData, err := os.ReadFile(filePath)
+	if err != nil {
+		// The file doesn't exist yet, it must be different
+		logger.Printf("checkIfDifferent: target file doesn't exist or can't be read: %v", err)
+		return true
+	}
+	existingContent := string(existingData)
+
+	var inputContent string
+
+	// Check if data is a string path pointing directly to an existing file
+	if strPath, ok := data.(string); ok {
+		clean := filepath.Clean(strPath)
+		if info, err := os.Stat(clean); err == nil && !info.IsDir() {
+			file2Bytes, err := os.ReadFile(clean)
+			if err == nil {
+				inputContent = string(file2Bytes)
+			} else {
+				logger.Printf("checkIfDifferent: failed to read second file %s: %v", clean, err)
+				return true
+			}
+		} else {
+			// Not a valid file path, treat as raw text content
+			inputContent, err = normalizeDataToString(data)
+			if err != nil {
+				logger.Printf("checkIfDifferent: failed to normalize data: %v", err)
+				return true
+			}
+		}
+	} else {
+		// Data is not a string (e.g. []byte), normalize it
+		inputContent, err = normalizeDataToString(data)
+		if err != nil {
+			logger.Printf("checkIfDifferent: failed to normalize data: %v", err)
+			return true
+		}
+	}
+
+	// Compare normalized content (handling Windows CRLF vs Unix LF differences)
+	normExisting := strings.ReplaceAll(existingContent, "\r\n", "\n")
+	normInput := strings.ReplaceAll(inputContent, "\r\n", "\n")
+
+	if normExisting == normInput {
+		logger.Printf("ℹ️ Content identical, skipping write: %s", filePath)
+		fmt.Printf("ℹ️ %s%sContent identical to%s %s`%s`%s, %s%sno changes needed%s\n", 
+			ColorWhite, BgBlue, ColorReset, ColorCyan, filePath, ColorReset, ColorWhite, BgYellow, ColorReset)
+		fmt.Printf("📄 File: %s\n", filePath)
+		return false
+	}
+
+	return true
 }
 
+func normalizeDataToString(data any) (string, error) {
+	switch v := data.(type) {
+	case string:
+		logger.Printf("normalizeDataToString: input is string")
+
+		cleanPath := filepath.Clean(v)
+
+		// Check if cleanPath is a valid file on disk using os.Stat directly
+		if info, err := os.Stat(cleanPath); err == nil && !info.IsDir() {
+			logger.Printf("normalizeDataToString: '%s' resolved to valid file", cleanPath)
+			b, err := os.ReadFile(cleanPath)
+			if err != nil {
+				return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+			}
+			return string(b), nil
+		}
+
+		logger.Printf("normalizeDataToString: string is direct content")
+		return v, nil
+
+	case []byte:
+		logger.Printf("normalizeDataToString: input is []byte")
+		return string(v), nil
+
+	default:
+		logger.Printf("normalizeDataToString: unsupported type %T", v)
+		return "", fmt.Errorf("unsupported data type: %T", v)
+	}
+}
 
 func writeFile(filePath string, data string, appendMode bool, checkMode bool, comment string) error {
 	if err := validatePath(filePath); err != nil {
@@ -6243,7 +6594,7 @@ func handleDiffWithInfo(info *CommandInfo) error {
 	args := []string{fileName}
 	if info.BoolFlags["--last"] || info.BoolFlags["-lt"] {
 		args = append(args, "--last")
-	} else if fileName2 != "" && isFile(fileName2) {
+	} else if fileName2 != "" && isFile(fileName2) || isDir(afero.NewOsFs(), fileName2) {
 		return handleDiffFile(info.Files)
 	}
 	return handleDiffCommand(args)
