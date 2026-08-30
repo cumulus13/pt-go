@@ -5525,6 +5525,7 @@ func printHelp() {
 
 	fmt.Printf("\n%s📺 MONITORING MODE:%s\n", ColorBold+ColorYellow, ColorReset)
 	fmt.Printf("  %spt --monitor/-mt%s                      Monitoring change and send notification to growl/gntp (port: 23053)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %spt --monitor/-mt -e .git -e download%s  Monitoring change with exceptions and send notification to growl/gntp (port: 23053)\n", ColorGreen, ColorReset)
 	
 	fmt.Printf("\n%s💡 EXAMPLES:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("  %s$%s pt notes.txt                %s# Save clipboard%s\n", ColorGray, ColorReset, ColorGray, ColorReset)
