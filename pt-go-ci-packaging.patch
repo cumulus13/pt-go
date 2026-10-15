@@ -1,0 +1,2077 @@
+From 4ca2a01ee91326c58b788cd742e2bc66289cf9bf Mon Sep 17 00:00:00 2001
+From: cumulus13 <cumulus13@gmail.com>
+Date: Thu, 15 Oct 2026 09:33:53 +0000
+Subject: [PATCH] fix(ci,release): static CGO-free builds; add .deb, .apk and
+ NSIS packaging
+
+---
+ .github/workflows/ci.yml             |  60 ++--
+ .github/workflows/packages.yml       | 157 +++++++++++
+ .github/workflows/release.yml        | 297 ++++++--------------
+ .gitignore                           |   3 +
+ README.md                            |  19 ++
+ packaging/build-linux-packages.sh    |  30 ++
+ packaging/build-windows-installer.sh |  35 +++
+ packaging/linux/postinstall.sh       |   6 +
+ packaging/linux/pt.sh                |   6 +
+ packaging/nfpm.yaml                  |  61 +++++
+ packaging/smoke/apk.sh               |  25 ++
+ packaging/smoke/deb.sh               |  28 ++
+ packaging/smoke/windows.ps1          |  56 ++++
+ packaging/windows/path.ps1           |  52 ++++
+ packaging/windows/pt.nsi             | 134 +++++++++
+ pt/main.go                           |   9 +-
+ pt/monitor.go                        | 371 +------------------------
+ pt/tray.go                           | 395 +++++++++++++++++++++++++++
+ pt/tray_stub.go                      |   8 +
+ 19 files changed, 1138 insertions(+), 614 deletions(-)
+ create mode 100644 .github/workflows/packages.yml
+ create mode 100755 packaging/build-linux-packages.sh
+ create mode 100755 packaging/build-windows-installer.sh
+ create mode 100755 packaging/linux/postinstall.sh
+ create mode 100644 packaging/linux/pt.sh
+ create mode 100644 packaging/nfpm.yaml
+ create mode 100755 packaging/smoke/apk.sh
+ create mode 100755 packaging/smoke/deb.sh
+ create mode 100644 packaging/smoke/windows.ps1
+ create mode 100644 packaging/windows/path.ps1
+ create mode 100644 packaging/windows/pt.nsi
+ create mode 100644 pt/tray.go
+ create mode 100644 pt/tray_stub.go
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index bd106da..cd6a52f 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -12,11 +12,15 @@ on:
+ permissions:
+   contents: read
+ 
++concurrency:
++  group: ci-${{ github.ref }}
++  cancel-in-progress: true
++
+ jobs:
+   build-check:
+     name: Build Check - ${{ matrix.goos }}/${{ matrix.goarch }}
+     runs-on: ubuntu-latest
+-    
++
+     strategy:
+       fail-fast: false
+       matrix:
+@@ -25,51 +29,63 @@ jobs:
+         exclude:
+           - goos: windows
+             goarch: arm64
+-    
++
+     steps:
+       - name: Checkout Repository
+         uses: actions/checkout@v4
+-        
++
+       - name: Setup Go
+         uses: actions/setup-go@v5
+         with:
+           go-version-file: 'go.mod'
+           cache: true
+-          
++
+       - name: Download Dependencies
+         run: go mod download
+-        
++
+       - name: Verify Dependencies
+         run: go mod verify
+-        
++
++      # CGO is OFF on purpose: the system tray (getlantern/systray) needs CGO on
++      # Linux/macOS, so it lives behind a build tag (see pt/tray.go, pt/tray_stub.go).
++      # Default builds are fully static. Windows keeps the tray (pure Go).
+       - name: Build Check
+         env:
+           GOOS: ${{ matrix.goos }}
+           GOARCH: ${{ matrix.goarch }}
+           CGO_ENABLED: 0
+         run: |
+-          echo "=================================="
+-          echo "Building for $GOOS/$GOARCH"
+-          echo "CGO_ENABLED=$CGO_ENABLED"
+-          echo "=================================="
+-          
+           if [ "$GOOS" = "windows" ]; then
+             OUTPUT="pt-$GOOS-$GOARCH.exe"
+           else
+             OUTPUT="pt-$GOOS-$GOARCH"
+           fi
+-          
+-          echo "Output: $OUTPUT"
+-          
+-          go build -v -ldflags="-s -w" -o "$OUTPUT" ./pt
+-          
++          go build -v -trimpath -ldflags="-s -w" -o "$OUTPUT" ./pt
+           ls -lh "$OUTPUT"
+-          
+-          echo "=================================="
+-          echo "✅ Build successful for $GOOS/$GOARCH"
+-          echo "=================================="
+-      
++
+       - name: Run Tests
+         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
++        run: go test -v ./...
++
++  # The optional tray build on Linux (CGO + GTK3 + appindicator) must keep compiling.
++  build-tray-linux:
++    name: Build Check - linux tray (CGO, -tags tray)
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-go@v5
++        with:
++          go-version-file: 'go.mod'
++          cache: true
++      - name: Install GTK3 / appindicator headers
+         run: |
+-          go test -v ./... || echo "No tests found"
+\ No newline at end of file
++          sudo apt-get update -qq
++          sudo apt-get install -y -qq libgtk-3-dev libayatana-appindicator3-dev
++      - name: Build with tray
++        env:
++          CGO_ENABLED: 1
++        run: go build -v -tags tray -o pt-tray ./pt
++
++  packages:
++    name: Packages (deb / apk / NSIS)
++    uses: ./.github/workflows/packages.yml
+diff --git a/.github/workflows/packages.yml b/.github/workflows/packages.yml
+new file mode 100644
+index 0000000..c623bb4
+--- /dev/null
++++ b/.github/workflows/packages.yml
+@@ -0,0 +1,157 @@
++name: Packages (deb / apk / NSIS)
++
++# Reusable workflow: builds the Debian (.deb), Alpine (.apk) and Windows (NSIS)
++# packages, then installs/uninstalls each one in a clean environment as a smoke test.
++# Called from ci.yml and release.yml. Produces the artifact "packages".
++
++on:
++  workflow_call:
++    inputs:
++      version:
++        description: "Version for the packages (e.g. v1.0.81). Empty = read the VERSION file."
++        type: string
++        required: false
++        default: ""
++
++permissions:
++  contents: read
++
++env:
++  NFPM_VERSION: "2.43.4"
++  NFPM_SHA256: "cafb544650cb0305d1b164fc0ab261eb77a81af324e18011282d326b326d20fb"
++
++jobs:
++  build:
++    name: Build packages
++    runs-on: ubuntu-latest
++    outputs:
++      version: ${{ steps.ver.outputs.version }}
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup Go
++        uses: actions/setup-go@v5
++        with:
++          go-version-file: go.mod
++          cache: true
++
++      - name: Resolve version
++        id: ver
++        env:
++          INPUT_VERSION: ${{ inputs.version }}
++        run: |
++          V="$INPUT_VERSION"
++          if [ -z "$V" ]; then
++            V="$(sed -E 's/^version *= *"?([^"]*)"?.*/\1/' VERSION | tr -d '\r\n ')"
++          fi
++          V="${V#v}"
++          if ! echo "$V" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
++            echo "::error::Invalid package version '$V' (expected digits and dots, e.g. 1.0.81)"
++            exit 1
++          fi
++          echo "version=$V" >> "$GITHUB_OUTPUT"
++          echo "Package version: $V"
++
++      - name: Install nfpm and NSIS
++        run: |
++          set -euo pipefail
++          curl -fsSL -o /tmp/nfpm.tgz \
++            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
++          echo "${NFPM_SHA256}  /tmp/nfpm.tgz" | sha256sum -c -
++          sudo tar -xzf /tmp/nfpm.tgz -C /usr/local/bin nfpm
++          nfpm --version
++          sudo apt-get update -qq
++          sudo apt-get install -y -qq nsis
++          makensis -VERSION
++
++      - name: Build static binaries
++        env:
++          CGO_ENABLED: "0"
++          VERSION: ${{ steps.ver.outputs.version }}
++        run: |
++          set -euo pipefail
++          mkdir -p build dist
++          LDFLAGS="-s -w -X main.Version=${VERSION}"
++          GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o build/pt-linux-amd64 ./pt
++          GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o build/pt-linux-arm64 ./pt
++          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o build/pt-windows-amd64.exe ./pt
++          ls -lh build
++
++      - name: Build .deb and .apk
++        env:
++          VERSION: ${{ steps.ver.outputs.version }}
++        run: |
++          set -euo pipefail
++          packaging/build-linux-packages.sh "$VERSION" amd64 build/pt-linux-amd64 dist
++          packaging/build-linux-packages.sh "$VERSION" arm64 build/pt-linux-arm64 dist
++
++      - name: Build Windows installer (NSIS)
++        env:
++          VERSION: ${{ steps.ver.outputs.version }}
++        run: packaging/build-windows-installer.sh "$VERSION" build/pt-windows-amd64.exe dist
++
++      - name: Checksums
++        working-directory: dist
++        run: |
++          set -euo pipefail
++          for f in *.deb *.apk *.exe; do sha256sum "$f" > "$f.sha256"; done
++          ls -lh
++
++      - name: Upload packages
++        uses: actions/upload-artifact@v4
++        with:
++          name: packages
++          path: dist/*
++          if-no-files-found: error
++          retention-days: 30
++
++  smoke-debian:
++    name: Smoke test - Debian (.deb)
++    needs: build
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/download-artifact@v4
++        with:
++          name: packages
++          path: dist
++      - name: Install / verify PATH / remove in debian:stable
++        run: |
++          docker run --rm \
++            -e EXPECT_VERSION="${{ needs.build.outputs.version }}" \
++            -v "$PWD/dist:/dist:ro" \
++            -v "$PWD/packaging/smoke:/smoke:ro" \
++            debian:stable-slim sh /smoke/deb.sh
++
++  smoke-alpine:
++    name: Smoke test - Alpine (.apk)
++    needs: build
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/download-artifact@v4
++        with:
++          name: packages
++          path: dist
++      - name: Install / verify PATH / remove in alpine:latest
++        run: |
++          docker run --rm \
++            -e EXPECT_VERSION="${{ needs.build.outputs.version }}" \
++            -v "$PWD/dist:/dist:ro" \
++            -v "$PWD/packaging/smoke:/smoke:ro" \
++            alpine:latest sh /smoke/apk.sh
++
++  smoke-windows:
++    name: Smoke test - Windows (NSIS)
++    needs: build
++    runs-on: windows-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/download-artifact@v4
++        with:
++          name: packages
++          path: dist
++      - name: Install / verify C:\TOOLS\pt + system PATH / uninstall
++        shell: pwsh
++        run: ./packaging/smoke/windows.ps1 -Dist dist -ExpectVersion "${{ needs.build.outputs.version }}"
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 700a4ce..20668f7 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -1,21 +1,23 @@
+ name: Build and Release Multi-Platform Binaries
+ 
++# Runs when a version tag (v*) is pushed, or manually (build only, no release).
++# NOTE: the old `release: [published, created]` trigger was removed: creating a
++# release also pushes its tag, so both triggers fired and raced to upload the
++# same assets.
+ on:
+-  release:
+-    types: [published, created]
+   push:
+     tags:
+       - 'v*'
+   workflow_dispatch:
+ 
+ permissions:
+-  contents: write
++  contents: read
+ 
+ jobs:
+   build:
+     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+     runs-on: ubuntu-latest
+-    
++
+     strategy:
+       fail-fast: false
+       matrix:
+@@ -30,93 +32,94 @@ jobs:
+             goarch: amd64
+           - goos: darwin
+             goarch: arm64
+-    
++
+     steps:
+       - name: Checkout
+         uses: actions/checkout@v4
+-        
++
+       - name: Setup Go
+         uses: actions/setup-go@v5
+         with:
+           go-version-file: 'go.mod'
+           cache: true
+-          
++
+       - name: Get version
+         id: version
+         run: |
+-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+-            VERSION="${GITHUB_REF#refs/tags/}"
+-          elif [[ "${{ github.event.release.tag_name }}" != "" ]]; then
+-            VERSION="${{ github.event.release.tag_name }}"
++          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
++            VERSION="${GITHUB_REF_NAME}"
+           else
+             VERSION="dev-$(git rev-parse --short HEAD)"
+           fi
+-          echo "version=$VERSION" >> $GITHUB_OUTPUT
++          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+           echo "Building version: $VERSION"
+-          
++
++      # CGO off: fully static binaries. The system tray needs CGO on Linux/macOS,
++      # so it is behind the `tray` build tag there (Windows keeps it, pure Go).
+       - name: Build
+         env:
+           CGO_ENABLED: 0
+           GOOS: ${{ matrix.goos }}
+           GOARCH: ${{ matrix.goarch }}
++          VERSION: ${{ steps.version.outputs.version }}
+         run: |
+-          echo "Building for $GOOS/$GOARCH"
+-          
+-          # Set binary name
++          set -euo pipefail
+           if [ "$GOOS" = "windows" ]; then
+-            BINARY="pt-${{ steps.version.outputs.version }}-$GOOS-$GOARCH.exe"
++            BINARY="pt-${VERSION}-$GOOS-$GOARCH.exe"
+           else
+-            BINARY="pt-${{ steps.version.outputs.version }}-$GOOS-$GOARCH"
++            BINARY="pt-${VERSION}-$GOOS-$GOARCH"
+           fi
+-          
+           echo "Binary name: $BINARY"
+-          
+-          # Build
+-          go build -v -trimpath -ldflags="-s -w" -o "$BINARY" ./pt
+-          
+-          # Verify
++
++          go build -v -trimpath -ldflags="-s -w -X main.Version=${VERSION#v}" -o "$BINARY" ./pt
+           ls -lh "$BINARY"
+-          
+-          # Generate checksum
++
+           sha256sum "$BINARY" > "$BINARY.sha256"
+           cat "$BINARY.sha256"
+-          
+-          # Save for next steps
+-          echo "BINARY=$BINARY" >> $GITHUB_ENV
+-          
++
++          echo "BINARY=$BINARY" >> "$GITHUB_ENV"
++
+       - name: Upload to Artifacts
+         uses: actions/upload-artifact@v4
+         with:
+-          name: pt-${{ matrix.goos }}-${{ matrix.goarch }}
++          name: bin-${{ matrix.goos }}-${{ matrix.goarch }}
+           path: |
+             ${{ env.BINARY }}
+             ${{ env.BINARY }}.sha256
+           if-no-files-found: error
+           retention-days: 90
+ 
++  # .deb (Debian/Ubuntu), .apk (Alpine) and NSIS installer (Windows), each
++  # smoke-tested (install -> PATH -> uninstall) before the release is published.
++  packages:
++    name: Packages (deb / apk / NSIS)
++    uses: ./.github/workflows/packages.yml
++    with:
++      version: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
++
+   release:
+     name: Create Release
+-    needs: build
++    needs: [build, packages]
+     runs-on: ubuntu-latest
+-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+-    
++    if: startsWith(github.ref, 'refs/tags/')
++    permissions:
++      contents: write
++
+     steps:
+       - name: Download all artifacts
+         uses: actions/download-artifact@v4
+         with:
+           path: artifacts
+-          
++
+       - name: Display structure
+-        run: |
+-          echo "Artifacts structure:"
+-          ls -R artifacts/
+-          
++        run: ls -R artifacts/
++
+       - name: Prepare release files
+         run: |
+           mkdir -p release-files
+           find artifacts -type f -exec cp {} release-files/ \;
+           ls -lh release-files/
+-          
++
+       - name: Upload to Release
+         uses: softprops/action-gh-release@v2
+         with:
+@@ -124,196 +127,48 @@ jobs:
+           fail_on_unmatched_files: true
+         env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-  
++
+   release-summary:
+     name: Generate Release Summary
+     needs: release
+     runs-on: ubuntu-latest
+     if: success()
+-    
++
+     steps:
+       - name: Create Summary
+         run: |
+-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+-          # 🎉 Release Build Complete!
+-          
+-          ## 📦 Built Binaries
+-          
+-          | Platform | Architecture | Binary Name |
+-          |----------|--------------|-------------|
+-          | 🐧 Linux | x86_64 | pt-*-linux-amd64 |
+-          | 🐧 Linux | ARM64 | pt-*-linux-arm64 |
+-          | 🪟 Windows | x86_64 | pt-*-windows-amd64.exe |
+-          | 🍎 macOS | Intel | pt-*-darwin-amd64 |
+-          | 🍎 macOS | Apple Silicon | pt-*-darwin-arm64 |
+-          
+-          ## ✅ Features
+-          
+-          - Static binaries (no dependencies required)
+-          - Alpine Linux compatible
+-          - CGO disabled for maximum portability
+-          - SHA256 checksums included
+-          
+-          ## 📥 Installation
+-          
+-          ### Linux (Ubuntu, Debian, etc)
+-          ```bash
+-          # Download
+-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64
+-          
+-          # Make executable
+-          chmod +x pt-*-linux-amd64
+-          
+-          # Move to PATH
+-          sudo mv pt-*-linux-amd64 /usr/local/bin/pt
+-          
+-          # Install dependencies
+-          sudo apt-get install xclip  # For clipboard support
+-          
+-          # Verify
+-          pt --version
+-          ```
+-          
+-          ### Alpine Linux
+-          ```bash
+-          # Install dependencies first
+-          apk add xclip wget
+-          
+-          # Download PT
+-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64
+-          
+-          # Make executable
+-          chmod +x pt-*-linux-amd64
+-          
+-          # Move to PATH
+-          mv pt-*-linux-amd64 /usr/local/bin/pt
+-          
+-          # Verify
+-          pt --version
+-          ```
+-          
+-          ### macOS
++          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
++          # Release build complete
++
++          ## Assets
++
++          | Platform | Asset |
++          |----------|-------|
++          | Debian / Ubuntu (amd64, arm64) | `pt-go_<version>_amd64.deb`, `pt-go_<version>_arm64.deb` |
++          | Alpine (x86_64, aarch64) | `pt-go_<version>_x86_64.apk`, `pt-go_<version>_aarch64.apk` |
++          | Windows installer (amd64) | `pt-<version>-windows-amd64-setup.exe` |
++          | Static binaries | `pt-<tag>-linux-{amd64,arm64}`, `pt-<tag>-darwin-{amd64,arm64}`, `pt-<tag>-windows-amd64.exe` |
++
++          All assets have a `.sha256` file next to them.
++
++          ## Install
++
++          All packages install to `/TOOLS/pt` (Windows: `C:\TOOLS\pt`) and add that directory to the system PATH.
++
+           ```bash
+-          # Intel Mac
+-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-darwin-amd64
+-          chmod +x pt-*-darwin-amd64
+-          sudo mv pt-*-darwin-amd64 /usr/local/bin/pt
+-          
+-          # Apple Silicon (M1/M2/M3)
+-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-darwin-arm64
+-          chmod +x pt-*-darwin-arm64
+-          sudo mv pt-*-darwin-arm64 /usr/local/bin/pt
+-          
+-          # Verify
+-          pt --version
++          # Debian / Ubuntu
++          sudo apt install ./pt-go_<version>_amd64.deb
++
++          # Alpine (packages are unsigned)
++          apk add --allow-untrusted ./pt-go_<version>_x86_64.apk
+           ```
+-          
+-          ### Windows
++
+           ```powershell
+-          # Download pt-*-windows-amd64.exe from releases page
+-          # Add to PATH or use directly
+-          pt.exe --version
+-          ```
+-          
+-          ## 🔧 Dependencies
+-          
+-          ### Linux/Alpine
+-          - **xclip** or **xsel** (for clipboard operations)
+-          - **delta** (optional, for diff operations)
+-          
+-          ```bash
+-          # Ubuntu/Debian
+-          sudo apt-get install xclip delta
+-          
+-          # Alpine
+-          apk add xclip
+-          
+-          # For delta on Alpine
+-          apk add cargo
+-          cargo install git-delta
+-          ```
+-          
+-          ### macOS
+-          - Clipboard works out of box
+-          - **delta** (optional): `brew install git-delta`
+-          
+-          ### Windows
+-          - Everything works out of box
+-          - **delta** (optional): `scoop install delta`
+-          
+-          ## 🔐 Verify Checksums
+-          
+-          ```bash
+-          # Download binary and checksum
+-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64
+-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64.sha256
+-          
+-          # Verify
+-          sha256sum -c pt-*-linux-amd64.sha256
+-          
+-          # Expected output: pt-*-linux-amd64: OK
++          # Windows (run as Administrator, or double-click the installer)
++          .\pt-<version>-windows-amd64-setup.exe /S
+           ```
+-          
+-          ## 🐳 Docker Usage (Alpine-based)
+-          
+-          ```dockerfile
+-          FROM alpine:latest
+-          
+-          # Install dependencies
+-          RUN apk add --no-cache xclip ca-certificates
+-          
+-          # Download PT
+-          RUN wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64 \
+-              -O /usr/local/bin/pt && \
+-              chmod +x /usr/local/bin/pt
+-          
+-          ENTRYPOINT ["pt"]
+-          ```
+-          
+-          ## 📚 Quick Start
+-          
+-          ```bash
+-          # Copy text to clipboard, then:
+-          pt myfile.txt                    # Save clipboard to file
+-          pt myfile.txt -m "initial code"  # With comment
+-          
+-          # Check status
+-          pt check                         # Like git status
+-          
+-          # Commit changes
+-          pt commit -m "fixed bug"         # Like git commit
+-          
+-          # View file with syntax highlighting
+-          pt show myfile.py                # Like bat/cat with colors
+-          
+-          # Restore from backup
+-          pt -r myfile.txt                 # Interactive restore
+-          pt -r myfile.txt --last          # Restore last backup
+-          
+-          # Diff with backup
+-          pt -d myfile.txt                 # Compare with backup
+-          ```
+-          
+-          ## 🆘 Troubleshooting
+-          
+-          ### "clipboard not available" error
+-          ```bash
+-          # Linux: Install xclip or xsel
+-          sudo apt-get install xclip
+-          # or
+-          apk add xclip
+-          
+-          # Verify X11 is running
+-          echo $DISPLAY
+-          ```
+-          
+-          ### Binary not executable
+-          ```bash
+-          chmod +x pt-*
+-          ```
+-          
+-          ### "permission denied" when moving to /usr/local/bin
+-          ```bash
+-          sudo mv pt-* /usr/local/bin/pt
+-          ```
+-          EOF
+\ No newline at end of file
++
++          Open a new login shell / terminal afterwards so the PATH change is picked up.
++
++          Linux needs `xclip`, `xsel` or `wl-clipboard` for clipboard access (installed automatically as a dependency). `delta` is optional (diff view).
++          EOF
+diff --git a/.gitignore b/.gitignore
+index 80f4579..41fe27a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -119,3 +119,6 @@ INTEGRATION.md
+ 
+ # Added entries (1 items)
+ *.0
++
++# Packaging output (packaging/*.sh)
++/dist/
+diff --git a/README.md b/README.md
+index 85b2835..ddfe375 100644
+--- a/README.md
++++ b/README.md
+@@ -91,6 +91,25 @@ set `diff_tool` in config file pt.yml/pt.yaml or use   '--tool DIFF_TOOL_NAME'
+ - Git (for installation)
+ - **Delta** (optional, for diff functionality) - [Install from here](https://github.com/dandavison/delta)
+ 
++### Install from Packages (recommended)
++
++Download from the [Releases](https://github.com/cumulus13/pt-go/releases) page. Every package installs to `/TOOLS/pt` (Windows: `C:\TOOLS\pt`) and adds that directory to the **system PATH**.
++
++```
++# Windows - NSIS installer (installs to C:\TOOLS\pt, adds it to the system PATH; run as Administrator)
++pt-<version>-windows-amd64-setup.exe          # add /S for a silent install
++
++# Debian / Ubuntu (.deb)
++sudo apt install ./pt-go_<version>_amd64.deb      # or _arm64.deb
++
++# Alpine (.apk, unsigned package)
++apk add --allow-untrusted ./pt-go_<version>_x86_64.apk   # or _aarch64.apk
++```
++
++Open a new terminal / login shell afterwards so the PATH change is picked up. On Linux the PATH entry is `/etc/profile.d/pt.sh`.
++
++> **System tray (monitor mode):** always available on Windows. Linux/macOS release binaries are static (no CGO) and have no tray icon; to build one with the tray: `CGO_ENABLED=1 go build -tags tray ./pt` (Linux needs `libgtk-3-dev` and `libayatana-appindicator3-dev`).
++
+ ### Install from Source
+ 
+ ```bash
+diff --git a/packaging/build-linux-packages.sh b/packaging/build-linux-packages.sh
+new file mode 100755
+index 0000000..094c959
+--- /dev/null
++++ b/packaging/build-linux-packages.sh
+@@ -0,0 +1,30 @@
++#!/usr/bin/env bash
++# Build .deb and .apk packages with nfpm.
++# Usage: packaging/build-linux-packages.sh <version> <amd64|arm64> <path-to-static-linux-binary> [outdir]
++# Run from the repository root. Requires `nfpm` in PATH.
++set -euo pipefail
++
++VERSION="${1:?version required, e.g. 1.0.81}"
++ARCH="${2:?arch required: amd64|arm64}"
++BIN="${3:?binary path required}"
++OUT="${4:-dist}"
++
++VERSION="${VERSION#v}"
++case "$ARCH" in amd64|arm64) ;; *) echo "unsupported arch: $ARCH" >&2; exit 2 ;; esac
++[ -f "$BIN" ] || { echo "binary not found: $BIN" >&2; exit 2; }
++[ -f pt.yml.example ] && [ -f README.md ] || { echo "run from the repo root" >&2; exit 2; }
++
++mkdir -p "$OUT"
++WORK="$(mktemp -d)"
++trap 'rm -rf "$WORK"' EXIT
++
++# VERSION file shipped next to the binary (pt reads it from its own directory)
++printf 'version = "%s"\n' "$VERSION" > "$WORK/VERSION"
++
++export PT_VERSION="$VERSION" PT_ARCH="$ARCH" PT_BIN="$BIN" PT_VERSION_FILE="$WORK/VERSION"
++
++for fmt in deb apk; do
++  nfpm package --config packaging/nfpm.yaml --packager "$fmt" --target "$OUT/"
++done
++
++ls -l "$OUT"
+diff --git a/packaging/build-windows-installer.sh b/packaging/build-windows-installer.sh
+new file mode 100755
+index 0000000..0f30bf5
+--- /dev/null
++++ b/packaging/build-windows-installer.sh
+@@ -0,0 +1,35 @@
++#!/usr/bin/env bash
++# Build the NSIS installer for Windows (amd64).
++# Usage: packaging/build-windows-installer.sh <version> <path-to-pt.exe> [outdir]
++# Run from the repository root. Requires `makensis` (apt-get install nsis).
++set -euo pipefail
++
++VERSION="${1:?version required, e.g. 1.0.81}"
++EXE="${2:?path to pt.exe required}"
++OUT="${3:-dist}"
++
++VERSION="${VERSION#v}"
++[ -f "$EXE" ] || { echo "binary not found: $EXE" >&2; exit 2; }
++[ -f packaging/windows/pt.nsi ] || { echo "run from the repo root" >&2; exit 2; }
++command -v makensis >/dev/null || { echo "makensis not found (apt-get install nsis)" >&2; exit 2; }
++
++mkdir -p "$OUT"
++OUT="$(cd "$OUT" && pwd)"   # absolute: makensis resolves relative OutFile against the script dir
++WORK="$(mktemp -d)"
++trap 'rm -rf "$WORK"' EXIT
++
++# VERSION file installed next to pt.exe (pt reads it from its own directory)
++printf 'version = "%s"\n' "$VERSION" > "$WORK/VERSION"
++cp pt.yml.example README.md pt.ico packaging/windows/path.ps1 "$WORK/"
++cp "$EXE" "$WORK/pt-bin.exe"
++
++OUTFILE="$OUT/pt-${VERSION}-windows-amd64-setup.exe"
++DEFS=(-DVERSION="$VERSION" -DBIN="$WORK/pt-bin.exe" -DREPO="$WORK" -DOUTFILE="$OUTFILE")
++
++# VIProductVersion needs strictly N.N.N.N
++if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
++  DEFS+=(-DVI_VERSION="${VERSION}.0")
++fi
++
++makensis -V2 "${DEFS[@]}" packaging/windows/pt.nsi
++ls -l "$OUTFILE"
+diff --git a/packaging/linux/postinstall.sh b/packaging/linux/postinstall.sh
+new file mode 100755
+index 0000000..d394fc5
+--- /dev/null
++++ b/packaging/linux/postinstall.sh
+@@ -0,0 +1,6 @@
++#!/bin/sh
++# POSIX sh only (Alpine uses busybox ash).
++set -e
++echo "pt installed in /TOOLS/pt (added to PATH via /etc/profile.d/pt.sh)."
++echo "Open a new login shell, or run:  . /etc/profile.d/pt.sh"
++exit 0
+diff --git a/packaging/linux/pt.sh b/packaging/linux/pt.sh
+new file mode 100644
+index 0000000..3aebd04
+--- /dev/null
++++ b/packaging/linux/pt.sh
+@@ -0,0 +1,6 @@
++# Added by the pt-go package: put the pt install directory on the system PATH.
++# Sourced by /etc/profile for login shells (Debian/Ubuntu: bash/dash, Alpine: ash).
++case ":${PATH}:" in
++    *:/TOOLS/pt:*) ;;
++    *) PATH="${PATH:+${PATH}:}/TOOLS/pt"; export PATH ;;
++esac
+diff --git a/packaging/nfpm.yaml b/packaging/nfpm.yaml
+new file mode 100644
+index 0000000..3b22997
+--- /dev/null
++++ b/packaging/nfpm.yaml
+@@ -0,0 +1,61 @@
++# nfpm config for the .deb (Debian/Ubuntu) and .apk (Alpine) packages.
++# Driven by packaging/build-linux-packages.sh, which exports:
++#   PT_VERSION, PT_ARCH (amd64|arm64), PT_BIN (static linux binary), PT_VERSION_FILE
++name: pt-go
++arch: ${PT_ARCH}
++platform: linux
++version: ${PT_VERSION}
++section: utils
++priority: optional
++maintainer: Hadi Cahyadi <cumulus13@gmail.com>
++description: pt - clipboard to file tool with smart version management (backups, comments, restore, diff, tree, monitor)
++vendor: cumulus13
++homepage: https://github.com/cumulus13/pt-go
++license: MIT
++
++contents:
++  # Install dir (same layout as the Windows installer: C:\TOOLS\pt -> /TOOLS/pt)
++  - dst: /TOOLS
++    type: dir
++    file_info:
++      mode: 0755
++  - dst: /TOOLS/pt
++    type: dir
++    file_info:
++      mode: 0755
++  - src: ${PT_BIN}
++    dst: /TOOLS/pt/pt
++    expand: true
++    file_info:
++      mode: 0755
++  - src: ${PT_VERSION_FILE}
++    dst: /TOOLS/pt/VERSION
++    expand: true
++    file_info:
++      mode: 0644
++  - src: pt.yml.example
++    dst: /TOOLS/pt/pt.yml.example
++    file_info:
++      mode: 0644
++  - src: README.md
++    dst: /TOOLS/pt/README.md
++    file_info:
++      mode: 0644
++  # System-wide PATH entry
++  - src: packaging/linux/pt.sh
++    dst: /etc/profile.d/pt.sh
++    file_info:
++      mode: 0644
++
++scripts:
++  postinstall: packaging/linux/postinstall.sh
++
++overrides:
++  deb:
++    depends:
++      - xclip | xsel | wl-clipboard
++    suggests:
++      - git-delta
++  apk:
++    depends:
++      - xclip
+diff --git a/packaging/smoke/apk.sh b/packaging/smoke/apk.sh
+new file mode 100755
+index 0000000..fbd399e
+--- /dev/null
++++ b/packaging/smoke/apk.sh
+@@ -0,0 +1,25 @@
++#!/bin/sh
++# Smoke test, run INSIDE an alpine container: install the .apk, verify PATH, remove.
++# Expects: /dist/pt-go_*_x86_64.apk and env EXPECT_VERSION.
++set -eu
++
++APK="$(ls /dist/pt-go_*_x86_64.apk)"
++# unsigned package -> --allow-untrusted
++apk add --no-cache --allow-untrusted "$APK"
++
++test -x /TOOLS/pt/pt
++test -f /TOOLS/pt/VERSION
++test -f /etc/profile.d/pt.sh
++
++[ "$(sh -lc 'command -v pt')" = "/TOOLS/pt/pt" ]
++sh -lc 'echo "$PATH"' | tr ':' '\n' | grep -qx '/TOOLS/pt'
++[ "$(sh -lc 'echo "$PATH"' | tr ':' '\n' | grep -cx '/TOOLS/pt')" = "1" ]
++
++OUT="$(sh -lc 'cd / && pt --version' | head -1)"
++echo "$OUT"
++[ "$OUT" = "PT version ${EXPECT_VERSION}" ]
++
++apk del pt-go
++test ! -e /TOOLS/pt
++test ! -e /etc/profile.d/pt.sh
++echo "APK SMOKE TEST OK"
+diff --git a/packaging/smoke/deb.sh b/packaging/smoke/deb.sh
+new file mode 100755
+index 0000000..ee12782
+--- /dev/null
++++ b/packaging/smoke/deb.sh
+@@ -0,0 +1,28 @@
++#!/bin/sh
++# Smoke test, run INSIDE a debian container: install the .deb, verify PATH, remove.
++# Expects: /dist/pt-go_*_amd64.deb and env EXPECT_VERSION.
++set -eu
++
++DEB="$(ls /dist/pt-go_*_amd64.deb)"
++apt-get update -qq
++apt-get install -y -qq "$DEB"
++
++test -x /TOOLS/pt/pt
++test -f /TOOLS/pt/VERSION
++test -f /etc/profile.d/pt.sh
++
++# A fresh LOGIN shell must see /TOOLS/pt on PATH
++[ "$(bash -lc 'command -v pt')" = "/TOOLS/pt/pt" ]
++[ "$(sh -lc 'command -v pt')" = "/TOOLS/pt/pt" ]
++bash -lc 'echo "$PATH"' | tr ':' '\n' | grep -qx '/TOOLS/pt'
++# no duplicate entries
++[ "$(bash -lc 'echo "$PATH"' | tr ':' '\n' | grep -cx '/TOOLS/pt')" = "1" ]
++
++OUT="$(bash -lc 'cd / && pt --version' | head -1)"
++echo "$OUT"
++[ "$OUT" = "PT version ${EXPECT_VERSION}" ]
++
++apt-get remove -y -qq pt-go
++test ! -e /TOOLS/pt
++test ! -e /etc/profile.d/pt.sh
++echo "DEB SMOKE TEST OK"
+diff --git a/packaging/smoke/windows.ps1 b/packaging/smoke/windows.ps1
+new file mode 100644
+index 0000000..28537f3
+--- /dev/null
++++ b/packaging/smoke/windows.ps1
+@@ -0,0 +1,56 @@
++# Smoke test on a Windows runner: silent install -> verify dir + SYSTEM PATH -> uninstall -> verify clean.
++# Usage: powershell -File packaging/smoke/windows.ps1 -Dist dist -ExpectVersion 1.0.81
++param(
++    [Parameter(Mandatory = $true)][string]$Dist,
++    [Parameter(Mandatory = $true)][string]$ExpectVersion
++)
++$ErrorActionPreference = 'Stop'
++$installDir = 'C:\TOOLS\pt'
++
++function Machine-Path { [Environment]::GetEnvironmentVariable('Path', 'Machine') }
++function Path-Has([string]$dir) {
++    $d = $dir.TrimEnd('\').ToLowerInvariant()
++    return @((Machine-Path) -split ';' | Where-Object { $_.TrimEnd('\').ToLowerInvariant() -eq $d }).Count
++}
++function Check([bool]$cond, [string]$msg) {
++    if (-not $cond) { throw "SMOKE FAIL: $msg" }
++    Write-Host "ok: $msg"
++}
++
++$setup = Get-ChildItem -Path $Dist -Filter 'pt-*-windows-amd64-setup.exe' | Select-Object -First 1
++if ($null -eq $setup) { throw "no installer found in $Dist" }
++Write-Host "Installer: $($setup.FullName)"
++
++$before = Machine-Path
++
++# --- install (twice, to prove PATH is not duplicated on upgrade/reinstall)
++foreach ($i in 1, 2) {
++    $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
++    Check ($p.ExitCode -eq 0) "silent install #$i exit code 0 (got $($p.ExitCode))"
++}
++Check (Test-Path "$installDir\pt.exe") 'pt.exe installed to C:\TOOLS\pt'
++Check (Test-Path "$installDir\uninstall.exe") 'uninstaller present'
++Check ((Path-Has $installDir) -eq 1) 'C:\TOOLS\pt present exactly once in SYSTEM PATH'
++
++$out = (& "$installDir\pt.exe" --version) | Select-Object -First 1
++Write-Host $out
++Check ($out -eq "PT version $ExpectVersion") "pt.exe --version == $ExpectVersion"
++
++$arp = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\pt-go' -ErrorAction SilentlyContinue
++Check ($null -ne $arp -and $arp.DisplayVersion -eq $ExpectVersion) 'Add/Remove Programs entry present'
++
++# --- uninstall (_?= makes the uninstaller run synchronously in place)
++$u = Start-Process -FilePath "$installDir\uninstall.exe" -ArgumentList '/S', "_?=$installDir" -Wait -PassThru
++Check ($u.ExitCode -eq 0) "silent uninstall exit code 0 (got $($u.ExitCode))"
++Check (-not (Test-Path "$installDir\pt.exe")) 'pt.exe removed'
++Check ((Path-Has $installDir) -eq 0) 'C:\TOOLS\pt removed from SYSTEM PATH'
++Check ($null -eq (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\pt-go' -ErrorAction SilentlyContinue)) 'Add/Remove Programs entry removed'
++
++# uninstall.exe stays when run with _?=, clean it up
++Remove-Item "$installDir\uninstall.exe" -Force -ErrorAction SilentlyContinue
++Remove-Item $installDir -Force -ErrorAction SilentlyContinue
++
++# PATH must hold exactly the same entries as before (path.ps1 drops empty segments, so compare entry lists)
++function Entries([string]$p) { @($p -split ';' | Where-Object { $_.Trim() -ne '' } | ForEach-Object { $_.Trim() }) }
++Check (((Entries (Machine-Path)) -join ';') -eq ((Entries $before) -join ';')) 'SYSTEM PATH entries restored to the original list'
++Write-Host 'WINDOWS SMOKE TEST OK'
+diff --git a/packaging/windows/path.ps1 b/packaging/windows/path.ps1
+new file mode 100644
+index 0000000..043b6dd
+--- /dev/null
++++ b/packaging/windows/path.ps1
+@@ -0,0 +1,52 @@
++# Adds/removes a directory to/from the SYSTEM (machine) PATH.
++#  - Works on the registry value directly, so the existing REG_EXPAND_SZ type and
++#    unexpanded %VARS% are preserved, and there is no 1024-char (NSIS/setx) truncation.
++#  - Idempotent: 'add' never duplicates, 'remove' removes every matching entry.
++#  - Never writes if nothing changed.
++# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File path.ps1 -Action add|remove -Dir C:\TOOLS\pt
++param(
++    [Parameter(Mandatory = $true)][ValidateSet('add', 'remove')][string]$Action,
++    [Parameter(Mandatory = $true)][string]$Dir
++)
++
++$ErrorActionPreference = 'Stop'
++
++function Normalize([string]$s) {
++    return $s.Trim().Trim('"').TrimEnd('\').ToLowerInvariant()
++}
++
++$Dir = $Dir.Trim().TrimEnd('\')
++if ([string]::IsNullOrWhiteSpace($Dir)) { throw 'Dir is empty' }
++$target = Normalize $Dir
++
++$base = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
++    [Microsoft.Win32.RegistryHive]::LocalMachine,
++    [Microsoft.Win32.RegistryView]::Registry64)
++$key = $base.OpenSubKey('SYSTEM\CurrentControlSet\Control\Session Manager\Environment', $true)
++if ($null -eq $key) { throw 'Cannot open the system Environment registry key (run as Administrator)' }
++
++try {
++    $current = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
++    $parts = @($current -split ';' | Where-Object { $_.Trim() -ne '' })
++
++    $has = @($parts | Where-Object { (Normalize $_) -eq $target }).Count -gt 0
++
++    if ($Action -eq 'add') {
++        if ($has) { Write-Host "PATH already contains $Dir"; exit 0 }
++        $parts = @($parts) + $Dir
++        Write-Host "Added $Dir to system PATH"
++    }
++    else {
++        if (-not $has) { Write-Host "PATH does not contain $Dir"; exit 0 }
++        $parts = @($parts | Where-Object { (Normalize $_) -ne $target })
++        Write-Host "Removed $Dir from system PATH"
++    }
++
++    $new = ($parts -join ';')
++    $key.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::ExpandString)
++}
++finally {
++    $key.Close()
++    $base.Close()
++}
++exit 0
+diff --git a/packaging/windows/pt.nsi b/packaging/windows/pt.nsi
+new file mode 100644
+index 0000000..3b42d3d
+--- /dev/null
++++ b/packaging/windows/pt.nsi
+@@ -0,0 +1,134 @@
++; NSIS installer for pt (Windows, amd64)
++; Installs to C:\TOOLS\pt and adds that directory to the SYSTEM PATH.
++;
++; Build (from repo root, see packaging/build-windows-installer.sh):
++;   makensis -DVERSION=1.0.81 -DBIN=pt.exe -DREPO=. -DOUTFILE=dist\pt-setup.exe packaging\windows\pt.nsi
++
++Unicode true
++ManifestDPIAware true
++SetCompressor /SOLID lzma
++
++!ifndef VERSION
++  !define VERSION "0.0.0"
++!endif
++!ifndef BIN
++  !error "Pass -DBIN=<path to pt.exe>"
++!endif
++!ifndef REPO
++  !define REPO "."
++!endif
++!ifndef OUTFILE
++  !define OUTFILE "pt-${VERSION}-windows-amd64-setup.exe"
++!endif
++
++!define APPNAME     "pt"
++!define PUBLISHER   "Hadi Cahyadi"
++!define URL         "https://github.com/cumulus13/pt-go"
++!define DEFAULT_DIR "C:\TOOLS\pt"
++!define UNINST_KEY  "Software\Microsoft\Windows\CurrentVersion\Uninstall\pt-go"
++
++!include "MUI2.nsh"
++!include "x64.nsh"
++!include "WinMessages.nsh"
++!include "LogicLib.nsh"
++
++Name "${APPNAME} ${VERSION}"
++OutFile "${OUTFILE}"
++InstallDir "${DEFAULT_DIR}"
++RequestExecutionLevel admin
++BrandingText "${APPNAME} ${VERSION}"
++
++!ifdef VI_VERSION
++  VIProductVersion "${VI_VERSION}"
++  VIAddVersionKey "ProductName"     "${APPNAME}"
++  VIAddVersionKey "CompanyName"     "${PUBLISHER}"
++  VIAddVersionKey "FileDescription" "pt installer"
++  VIAddVersionKey "FileVersion"     "${VERSION}"
++  VIAddVersionKey "ProductVersion"  "${VERSION}"
++  VIAddVersionKey "LegalCopyright"  "MIT License"
++!endif
++
++!define MUI_ABORTWARNING
++!define MUI_ICON   "${REPO}\pt.ico"
++!define MUI_UNICON "${REPO}\pt.ico"
++
++!insertmacro MUI_PAGE_WELCOME
++!insertmacro MUI_PAGE_DIRECTORY
++!insertmacro MUI_PAGE_INSTFILES
++!insertmacro MUI_PAGE_FINISH
++!insertmacro MUI_UNPAGE_CONFIRM
++!insertmacro MUI_UNPAGE_INSTFILES
++!insertmacro MUI_LANGUAGE "English"
++
++Function .onInit
++  ${IfNot} ${RunningX64}
++    MessageBox MB_ICONSTOP "This installer requires 64-bit Windows." /SD IDOK
++    Abort
++  ${EndIf}
++  SetRegView 64
++FunctionEnd
++
++Function un.onInit
++  SetRegView 64
++FunctionEnd
++
++; Runs path.ps1 ($0 = add|remove). Result code is checked; failure is reported
++; but is not fatal for the file install.
++!macro RunPathScript ACTION
++  DetailPrint "Updating system PATH (${ACTION})..."
++  nsExec::ExecToLog '"$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\path.ps1" -Action ${ACTION} -Dir "$INSTDIR"'
++  Pop $0
++  ${If} $0 != "0"
++    DetailPrint "PATH update returned: $0"
++    MessageBox MB_ICONEXCLAMATION|MB_OK "Could not update the system PATH automatically (code $0).$\r$\nAdd $INSTDIR to PATH manually if needed." /SD IDOK
++  ${EndIf}
++  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
++!macroend
++
++Section "Install"
++  SetRegView 64
++  SetOutPath "$INSTDIR"
++  SetOverwrite on
++
++  File /oname=pt.exe "${BIN}"
++  File "${REPO}\pt.yml.example"
++  File "${REPO}\README.md"
++  File "${REPO}\pt.ico"
++  File "${REPO}\VERSION"
++  File "${REPO}\path.ps1"
++
++  WriteUninstaller "$INSTDIR\uninstall.exe"
++
++  !insertmacro RunPathScript add
++
++  ; Add/Remove Programs entry
++  WriteRegStr   HKLM "${UNINST_KEY}" "DisplayName"          "${APPNAME} (clipboard to file tool)"
++  WriteRegStr   HKLM "${UNINST_KEY}" "DisplayVersion"       "${VERSION}"
++  WriteRegStr   HKLM "${UNINST_KEY}" "Publisher"            "${PUBLISHER}"
++  WriteRegStr   HKLM "${UNINST_KEY}" "URLInfoAbout"         "${URL}"
++  WriteRegStr   HKLM "${UNINST_KEY}" "InstallLocation"      "$INSTDIR"
++  WriteRegStr   HKLM "${UNINST_KEY}" "DisplayIcon"          "$INSTDIR\pt.exe"
++  WriteRegStr   HKLM "${UNINST_KEY}" "UninstallString"      '"$INSTDIR\uninstall.exe"'
++  WriteRegStr   HKLM "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
++  WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
++  WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
++SectionEnd
++
++Section "Uninstall"
++  SetRegView 64
++
++  !insertmacro RunPathScript remove
++
++  Delete /REBOOTOK "$INSTDIR\pt.exe"
++  Delete /REBOOTOK "$INSTDIR\pt.yml.example"
++  Delete /REBOOTOK "$INSTDIR\README.md"
++  Delete /REBOOTOK "$INSTDIR\pt.ico"
++  Delete /REBOOTOK "$INSTDIR\VERSION"
++  Delete /REBOOTOK "$INSTDIR\path.ps1"
++  Delete /REBOOTOK "$INSTDIR\uninstall.exe"
++
++  ; Only removes the directory if it is empty (user config/backups are left alone)
++  RMDir "$INSTDIR"
++
++  DeleteRegKey HKLM "${UNINST_KEY}"
++SectionEnd
+diff --git a/pt/main.go b/pt/main.go
+index 723d780..d83198d 100644
+--- a/pt/main.go
++++ b/pt/main.go
+@@ -265,7 +265,14 @@ func init() {
+     // Initialize logger to discard by default in init.
+     // It will be set correctly in main() after flag parsing.
+     logger = log.New(&discardWriter{}, "", log.LstdFlags)
+-    Version = loadVersion()
++    // Release builds inject the version at build time:
++    //   -ldflags "-X main.Version=x.y.z"
++    // That value wins, so an installed pt never reports the version of an
++    // unrelated VERSION file in the current directory. Plain `go build`
++    // (Version == "dev") keeps the old behaviour: read the VERSION file.
++    if Version == "" || Version == "dev" {
++        Version = loadVersion()
++    }
+     appConfig = loadConfig()
+ }
+ 
+diff --git a/pt/monitor.go b/pt/monitor.go
+index fd921ad..29a2acf 100644
+--- a/pt/monitor.go
++++ b/pt/monitor.go
+@@ -9,7 +9,6 @@ import (
+ 	"time"
+ 
+ 	"github.com/fsnotify/fsnotify"
+-	"github.com/getlantern/systray"
+ 	"github.com/mattn/go-gntp"
+ )
+ 
+@@ -23,12 +22,6 @@ var (
+ 	monitorRunning = false
+ 	stopMonitorCh  = make(chan bool)
+ 	
+-	menuStart      *systray.MenuItem
+-	menuStop       *systray.MenuItem
+-	menuPause      *systray.MenuItem
+-	menuResume     *systray.MenuItem
+-	menuTextNotif  *systray.MenuItem
+-	menuQuit       *systray.MenuItem
+ 	
+ 	savedArgs       []string
+ 	savedExceptions []string  // Store exceptions for restart
+@@ -154,7 +147,7 @@ func handleMonitorCommand(args []string) error {
+ 		fmt.Printf("   %d. %s\n", i+1, absPath)
+ 	}
+ 
+-	go systray.Run(onReady, onExit)
++	startTray()
+ 
+ 	return startMonitorMultiple(expandedPaths, exceptions)
+ }
+@@ -700,365 +693,3 @@ func findNotificationIcon() string {
+ 
+ 	return ""
+ }
+-
+-func onReady() {
+-	// Helper for safe min (Go <1.21 compatible)
+-	minInt := func(a, b int) int {
+-		if a < b {
+-			return a
+-		}
+-		return b
+-	}
+-
+-	currentDir, err := os.Getwd()
+-	if err != nil {fmt.Printf("Error: os.Getwd !")}
+-
+-	// parentDir := ""
+-	// if currentDir != "" {
+-	// 	parentDir = filepath.Dir(currentDir)
+-	// }
+-
+-	iconData := getTrayIconData()
+-
+-	// Debug output (optional)
+-	if os.Getenv("DEBUG") == "1" {
+-		fmt.Printf("Icon data length: %d bytes\n", len(iconData))
+-		if len(iconData) > 0 {
+-			n := minInt(16, len(iconData))
+-			fmt.Printf("Icon header (first %d bytes): %x\n", n, iconData[:n])
+-		} else {
+-			fmt.Println("Icon data is empty")
+-		}
+-	}
+-
+-	if len(iconData) >= 4 && iconData[0] == 0 && iconData[1] == 0 && iconData[2] == 1 && iconData[3] == 0 {
+-	    // EXTRA SAFETY: ensure it's not just header — e.g., must be ≥ 22 bytes (min ICO size)
+-	    if len(iconData) < 22 {
+-	        if logger != nil {
+-	            logger.Printf("⚠️ ICO too small (%d bytes)", len(iconData))
+-	        }
+-	    } else {
+-	        systray.SetIcon(iconData)   // ← now much less likely to trigger false error
+-	        if logger != nil {
+-	            logger.Printf("Tray icon set")
+-	        }
+-	    }
+-	}
+-
+-	// Validate ICO header: must be at least 4 bytes and match 00 00 01 00
+-	isValidICO := len(iconData) >= 4 &&
+-		iconData[0] == 0 &&
+-		iconData[1] == 0 &&
+-		iconData[2] == 1 &&
+-		iconData[3] == 0
+-
+-	if isValidICO {
+-		systray.SetIcon(iconData) // ✅ No error — correct usage
+-		if logger != nil {
+-			logger.Printf("Tray icon set (%d bytes)", len(iconData))
+-		}
+-	} else {
+-		if logger != nil {
+-			if len(iconData) == 0 {
+-				logger.Printf("⚠️ No icon data found — using emoji title only")
+-			} else {
+-				n := minInt(8, len(iconData))
+-				hdr := iconData[:n]
+-				logger.Printf("⚠️ Invalid icon format (not ICO). Header: %x", hdr)
+-			}
+-		}
+-		// Proceed without icon — rely on emoji title & tooltip
+-	}
+-	
+-	// Always set title with emoji (works as fallback)
+-	systray.SetTitle("📁 File Monitor - Running " + string(currentDir))
+-	if iconTray := getTrayIconData(); len(iconTray) > 0 {
+-		systray.SetIcon(iconTray)
+-	}
+-	systray.SetTooltip("File Monitor - Running " + string(currentDir))
+-
+-	menuStart = systray.AddMenuItem("▶️ Start", "Start monitoring")
+-	if iconStart := getMenuIcon("start"); len(iconStart) > 0 {
+-		menuStart.SetIcon(iconStart)
+-	}
+-	
+-	menuStop = systray.AddMenuItem("⏹️ Stop", "Stop monitoring")
+-	if iconStop := getMenuIcon("stop"); len(iconStop) > 0 {
+-		menuStop.SetIcon(iconStop)
+-	}
+-	
+-	menuPause = systray.AddMenuItem("⏸️ Pause", "Pause monitoring")
+-	if iconPause := getMenuIcon("pause"); len(iconPause) > 0 {
+-		menuPause.SetIcon(iconPause)
+-	}
+-	
+-	menuResume = systray.AddMenuItem("⏯️ Resume", "Resume monitoring")
+-	if iconResume := getMenuIcon("resume"); len(iconResume) > 0 {
+-		menuResume.SetIcon(iconResume)
+-	}
+-	
+-	systray.AddSeparator()
+-	
+-	menuTextNotif = systray.AddMenuItemCheckbox("🔔 Test Notifications", "Toggle text notifications", false)
+-	if iconNotif := getMenuIcon("notification"); len(iconNotif) > 0 {
+-		menuTextNotif.SetIcon(iconNotif)
+-	}
+-	
+-	systray.AddSeparator()
+-	
+-	menuQuit = systray.AddMenuItem("🚪 Exit", "Exit the application")
+-	if iconExit := getMenuIcon("exit"); len(iconExit) > 0 {
+-		menuQuit.SetIcon(iconExit)
+-	}
+-
+-	menuStart.Disable()
+-	menuStop.Enable()
+-	menuPause.Enable()
+-	menuResume.Hide()
+-
+-	go func() {
+-		for {
+-			select {
+-			case <-menuStart.ClickedCh:
+-				handleTrayStart()
+-			case <-menuStop.ClickedCh:
+-				handleTrayStop()
+-			case <-menuPause.ClickedCh:
+-				handleTrayPause()
+-			case <-menuResume.ClickedCh:
+-				handleTrayResume()
+-			case <-menuTextNotif.ClickedCh:
+-				if menuTextNotif.Checked() {
+-					menuTextNotif.Uncheck()
+-					fmt.Println("🔕 Text notifications disabled")
+-				} else {
+-					menuTextNotif.Check()
+-					fmt.Println("🔔 Text notifications enabled")
+-				}
+-			case <-menuQuit.ClickedCh:
+-				fmt.Println("👋 Exiting file monitor...")
+-				systray.Quit()
+-				os.Exit(0)
+-			}
+-		}
+-	}()
+-}
+-
+-func handleTrayStart() {
+-	if monitorRunning {
+-		fmt.Println("⚠️  Monitor already running")
+-		return
+-	}
+-
+-	if len(savedArgs) == 0 {
+-		fmt.Println("❌ No saved configuration. Please restart the program.")
+-		return
+-	}
+-
+-	fmt.Println("▶️  Starting monitor from tray...")
+-	menuStart.Disable()
+-	menuStop.Enable()
+-	menuPause.Enable()
+-	menuResume.Hide()
+-	menuPause.Show()
+-	systray.SetTooltip("File Monitor - Running")
+-
+-	go func() {
+-		monitorMu.Lock()
+-		watchedDirs = make(map[string]bool)
+-		watchedFiles = make(map[string]bool)
+-		monitorMu.Unlock()
+-
+-		// Parse args again for exceptions
+-		var exceptions []string
+-		var paths []string
+-		
+-		for i := 0; i < len(savedArgs); i++ {
+-			if savedArgs[i] == "-e" || savedArgs[i] == "--exception" {
+-				if i+1 < len(savedArgs) {
+-					exceptions = append(exceptions, savedArgs[i+1])
+-					i++
+-				}
+-			} else {
+-				paths = append(paths, savedArgs[i])
+-			}
+-		}
+-
+-		err := startMonitorMultiple(paths, exceptions)
+-		if err != nil {
+-			fmt.Printf("❌ Monitor error: %v\n", err)
+-			menuStart.Enable()
+-			menuStop.Disable()
+-			menuPause.Disable()
+-		}
+-	}()
+-}
+-
+-func handleTrayStop() {
+-	if !monitorRunning {
+-		fmt.Println("⚠️  Monitor not running")
+-		return
+-	}
+-
+-	fmt.Println("⏹️  Stopping monitor...")
+-	stopMonitorCh <- true
+-	monitorRunning = false
+-	monitorPaused = false
+-
+-	menuStart.Enable()
+-	menuStop.Disable()
+-	menuPause.Disable()
+-	menuResume.Hide()
+-	menuPause.Show()
+-	systray.SetTooltip("File Monitor - Stopped")
+-}
+-
+-func handleTrayPause() {
+-	if !monitorRunning {
+-		fmt.Println("⚠️  Monitor not running")
+-		return
+-	}
+-
+-	fmt.Println("⏸️  Pausing monitor...")
+-	monitorPaused = true
+-	menuPause.Hide()
+-	menuResume.Show()
+-	menuResume.Enable()
+-	systray.SetTooltip("File Monitor - Paused")
+-}
+-
+-func handleTrayResume() {
+-	fmt.Println("⏯️  Resuming monitor...")
+-	monitorPaused = false
+-	menuResume.Hide()
+-	menuPause.Show()
+-	menuPause.Enable()
+-	systray.SetTooltip("File Monitor - Running")
+-}
+-
+-func onExit() {
+-	fmt.Println("System tray exited")
+-}
+-
+-func getTrayIconData() []byte {
+-	if appConfig == nil {
+-		return nil
+-	}
+-	
+-	if appConfig.TrayIcon != "" {
+-		if data, err := os.ReadFile(appConfig.TrayIcon); err == nil && len(data) > 0 {
+-			if logger != nil {
+-				logger.Printf("Using tray icon from config: %s", appConfig.TrayIcon)
+-			}
+-			return data
+-		}
+-		
+-		exePath, err := os.Executable()
+-		if err == nil {
+-			exeDir := filepath.Dir(exePath)
+-			iconPath := filepath.Join(exeDir, appConfig.TrayIcon)
+-			if os.Getenv("DEBUG") == "1" { fmt.Printf("iconPath: %s\n", iconPath)}
+-			if data, err := os.ReadFile(iconPath); err == nil && len(data) > 0 {
+-				if logger != nil {
+-					logger.Printf("Using tray icon from config (exe dir): %s", iconPath)
+-				}
+-				return data
+-			}
+-		}
+-		
+-		cwd, err := os.Getwd()
+-		if err == nil {
+-			iconPath := filepath.Join(cwd, appConfig.TrayIcon)
+-			if data, err := os.ReadFile(iconPath); err == nil && len(data) > 0 {
+-				if logger != nil {
+-					logger.Printf("Using tray icon from config (cwd): %s", iconPath)
+-				}
+-				return data
+-			}
+-		}
+-	}
+-	
+-	iconPath := findNotificationIcon()
+-	if iconPath != "" {
+-		data, err := os.ReadFile(iconPath)
+-		if err == nil && len(data) > 0 {
+-			if logger != nil {
+-				logger.Printf("Using tray icon from default location: %s", iconPath)
+-			}
+-			return data
+-		}
+-	}
+-	
+-	return nil
+-}
+-
+-func getMenuIcon(menuType string) []byte {
+-	if appConfig == nil {
+-		return nil
+-	}
+-	
+-	var iconName string
+-	
+-	switch menuType {
+-	case "start":
+-		iconName = "start.ico"
+-		if appConfig.MenuIcons.Start != "" {
+-			iconName = appConfig.MenuIcons.Start
+-		}
+-	case "stop":
+-		iconName = "stop.ico"
+-		if appConfig.MenuIcons.Stop != "" {
+-			iconName = appConfig.MenuIcons.Stop
+-		}
+-	case "pause":
+-		iconName = "pause.ico"
+-		if appConfig.MenuIcons.Pause != "" {
+-			iconName = appConfig.MenuIcons.Pause
+-		}
+-	case "resume":
+-		iconName = "resume.ico"
+-		if appConfig.MenuIcons.Resume != "" {
+-			iconName = appConfig.MenuIcons.Resume
+-		}
+-	case "notification":
+-		iconName = "notification.ico"
+-		if appConfig.MenuIcons.Notification != "" {
+-			iconName = appConfig.MenuIcons.Notification
+-		}
+-	case "exit":
+-		iconName = "exit.ico"
+-		if appConfig.MenuIcons.Exit != "" {
+-			iconName = appConfig.MenuIcons.Exit
+-		}
+-	default:
+-		return nil
+-	}
+-	
+-	var iconPaths []string
+-	
+-	if appConfig.MenuIconsDir != "" {
+-		iconPaths = append(iconPaths, filepath.Join(appConfig.MenuIconsDir, iconName))
+-	}
+-	
+-	exePath, _ := os.Executable()
+-	exeDir := filepath.Dir(exePath)
+-	iconPaths = append(iconPaths, filepath.Join(exeDir, "menu_icons", iconName))
+-	iconPaths = append(iconPaths, filepath.Join(exeDir, "icons", iconName))
+-	iconPaths = append(iconPaths, filepath.Join(exeDir, iconName))
+-	
+-	cwd, _ := os.Getwd()
+-	iconPaths = append(iconPaths, filepath.Join(cwd, "menu_icons", iconName))
+-	iconPaths = append(iconPaths, filepath.Join(cwd, "icons", iconName))
+-	iconPaths = append(iconPaths, filepath.Join(cwd, iconName))
+-	
+-	for _, path := range iconPaths {
+-		if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
+-			if logger != nil {
+-				logger.Printf("Using menu icon for %s: %s", menuType, path)
+-			}
+-			return data
+-		}
+-	}
+-	
+-	return nil
+-}
+diff --git a/pt/tray.go b/pt/tray.go
+new file mode 100644
+index 0000000..a9ea876
+--- /dev/null
++++ b/pt/tray.go
+@@ -0,0 +1,395 @@
++//go:build windows || tray
++// +build windows tray
++
++// System tray support.
++//
++// Compiled on Windows by default (pure Go, no CGO required).
++// On Linux/macOS the tray needs CGO (GTK3 + appindicator / Cocoa), so it is
++// opt-in: build with `CGO_ENABLED=1 go build -tags tray ./pt`.
++// Default Linux/macOS builds use tray_stub.go and stay fully static (CGO_ENABLED=0).
++
++package main
++
++import (
++	"fmt"
++	"os"
++	"path/filepath"
++
++	"github.com/getlantern/systray"
++)
++
++var (
++	menuStart     *systray.MenuItem
++	menuStop      *systray.MenuItem
++	menuPause     *systray.MenuItem
++	menuResume    *systray.MenuItem
++	menuTextNotif *systray.MenuItem
++	menuQuit      *systray.MenuItem
++)
++
++// startTray launches the system tray in the background.
++func startTray() {
++	go systray.Run(onReady, onExit)
++}
++
++func onReady() {
++	// Helper for safe min (Go <1.21 compatible)
++	minInt := func(a, b int) int {
++		if a < b {
++			return a
++		}
++		return b
++	}
++
++	currentDir, err := os.Getwd()
++	if err != nil {fmt.Printf("Error: os.Getwd !")}
++
++	// parentDir := ""
++	// if currentDir != "" {
++	// 	parentDir = filepath.Dir(currentDir)
++	// }
++
++	iconData := getTrayIconData()
++
++	// Debug output (optional)
++	if os.Getenv("DEBUG") == "1" {
++		fmt.Printf("Icon data length: %d bytes\n", len(iconData))
++		if len(iconData) > 0 {
++			n := minInt(16, len(iconData))
++			fmt.Printf("Icon header (first %d bytes): %x\n", n, iconData[:n])
++		} else {
++			fmt.Println("Icon data is empty")
++		}
++	}
++
++	if len(iconData) >= 4 && iconData[0] == 0 && iconData[1] == 0 && iconData[2] == 1 && iconData[3] == 0 {
++	    // EXTRA SAFETY: ensure it's not just header — e.g., must be ≥ 22 bytes (min ICO size)
++	    if len(iconData) < 22 {
++	        if logger != nil {
++	            logger.Printf("⚠️ ICO too small (%d bytes)", len(iconData))
++	        }
++	    } else {
++	        systray.SetIcon(iconData)   // ← now much less likely to trigger false error
++	        if logger != nil {
++	            logger.Printf("Tray icon set")
++	        }
++	    }
++	}
++
++	// Validate ICO header: must be at least 4 bytes and match 00 00 01 00
++	isValidICO := len(iconData) >= 4 &&
++		iconData[0] == 0 &&
++		iconData[1] == 0 &&
++		iconData[2] == 1 &&
++		iconData[3] == 0
++
++	if isValidICO {
++		systray.SetIcon(iconData) // ✅ No error — correct usage
++		if logger != nil {
++			logger.Printf("Tray icon set (%d bytes)", len(iconData))
++		}
++	} else {
++		if logger != nil {
++			if len(iconData) == 0 {
++				logger.Printf("⚠️ No icon data found — using emoji title only")
++			} else {
++				n := minInt(8, len(iconData))
++				hdr := iconData[:n]
++				logger.Printf("⚠️ Invalid icon format (not ICO). Header: %x", hdr)
++			}
++		}
++		// Proceed without icon — rely on emoji title & tooltip
++	}
++	
++	// Always set title with emoji (works as fallback)
++	systray.SetTitle("📁 File Monitor - Running " + string(currentDir))
++	if iconTray := getTrayIconData(); len(iconTray) > 0 {
++		systray.SetIcon(iconTray)
++	}
++	systray.SetTooltip("File Monitor - Running " + string(currentDir))
++
++	menuStart = systray.AddMenuItem("▶️ Start", "Start monitoring")
++	if iconStart := getMenuIcon("start"); len(iconStart) > 0 {
++		menuStart.SetIcon(iconStart)
++	}
++	
++	menuStop = systray.AddMenuItem("⏹️ Stop", "Stop monitoring")
++	if iconStop := getMenuIcon("stop"); len(iconStop) > 0 {
++		menuStop.SetIcon(iconStop)
++	}
++	
++	menuPause = systray.AddMenuItem("⏸️ Pause", "Pause monitoring")
++	if iconPause := getMenuIcon("pause"); len(iconPause) > 0 {
++		menuPause.SetIcon(iconPause)
++	}
++	
++	menuResume = systray.AddMenuItem("⏯️ Resume", "Resume monitoring")
++	if iconResume := getMenuIcon("resume"); len(iconResume) > 0 {
++		menuResume.SetIcon(iconResume)
++	}
++	
++	systray.AddSeparator()
++	
++	menuTextNotif = systray.AddMenuItemCheckbox("🔔 Test Notifications", "Toggle text notifications", false)
++	if iconNotif := getMenuIcon("notification"); len(iconNotif) > 0 {
++		menuTextNotif.SetIcon(iconNotif)
++	}
++	
++	systray.AddSeparator()
++	
++	menuQuit = systray.AddMenuItem("🚪 Exit", "Exit the application")
++	if iconExit := getMenuIcon("exit"); len(iconExit) > 0 {
++		menuQuit.SetIcon(iconExit)
++	}
++
++	menuStart.Disable()
++	menuStop.Enable()
++	menuPause.Enable()
++	menuResume.Hide()
++
++	go func() {
++		for {
++			select {
++			case <-menuStart.ClickedCh:
++				handleTrayStart()
++			case <-menuStop.ClickedCh:
++				handleTrayStop()
++			case <-menuPause.ClickedCh:
++				handleTrayPause()
++			case <-menuResume.ClickedCh:
++				handleTrayResume()
++			case <-menuTextNotif.ClickedCh:
++				if menuTextNotif.Checked() {
++					menuTextNotif.Uncheck()
++					fmt.Println("🔕 Text notifications disabled")
++				} else {
++					menuTextNotif.Check()
++					fmt.Println("🔔 Text notifications enabled")
++				}
++			case <-menuQuit.ClickedCh:
++				fmt.Println("👋 Exiting file monitor...")
++				systray.Quit()
++				os.Exit(0)
++			}
++		}
++	}()
++}
++
++func handleTrayStart() {
++	if monitorRunning {
++		fmt.Println("⚠️  Monitor already running")
++		return
++	}
++
++	if len(savedArgs) == 0 {
++		fmt.Println("❌ No saved configuration. Please restart the program.")
++		return
++	}
++
++	fmt.Println("▶️  Starting monitor from tray...")
++	menuStart.Disable()
++	menuStop.Enable()
++	menuPause.Enable()
++	menuResume.Hide()
++	menuPause.Show()
++	systray.SetTooltip("File Monitor - Running")
++
++	go func() {
++		monitorMu.Lock()
++		watchedDirs = make(map[string]bool)
++		watchedFiles = make(map[string]bool)
++		monitorMu.Unlock()
++
++		// Parse args again for exceptions
++		var exceptions []string
++		var paths []string
++		
++		for i := 0; i < len(savedArgs); i++ {
++			if savedArgs[i] == "-e" || savedArgs[i] == "--exception" {
++				if i+1 < len(savedArgs) {
++					exceptions = append(exceptions, savedArgs[i+1])
++					i++
++				}
++			} else {
++				paths = append(paths, savedArgs[i])
++			}
++		}
++
++		err := startMonitorMultiple(paths, exceptions)
++		if err != nil {
++			fmt.Printf("❌ Monitor error: %v\n", err)
++			menuStart.Enable()
++			menuStop.Disable()
++			menuPause.Disable()
++		}
++	}()
++}
++
++func handleTrayStop() {
++	if !monitorRunning {
++		fmt.Println("⚠️  Monitor not running")
++		return
++	}
++
++	fmt.Println("⏹️  Stopping monitor...")
++	stopMonitorCh <- true
++	monitorRunning = false
++	monitorPaused = false
++
++	menuStart.Enable()
++	menuStop.Disable()
++	menuPause.Disable()
++	menuResume.Hide()
++	menuPause.Show()
++	systray.SetTooltip("File Monitor - Stopped")
++}
++
++func handleTrayPause() {
++	if !monitorRunning {
++		fmt.Println("⚠️  Monitor not running")
++		return
++	}
++
++	fmt.Println("⏸️  Pausing monitor...")
++	monitorPaused = true
++	menuPause.Hide()
++	menuResume.Show()
++	menuResume.Enable()
++	systray.SetTooltip("File Monitor - Paused")
++}
++
++func handleTrayResume() {
++	fmt.Println("⏯️  Resuming monitor...")
++	monitorPaused = false
++	menuResume.Hide()
++	menuPause.Show()
++	menuPause.Enable()
++	systray.SetTooltip("File Monitor - Running")
++}
++
++func onExit() {
++	fmt.Println("System tray exited")
++}
++
++func getTrayIconData() []byte {
++	if appConfig == nil {
++		return nil
++	}
++	
++	if appConfig.TrayIcon != "" {
++		if data, err := os.ReadFile(appConfig.TrayIcon); err == nil && len(data) > 0 {
++			if logger != nil {
++				logger.Printf("Using tray icon from config: %s", appConfig.TrayIcon)
++			}
++			return data
++		}
++		
++		exePath, err := os.Executable()
++		if err == nil {
++			exeDir := filepath.Dir(exePath)
++			iconPath := filepath.Join(exeDir, appConfig.TrayIcon)
++			if os.Getenv("DEBUG") == "1" { fmt.Printf("iconPath: %s\n", iconPath)}
++			if data, err := os.ReadFile(iconPath); err == nil && len(data) > 0 {
++				if logger != nil {
++					logger.Printf("Using tray icon from config (exe dir): %s", iconPath)
++				}
++				return data
++			}
++		}
++		
++		cwd, err := os.Getwd()
++		if err == nil {
++			iconPath := filepath.Join(cwd, appConfig.TrayIcon)
++			if data, err := os.ReadFile(iconPath); err == nil && len(data) > 0 {
++				if logger != nil {
++					logger.Printf("Using tray icon from config (cwd): %s", iconPath)
++				}
++				return data
++			}
++		}
++	}
++	
++	iconPath := findNotificationIcon()
++	if iconPath != "" {
++		data, err := os.ReadFile(iconPath)
++		if err == nil && len(data) > 0 {
++			if logger != nil {
++				logger.Printf("Using tray icon from default location: %s", iconPath)
++			}
++			return data
++		}
++	}
++	
++	return nil
++}
++
++func getMenuIcon(menuType string) []byte {
++	if appConfig == nil {
++		return nil
++	}
++	
++	var iconName string
++	
++	switch menuType {
++	case "start":
++		iconName = "start.ico"
++		if appConfig.MenuIcons.Start != "" {
++			iconName = appConfig.MenuIcons.Start
++		}
++	case "stop":
++		iconName = "stop.ico"
++		if appConfig.MenuIcons.Stop != "" {
++			iconName = appConfig.MenuIcons.Stop
++		}
++	case "pause":
++		iconName = "pause.ico"
++		if appConfig.MenuIcons.Pause != "" {
++			iconName = appConfig.MenuIcons.Pause
++		}
++	case "resume":
++		iconName = "resume.ico"
++		if appConfig.MenuIcons.Resume != "" {
++			iconName = appConfig.MenuIcons.Resume
++		}
++	case "notification":
++		iconName = "notification.ico"
++		if appConfig.MenuIcons.Notification != "" {
++			iconName = appConfig.MenuIcons.Notification
++		}
++	case "exit":
++		iconName = "exit.ico"
++		if appConfig.MenuIcons.Exit != "" {
++			iconName = appConfig.MenuIcons.Exit
++		}
++	default:
++		return nil
++	}
++	
++	var iconPaths []string
++	
++	if appConfig.MenuIconsDir != "" {
++		iconPaths = append(iconPaths, filepath.Join(appConfig.MenuIconsDir, iconName))
++	}
++	
++	exePath, _ := os.Executable()
++	exeDir := filepath.Dir(exePath)
++	iconPaths = append(iconPaths, filepath.Join(exeDir, "menu_icons", iconName))
++	iconPaths = append(iconPaths, filepath.Join(exeDir, "icons", iconName))
++	iconPaths = append(iconPaths, filepath.Join(exeDir, iconName))
++	
++	cwd, _ := os.Getwd()
++	iconPaths = append(iconPaths, filepath.Join(cwd, "menu_icons", iconName))
++	iconPaths = append(iconPaths, filepath.Join(cwd, "icons", iconName))
++	iconPaths = append(iconPaths, filepath.Join(cwd, iconName))
++	
++	for _, path := range iconPaths {
++		if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
++			if logger != nil {
++				logger.Printf("Using menu icon for %s: %s", menuType, path)
++			}
++			return data
++		}
++	}
++	
++	return nil
++}
+diff --git a/pt/tray_stub.go b/pt/tray_stub.go
+new file mode 100644
+index 0000000..ace3073
+--- /dev/null
++++ b/pt/tray_stub.go
+@@ -0,0 +1,8 @@
++//go:build !windows && !tray
++// +build !windows,!tray
++
++package main
++
++// startTray is a no-op: system tray support is not compiled into this build.
++// (Linux/macOS tray needs CGO; build with `CGO_ENABLED=1 go build -tags tray ./pt`.)
++func startTray() {}
+-- 
+2.43.0
+
