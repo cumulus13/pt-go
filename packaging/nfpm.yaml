@@ -1,0 +1,61 @@
+# nfpm config for the .deb (Debian/Ubuntu) and .apk (Alpine) packages.
+# Driven by packaging/build-linux-packages.sh, which exports:
+#   PT_VERSION, PT_ARCH (amd64|arm64), PT_BIN (static linux binary), PT_VERSION_FILE
+name: pt-go
+arch: ${PT_ARCH}
+platform: linux
+version: ${PT_VERSION}
+section: utils
+priority: optional
+maintainer: Hadi Cahyadi <cumulus13@gmail.com>
+description: pt - clipboard to file tool with smart version management (backups, comments, restore, diff, tree, monitor)
+vendor: cumulus13
+homepage: https://github.com/cumulus13/pt-go
+license: MIT
+
+contents:
+  # Install dir (same layout as the Windows installer: C:\TOOLS\pt -> /TOOLS/pt)
+  - dst: /TOOLS
+    type: dir
+    file_info:
+      mode: 0755
+  - dst: /TOOLS/pt
+    type: dir
+    file_info:
+      mode: 0755
+  - src: ${PT_BIN}
+    dst: /TOOLS/pt/pt
+    expand: true
+    file_info:
+      mode: 0755
+  - src: ${PT_VERSION_FILE}
+    dst: /TOOLS/pt/VERSION
+    expand: true
+    file_info:
+      mode: 0644
+  - src: pt.yml.example
+    dst: /TOOLS/pt/pt.yml.example
+    file_info:
+      mode: 0644
+  - src: README.md
+    dst: /TOOLS/pt/README.md
+    file_info:
+      mode: 0644
+  # System-wide PATH entry
+  - src: packaging/linux/pt.sh
+    dst: /etc/profile.d/pt.sh
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: packaging/linux/postinstall.sh
+
+overrides:
+  deb:
+    depends:
+      - xclip | xsel | wl-clipboard
+    suggests:
+      - git-delta
+  apk:
+    depends:
+      - xclip

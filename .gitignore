@@ -119,3 +119,6 @@ INTEGRATION.md
 
 # Added entries (1 items)
 *.0
+
+# Packaging output (packaging/*.sh)
+/dist/

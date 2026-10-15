@@ -265,7 +265,14 @@ func init() {
     // Initialize logger to discard by default in init.
     // It will be set correctly in main() after flag parsing.
     logger = log.New(&discardWriter{}, "", log.LstdFlags)
-    Version = loadVersion()
+    // Release builds inject the version at build time:
+    //   -ldflags "-X main.Version=x.y.z"
+    // That value wins, so an installed pt never reports the version of an
+    // unrelated VERSION file in the current directory. Plain `go build`
+    // (Version == "dev") keeps the old behaviour: read the VERSION file.
+    if Version == "" || Version == "dev" {
+        Version = loadVersion()
+    }
     appConfig = loadConfig()
 }
 

@@ -1,0 +1,157 @@
+name: Packages (deb / apk / NSIS)
+
+# Reusable workflow: builds the Debian (.deb), Alpine (.apk) and Windows (NSIS)
+# packages, then installs/uninstalls each one in a clean environment as a smoke test.
+# Called from ci.yml and release.yml. Produces the artifact "packages".
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version for the packages (e.g. v1.0.81). Empty = read the VERSION file."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  NFPM_VERSION: "2.43.4"
+  NFPM_SHA256: "cafb544650cb0305d1b164fc0ab261eb77a81af324e18011282d326b326d20fb"
+
+jobs:
+  build:
+    name: Build packages
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          V="$INPUT_VERSION"
+          if [ -z "$V" ]; then
+            V="$(sed -E 's/^version *= *"?([^"]*)"?.*/\1/' VERSION | tr -d '\r\n ')"
+          fi
+          V="${V#v}"
+          if ! echo "$V" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
+            echo "::error::Invalid package version '$V' (expected digits and dots, e.g. 1.0.81)"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Package version: $V"
+
+      - name: Install nfpm and NSIS
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/nfpm.tgz \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
+          echo "${NFPM_SHA256}  /tmp/nfpm.tgz" | sha256sum -c -
+          sudo tar -xzf /tmp/nfpm.tgz -C /usr/local/bin nfpm
+          nfpm --version
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nsis
+          makensis -VERSION
+
+      - name: Build static binaries
+        env:
+          CGO_ENABLED: "0"
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p build dist
+          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o build/pt-linux-amd64 ./pt
+          GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o build/pt-linux-arm64 ./pt
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o build/pt-windows-amd64.exe ./pt
+          ls -lh build
+
+      - name: Build .deb and .apk
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          packaging/build-linux-packages.sh "$VERSION" amd64 build/pt-linux-amd64 dist
+          packaging/build-linux-packages.sh "$VERSION" arm64 build/pt-linux-arm64 dist
+
+      - name: Build Windows installer (NSIS)
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: packaging/build-windows-installer.sh "$VERSION" build/pt-windows-amd64.exe dist
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          for f in *.deb *.apk *.exe; do sha256sum "$f" > "$f.sha256"; done
+          ls -lh
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  smoke-debian:
+    name: Smoke test - Debian (.deb)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - name: Install / verify PATH / remove in debian:stable
+        run: |
+          docker run --rm \
+            -e EXPECT_VERSION="${{ needs.build.outputs.version }}" \
+            -v "$PWD/dist:/dist:ro" \
+            -v "$PWD/packaging/smoke:/smoke:ro" \
+            debian:stable-slim sh /smoke/deb.sh
+
+  smoke-alpine:
+    name: Smoke test - Alpine (.apk)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - name: Install / verify PATH / remove in alpine:latest
+        run: |
+          docker run --rm \
+            -e EXPECT_VERSION="${{ needs.build.outputs.version }}" \
+            -v "$PWD/dist:/dist:ro" \
+            -v "$PWD/packaging/smoke:/smoke:ro" \
+            alpine:latest sh /smoke/apk.sh
+
+  smoke-windows:
+    name: Smoke test - Windows (NSIS)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - name: Install / verify C:\TOOLS\pt + system PATH / uninstall
+        shell: pwsh
+        run: ./packaging/smoke/windows.ps1 -Dist dist -ExpectVersion "${{ needs.build.outputs.version }}"

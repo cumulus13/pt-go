@@ -1,21 +1,23 @@
 name: Build and Release Multi-Platform Binaries
 
+# Runs when a version tag (v*) is pushed, or manually (build only, no release).
+# NOTE: the old `release: [published, created]` trigger was removed: creating a
+# release also pushes its tag, so both triggers fired and raced to upload the
+# same assets.
 on:
-  release:
-    types: [published, created]
   push:
     tags:
       - 'v*'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -30,93 +32,94 @@ jobs:
             goarch: amd64
           - goos: darwin
             goarch: arm64
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
-          
+
       - name: Get version
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          elif [[ "${{ github.event.release.tag_name }}" != "" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
           else
             VERSION="dev-$(git rev-parse --short HEAD)"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
-          
+
+      # CGO off: fully static binaries. The system tray needs CGO on Linux/macOS,
+      # so it is behind the `tray` build tag there (Windows keeps it, pure Go).
       - name: Build
         env:
           CGO_ENABLED: 0
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          echo "Building for $GOOS/$GOARCH"
-          
-          # Set binary name
+          set -euo pipefail
           if [ "$GOOS" = "windows" ]; then
-            BINARY="pt-${{ steps.version.outputs.version }}-$GOOS-$GOARCH.exe"
+            BINARY="pt-${VERSION}-$GOOS-$GOARCH.exe"
           else
-            BINARY="pt-${{ steps.version.outputs.version }}-$GOOS-$GOARCH"
+            BINARY="pt-${VERSION}-$GOOS-$GOARCH"
           fi
-          
           echo "Binary name: $BINARY"
-          
-          # Build
-          go build -v -trimpath -ldflags="-s -w" -o "$BINARY" ./pt
-          
-          # Verify
+
+          go build -v -trimpath -ldflags="-s -w -X main.Version=${VERSION#v}" -o "$BINARY" ./pt
           ls -lh "$BINARY"
-          
-          # Generate checksum
+
           sha256sum "$BINARY" > "$BINARY.sha256"
           cat "$BINARY.sha256"
-          
-          # Save for next steps
-          echo "BINARY=$BINARY" >> $GITHUB_ENV
-          
+
+          echo "BINARY=$BINARY" >> "$GITHUB_ENV"
+
       - name: Upload to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pt-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: bin-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             ${{ env.BINARY }}
             ${{ env.BINARY }}.sha256
           if-no-files-found: error
           retention-days: 90
 
+  # .deb (Debian/Ubuntu), .apk (Alpine) and NSIS installer (Windows), each
+  # smoke-tested (install -> PATH -> uninstall) before the release is published.
+  packages:
+    name: Packages (deb / apk / NSIS)
+    uses: ./.github/workflows/packages.yml
+    with:
+      version: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
   release:
     name: Create Release
-    needs: build
+    needs: [build, packages]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
-    
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          
+
       - name: Display structure
-        run: |
-          echo "Artifacts structure:"
-          ls -R artifacts/
-          
+        run: ls -R artifacts/
+
       - name: Prepare release files
         run: |
           mkdir -p release-files
           find artifacts -type f -exec cp {} release-files/ \;
           ls -lh release-files/
-          
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -124,196 +127,48 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
+
   release-summary:
     name: Generate Release Summary
     needs: release
     runs-on: ubuntu-latest
     if: success()
-    
+
     steps:
       - name: Create Summary
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          # 🎉 Release Build Complete!
-          
-          ## 📦 Built Binaries
-          
-          | Platform | Architecture | Binary Name |
-          |----------|--------------|-------------|
-          | 🐧 Linux | x86_64 | pt-*-linux-amd64 |
-          | 🐧 Linux | ARM64 | pt-*-linux-arm64 |
-          | 🪟 Windows | x86_64 | pt-*-windows-amd64.exe |
-          | 🍎 macOS | Intel | pt-*-darwin-amd64 |
-          | 🍎 macOS | Apple Silicon | pt-*-darwin-arm64 |
-          
-          ## ✅ Features
-          
-          - Static binaries (no dependencies required)
-          - Alpine Linux compatible
-          - CGO disabled for maximum portability
-          - SHA256 checksums included
-          
-          ## 📥 Installation
-          
-          ### Linux (Ubuntu, Debian, etc)
+          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+          # Release build complete
+
+          ## Assets
+
+          | Platform | Asset |
+          |----------|-------|
+          | Debian / Ubuntu (amd64, arm64) | `pt-go_<version>_amd64.deb`, `pt-go_<version>_arm64.deb` |
+          | Alpine (x86_64, aarch64) | `pt-go_<version>_x86_64.apk`, `pt-go_<version>_aarch64.apk` |
+          | Windows installer (amd64) | `pt-<version>-windows-amd64-setup.exe` |
+          | Static binaries | `pt-<tag>-linux-{amd64,arm64}`, `pt-<tag>-darwin-{amd64,arm64}`, `pt-<tag>-windows-amd64.exe` |
+
+          All assets have a `.sha256` file next to them.
+
+          ## Install
+
+          All packages install to `/TOOLS/pt` (Windows: `C:\TOOLS\pt`) and add that directory to the system PATH.
+
           ```bash
-          # Download
-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64
-          
-          # Make executable
-          chmod +x pt-*-linux-amd64
-          
-          # Move to PATH
-          sudo mv pt-*-linux-amd64 /usr/local/bin/pt
-          
-          # Install dependencies
-          sudo apt-get install xclip  # For clipboard support
-          
-          # Verify
-          pt --version
+          # Debian / Ubuntu
+          sudo apt install ./pt-go_<version>_amd64.deb
+
+          # Alpine (packages are unsigned)
+          apk add --allow-untrusted ./pt-go_<version>_x86_64.apk
           ```
-          
-          ### Alpine Linux
-          ```bash
-          # Install dependencies first
-          apk add xclip wget
-          
-          # Download PT
-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64
-          
-          # Make executable
-          chmod +x pt-*-linux-amd64
-          
-          # Move to PATH
-          mv pt-*-linux-amd64 /usr/local/bin/pt
-          
-          # Verify
-          pt --version
-          ```
-          
-          ### macOS
-          ```bash
-          # Intel Mac
-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-darwin-amd64
-          chmod +x pt-*-darwin-amd64
-          sudo mv pt-*-darwin-amd64 /usr/local/bin/pt
-          
-          # Apple Silicon (M1/M2/M3)
-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-darwin-arm64
-          chmod +x pt-*-darwin-arm64
-          sudo mv pt-*-darwin-arm64 /usr/local/bin/pt
-          
-          # Verify
-          pt --version
-          ```
-          
-          ### Windows
+
           ```powershell
-          # Download pt-*-windows-amd64.exe from releases page
-          # Add to PATH or use directly
-          pt.exe --version
+          # Windows (run as Administrator, or double-click the installer)
+          .\pt-<version>-windows-amd64-setup.exe /S
           ```
-          
-          ## 🔧 Dependencies
-          
-          ### Linux/Alpine
-          - **xclip** or **xsel** (for clipboard operations)
-          - **delta** (optional, for diff operations)
-          
-          ```bash
-          # Ubuntu/Debian
-          sudo apt-get install xclip delta
-          
-          # Alpine
-          apk add xclip
-          
-          # For delta on Alpine
-          apk add cargo
-          cargo install git-delta
-          ```
-          
-          ### macOS
-          - Clipboard works out of box
-          - **delta** (optional): `brew install git-delta`
-          
-          ### Windows
-          - Everything works out of box
-          - **delta** (optional): `scoop install delta`
-          
-          ## 🔐 Verify Checksums
-          
-          ```bash
-          # Download binary and checksum
-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64
-          wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64.sha256
-          
-          # Verify
-          sha256sum -c pt-*-linux-amd64.sha256
-          
-          # Expected output: pt-*-linux-amd64: OK
-          ```
-          
-          ## 🐳 Docker Usage (Alpine-based)
-          
-          ```dockerfile
-          FROM alpine:latest
-          
-          # Install dependencies
-          RUN apk add --no-cache xclip ca-certificates
-          
-          # Download PT
-          RUN wget https://github.com/${{ github.repository }}/releases/latest/download/pt-*-linux-amd64 \
-              -O /usr/local/bin/pt && \
-              chmod +x /usr/local/bin/pt
-          
-          ENTRYPOINT ["pt"]
-          ```
-          
-          ## 📚 Quick Start
-          
-          ```bash
-          # Copy text to clipboard, then:
-          pt myfile.txt                    # Save clipboard to file
-          pt myfile.txt -m "initial code"  # With comment
-          
-          # Check status
-          pt check                         # Like git status
-          
-          # Commit changes
-          pt commit -m "fixed bug"         # Like git commit
-          
-          # View file with syntax highlighting
-          pt show myfile.py                # Like bat/cat with colors
-          
-          # Restore from backup
-          pt -r myfile.txt                 # Interactive restore
-          pt -r myfile.txt --last          # Restore last backup
-          
-          # Diff with backup
-          pt -d myfile.txt                 # Compare with backup
-          ```
-          
-          ## 🆘 Troubleshooting
-          
-          ### "clipboard not available" error
-          ```bash
-          # Linux: Install xclip or xsel
-          sudo apt-get install xclip
-          # or
-          apk add xclip
-          
-          # Verify X11 is running
-          echo $DISPLAY
-          ```
-          
-          ### Binary not executable
-          ```bash
-          chmod +x pt-*
-          ```
-          
-          ### "permission denied" when moving to /usr/local/bin
-          ```bash
-          sudo mv pt-* /usr/local/bin/pt
-          ```
+
+          Open a new login shell / terminal afterwards so the PATH change is picked up.
+
+          Linux needs `xclip`, `xsel` or `wl-clipboard` for clipboard access (installed automatically as a dependency). `delta` is optional (diff view).
           EOF

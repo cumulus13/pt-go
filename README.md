@@ -91,6 +91,25 @@ set `diff_tool` in config file pt.yml/pt.yaml or use   '--tool DIFF_TOOL_NAME'
 - Git (for installation)
 - **Delta** (optional, for diff functionality) - [Install from here](https://github.com/dandavison/delta)
 
+### Install from Packages (recommended)
+
+Download from the [Releases](https://github.com/cumulus13/pt-go/releases) page. Every package installs to `/TOOLS/pt` (Windows: `C:\TOOLS\pt`) and adds that directory to the **system PATH**.
+
+```
+# Windows - NSIS installer (installs to C:\TOOLS\pt, adds it to the system PATH; run as Administrator)
+pt-<version>-windows-amd64-setup.exe          # add /S for a silent install
+
+# Debian / Ubuntu (.deb)
+sudo apt install ./pt-go_<version>_amd64.deb      # or _arm64.deb
+
+# Alpine (.apk, unsigned package)
+apk add --allow-untrusted ./pt-go_<version>_x86_64.apk   # or _aarch64.apk
+```
+
+Open a new terminal / login shell afterwards so the PATH change is picked up. On Linux the PATH entry is `/etc/profile.d/pt.sh`.
+
+> **System tray (monitor mode):** always available on Windows. Linux/macOS release binaries are static (no CGO) and have no tray icon; to build one with the tray: `CGO_ENABLED=1 go build -tags tray ./pt` (Linux needs `libgtk-3-dev` and `libayatana-appindicator3-dev`).
+
 ### Install from Source
 
 ```bash
